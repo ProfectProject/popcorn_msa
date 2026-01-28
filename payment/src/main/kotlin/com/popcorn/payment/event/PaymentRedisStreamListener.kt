@@ -238,27 +238,16 @@ class PaymentRedisStreamListener(
 
             // Map을 OrderInfoResponseEvent로 변환
             val response = OrderInfoResponseEvent().apply {
-                requestId = values["requestId"] as? String
-                success = (values["success"] as? String)?.toBoolean() ?: false
-                actualOrderNo = values["actualOrderNo"] as? String
-                actualUserId = (values["actualUserId"] as? String)?.toLongOrNull()
-                actualPopupId = values["actualPopupId"] as? String
-                actualHasReservation = (values["actualHasReservation"] as? String)?.toBoolean()
-                actualHasGoods = (values["actualHasGoods"] as? String)?.toBoolean()
+                requestId = normalizeString(values["requestId"])
+                success = normalizeString(values["success"])?.toBoolean() ?: false
+                actualOrderNo = normalizeString(values["actualOrderNo"])
+                actualUserId = normalizeString(values["actualUserId"])?.toLongOrNull()
+                actualPopupId = normalizeString(values["actualPopupId"])
+                actualHasReservation = normalizeString(values["actualHasReservation"])?.toBoolean()
+                actualHasGoods = normalizeString(values["actualHasGoods"])?.toBoolean()
 
                 // lines JSON 파싱
-                val linesJson = values["actualLines"] as? String
-                if (!linesJson.isNullOrBlank() && linesJson != "[]") {
-                    try {
-                        val typeRef = object : com.fasterxml.jackson.core.type.TypeReference<List<com.popcorn.payment.event.standard.EventLineItem>>() {}
-                        actualLines = objectMapper.readValue(linesJson, typeRef)
-                    } catch (e: Exception) {
-                        log.warn("Order lines JSON 파싱 실패: {}", e.message)
-                        actualLines = emptyList()
-                    }
-                } else {
-                    actualLines = emptyList()
-                }
+                actualLines = parseEventLineItems(values["actualLines"])
             }
 
             // PaymentOrderInfoService에 응답 전달
@@ -269,6 +258,45 @@ class PaymentRedisStreamListener(
 
         } catch (e: Exception) {
             log.error("🚨 [PAYMENT] Order 정보 응답 처리 실패 - values: {}, error: {}", values, e.message, e)
+        }
+    }
+
+    private fun normalizeString(value: Any?): String? {
+        val raw = value as? String ?: return null
+        val trimmed = raw.trim()
+        return trimmed.trim('"')
+    }
+
+    private fun parseEventLineItems(rawLines: Any?): List<com.popcorn.payment.event.standard.EventLineItem> {
+        if (rawLines == null) {
+            return emptyList()
+        }
+        return try {
+            when (rawLines) {
+                is List<*> -> rawLines.mapNotNull { item ->
+                    when (item) {
+                        is com.popcorn.payment.event.standard.EventLineItem -> item
+                        is Map<*, *> -> objectMapper.convertValue(item, com.popcorn.payment.event.standard.EventLineItem::class.java)
+                        else -> null
+                    }
+                }
+                is String -> {
+                    val trimmed = rawLines.trim().trim('"')
+                    if (trimmed.isBlank() || trimmed == "[]") {
+                        emptyList()
+                    } else {
+                        val typeRef = object : com.fasterxml.jackson.core.type.TypeReference<List<com.popcorn.payment.event.standard.EventLineItem>>() {}
+                        objectMapper.readValue(trimmed, typeRef)
+                    }
+                }
+                else -> {
+                    val typeRef = object : com.fasterxml.jackson.core.type.TypeReference<List<com.popcorn.payment.event.standard.EventLineItem>>() {}
+                    objectMapper.convertValue(rawLines, typeRef)
+                }
+            }
+        } catch (e: Exception) {
+            log.warn("Order lines JSON 파싱 실패: {}", e.message)
+            emptyList()
         }
     }
 }

@@ -22,6 +22,8 @@ import lombok.Getter;
 import lombok.NoArgsConstructor;
 import lombok.Setter;
 
+import com.fasterxml.jackson.annotation.JsonIgnoreProperties;
+
 /**
  * 주문 아이템 엔티티 (JPA)
  * p_order_goods 테이블과 매핑
@@ -38,6 +40,7 @@ import lombok.Setter;
 @NoArgsConstructor
 @AllArgsConstructor
 @Builder
+@JsonIgnoreProperties(ignoreUnknown = true)
 public class OrderItem extends BaseEntity {
 
     /** 주문 아이템 ID (Primary Key) */

@@ -7,12 +7,19 @@ spring:
     activate:
       on-profile: dev
 
-  # 데이터베이스 설정
+  # 데이터베이스 설정 (성능 최적화)
   datasource:
     url: jdbc:postgresql://${DB_HOST:localhost}:${DB_PORT:5430}/${DB_NAME:popcorn_db}
     username: ${ORDER_DB_USERNAME:order_app}
     password: ${ORDER_DB_PASSWORD:order123}
     driver-class-name: org.postgresql.Driver
+    hikari:
+      maximum-pool-size: 50          # 기본 10 -> 50
+      minimum-idle: 10               # 기본 10 유지
+      connection-timeout: 5000       # 5초 연결 타임아웃
+      idle-timeout: 300000           # 5분 유휴 타임아웃
+      max-lifetime: 1800000          # 30분 최대 생명주기
+      leak-detection-threshold: 30000 # 30초 누수 감지
 
   # JPA 설정
   jpa:
@@ -39,20 +46,30 @@ spring:
     default-schema: orders
     schemas: orders
 
-  # Redis 설정
+  # Redis 설정 (타임아웃 문제 해결)
   data:
     redis:
       host: ${REDIS_HOST:localhost}
       port: ${REDIS_PORT:6379}
-      timeout: 2000ms
+      timeout: 10000ms  # 3초 → 10초 (타임아웃 대폭 증가)
+      command-timeout: 10000ms  # 명령 실행 타임아웃
+      lettuce:
+        pool:
+          max-active: 30    # 50 -> 30 (연결 수 조정)
+          max-idle: 15      # 25 -> 15 (유휴 연결 줄임)
+          min-idle: 5       # 10 -> 5 (최소 연결 줄임)
+          max-wait: 3000ms  # 대기 시간 증가
+          time-between-eviction-runs: 60s
+        shutdown-timeout: 2000ms  # shutdown 시간 증가
 
-# 로깅 설정
+# 로깅 설정 (성능 최적화)
 logging:
   level:
-    com.popcorn.order: DEBUG
-    org.springframework.web: INFO
-    org.hibernate.SQL: DEBUG
-    org.hibernate.type.descriptor.sql.BasicBinder: TRACE
+    com.popcorn.order: INFO           # DEBUG -> INFO (성능 향상)
+    org.springframework.web: WARN     # INFO -> WARN
+    org.hibernate.SQL: WARN           # DEBUG -> WARN (SQL 로깅 제거)
+    org.hibernate.type.descriptor.sql.BasicBinder: ERROR # TRACE -> ERROR
+    org.springframework.data.redis: WARN  # Redis 로깅 최소화
 
 # 이벤트 기반 아키텍처 - HTTP 통신 제거
 # microservices 통신은 Redis Stream 이벤트로 대체
@@ -63,8 +80,24 @@ order:
     timeout: ${ORDER_PAYMENT_TIMEOUT:30000}
   cancel:
     timeout: ${ORDER_CANCEL_TIMEOUT:1800}
+  reservation:
+    wait-timeout-ms: ${ORDER_RESERVATION_TIMEOUT:15000}  # 15초로 증가
   validation:
     max-quantity: ${ORDER_MAX_QUANTITY:100}
+
+# Redis Stream 설정 (타임아웃 해결)
+redis:
+  events:
+    enabled: true       # Redis Stream 다시 활성화
+  stream:
+    poll-timeout: 5000  # 5초 폴링 타임아웃
+    batch-size: 5       # 작은 배치 크기
+    error-retry-delay: 1000  # 에러 후 재시도 대기시간 (1초)
+
+# 비동기 주문 처리 비활성화 (Redis Stream 사용)
+async:
+  order:
+    enabled: false      # 비동기 주문 처리 비활성화
 
 passport:
   secret: ${PASSPORT_SECRET:passport-shared-secret}

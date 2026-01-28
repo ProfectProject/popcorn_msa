@@ -152,7 +152,14 @@ class OrderQueryCoroutineService(
     private fun getCachedOrder(orderId: UUID): OrderInfo? {
         return try {
             val cached = redisTemplate.opsForValue().get("$ORDER_CACHE_PREFIX$orderId")
-            cached?.let { objectMapper.readValue(it, OrderInfo::class.java) }
+            cached?.let {
+                val normalized = if (it.length >= 2 && it.first() == '"' && it.last() == '"') {
+                    objectMapper.readValue(it, String::class.java)
+                } else {
+                    it
+                }
+                objectMapper.readValue(normalized, OrderInfo::class.java)
+            }
         } catch (e: Exception) {
             log.warn("⚠️ 캐시 조회 실패: orderId={}, error={}", orderId, e.message)
             null

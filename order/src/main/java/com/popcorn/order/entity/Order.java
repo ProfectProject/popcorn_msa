@@ -27,6 +27,8 @@ import lombok.Getter;
 import lombok.NoArgsConstructor;
 import lombok.Setter;
 
+import com.fasterxml.jackson.annotation.JsonIgnoreProperties;
+
 /**
  * 주문 엔티티 (JPA)
  * BaseEntity를 상속받아 표준화된 감사 필드를 포함합니다.
@@ -51,6 +53,7 @@ import lombok.Setter;
 @NoArgsConstructor
 @AllArgsConstructor
 @Builder
+@JsonIgnoreProperties(ignoreUnknown = true)
 public class Order extends BaseEntity {
 
     // ========================= 기본 필드 =========================

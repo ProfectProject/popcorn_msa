@@ -42,13 +42,30 @@ public class OrderReservationAwaiter {
 
     public ReservationOutcome await(UUID orderId, Duration timeout) throws TimeoutException {
         CompletableFuture<ReservationOutcome> future = waiters.computeIfAbsent(orderId, id -> new CompletableFuture<>());
+
+        // 즉시 체크: 이미 완료된 경우 바로 반환
+        if (future.isDone()) {
+            try {
+                waiters.remove(orderId, future);
+                return future.get();
+            } catch (Exception e) {
+                throw new RuntimeException("완료된 예약 결과 조회 실패", e);
+            }
+        }
+
         try {
-            return future.get(timeout.toMillis(), TimeUnit.MILLISECONDS);
+            log.debug("⏳ 예약 응답 대기 시작 - orderId: {}, timeout: {}ms", orderId, timeout.toMillis());
+            ReservationOutcome result = future.get(timeout.toMillis(), TimeUnit.MILLISECONDS);
+            waiters.remove(orderId, future);
+            log.info("✅ 예약 응답 성공 - orderId: {}", orderId);
+            return result;
         } catch (TimeoutException e) {
             waiters.remove(orderId, future);
+            log.warn("⏱️ 예약 응답 타임아웃 - orderId: {}", orderId);
             throw e;
         } catch (Exception e) {
             waiters.remove(orderId, future);
+            log.error("❌ 예약 응답 대기 중 오류 - orderId: {}, error: {}", orderId, e.getMessage());
             throw new RuntimeException("예약 응답 대기 중 오류가 발생했습니다.", e);
         }
     }

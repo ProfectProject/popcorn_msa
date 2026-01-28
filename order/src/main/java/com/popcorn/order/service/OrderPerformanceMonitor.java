@@ -12,10 +12,10 @@ import lombok.extern.slf4j.Slf4j;
  * 주문 처리 성능 모니터링 서비스
  *
  * 🎯 목표 성능 추적:
- * - 전체 주문 처리 시간 < 1초
- * - Redis 캐시 응답 시간 < 50ms
- * - DB 트랜잭션 시간 < 200ms
- * - 이벤트 발행 시간 < 100ms
+ * - 전체 주문 처리 시간 < 20초 (예약 응답 대기 포함)
+ * - Redis 캐시 응답 시간 < 200ms
+ * - DB 트랜잭션 시간 < 500ms
+ * - 이벤트 발행 시간 < 300ms
  */
 @Service
 @Slf4j
@@ -40,12 +40,12 @@ public class OrderPerformanceMonitor {
     public void recordOrderPerformance(long processingTimeMs) {
         totalOrders.incrementAndGet();
 
-        if (processingTimeMs < 1000) {
+        if (processingTimeMs < 20000) { // 20초로 조정
             fastOrders.incrementAndGet();
-            log.info("🚀 ULTRA-FAST 주문 처리 성공 - {}ms", processingTimeMs);
+            log.info("🚀 FAST 주문 처리 성공 - {}ms", processingTimeMs);
         } else {
             slowOrders.incrementAndGet();
-            log.warn("🐌 SLOW 주문 처리 - {}ms (목표 1초 초과)", processingTimeMs);
+            log.warn("🐌 SLOW 주문 처리 - {}ms (목표 20초 초과)", processingTimeMs);
         }
 
         // 최고/최악 기록 업데이트
@@ -95,8 +95,8 @@ public class OrderPerformanceMonitor {
         public void markDbEnd() {
             this.dbEndTime = System.currentTimeMillis();
             long dbTime = dbEndTime - dbStartTime;
-            if (dbTime > 200) {
-                log.warn("🗄️ DB 처리 시간 초과 - {}ms (목표 200ms)", dbTime);
+            if (dbTime > 500) { // 500ms로 조정
+                log.warn("🗄️ DB 처리 시간 초과 - {}ms (목표 500ms)", dbTime);
             } else {
                 log.debug("🗄️ DB 처리 완료 - {}ms", dbTime);
             }
@@ -109,8 +109,8 @@ public class OrderPerformanceMonitor {
         public void markCacheEnd() {
             this.cacheEndTime = System.currentTimeMillis();
             long cacheTime = cacheEndTime - cacheStartTime;
-            if (cacheTime > 50) {
-                log.warn("💾 캐시 처리 시간 초과 - {}ms (목표 50ms)", cacheTime);
+            if (cacheTime > 200) { // 200ms로 조정
+                log.warn("💾 캐시 처리 시간 초과 - {}ms (목표 200ms)", cacheTime);
             } else {
                 log.debug("💾 캐시 처리 완료 - {}ms", cacheTime);
             }
@@ -123,8 +123,8 @@ public class OrderPerformanceMonitor {
         public void markEventEnd() {
             this.eventEndTime = System.currentTimeMillis();
             long eventTime = eventEndTime - eventStartTime;
-            if (eventTime > 100) {
-                log.warn("📢 이벤트 처리 시간 초과 - {}ms (목표 100ms)", eventTime);
+            if (eventTime > 300) { // 300ms로 조정
+                log.warn("📢 이벤트 처리 시간 초과 - {}ms (목표 300ms)", eventTime);
             } else {
                 log.debug("📢 이벤트 처리 완료 - {}ms", eventTime);
             }

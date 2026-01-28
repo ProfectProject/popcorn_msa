@@ -1,7 +1,6 @@
 package com.popcorn.order.event;
 
 import com.fasterxml.jackson.databind.ObjectMapper;
-import com.popcorn.common.cache.IdempotencyService;
 import com.popcorn.order.dto.user.UserAddressResponse;
 import com.popcorn.order.entity.ItemType;
 import com.popcorn.order.entity.OrderStatus;
@@ -18,13 +17,17 @@ import com.popcorn.order.service.OrderReservationAwaiter;
 import com.popcorn.order.service.OrderIdempotencyService;
 import com.popcorn.order.dto.payment.PaymentUrlResponse;
 import lombok.RequiredArgsConstructor;
-import lombok.extern.slf4j.Slf4j;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 import org.springframework.context.ApplicationEventPublisher;
 import org.springframework.data.redis.connection.stream.MapRecord;
+import org.springframework.data.redis.core.RedisTemplate;
 import org.springframework.data.redis.stream.StreamListener;
 import org.springframework.stereotype.Component;
 
+import java.time.Duration;
 import java.util.ArrayList;
+import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.UUID;
@@ -36,8 +39,9 @@ import java.util.UUID;
  */
 @Component
 @RequiredArgsConstructor
-@Slf4j
-public class OrderRedisStreamListener implements StreamListener<String, MapRecord<String, String, Object>> {
+public class OrderRedisStreamListener implements StreamListener<String, MapRecord<String, String, String>> {
+
+    private static final Logger log = LoggerFactory.getLogger(OrderRedisStreamListener.class);
 
     private final OrderPriceLookupService orderPriceLookupService;
     private final OrderUserLookupService orderUserLookupService;
@@ -46,6 +50,7 @@ public class OrderRedisStreamListener implements StreamListener<String, MapRecor
     private final OrderPopupLookupService orderPopupLookupService;
     private final OrderReservationAwaiter orderReservationAwaiter;
     private final OrderInfoResponseService orderInfoResponseService;
+    private final RedisTemplate<String, Object> redisTemplate;
     private final ObjectMapper objectMapper;
     private final ApplicationEventPublisher eventPublisher;
     private final PaymentCacheService paymentCacheService;
@@ -53,14 +58,29 @@ public class OrderRedisStreamListener implements StreamListener<String, MapRecor
     private final OrderIdempotencyService orderIdempotencyService;
 
     @Override
-    public void onMessage(MapRecord<String, String, Object> record) {
+    public void onMessage(MapRecord<String, String, String> record) {
         try {
             String streamName = record.getStream();
             String recordId = record.getId().getValue();
-            Map<String, Object> values = record.getValue();
+
+            Map<String, Object> values = new HashMap<>(record.getValue());
 
             log.info("🔔 [ORDER] Stream 메시지 수신 - stream: {}, recordId: {}, eventType: {}",
                     streamName, recordId, values.get("eventType"));
+
+            if ("order:query:stream".equals(streamName)) {
+                log.info("🔍 [ORDER] 주문 조회 요청 이벤트 수신");
+                handleOrderQueryRequest(values);
+                log.debug("✅ [ORDER] 주문 조회 요청 처리 완료 - recordId: {}", recordId);
+                return;
+            }
+
+            if ("order:update:stream".equals(streamName)) {
+                log.info("🔄 [ORDER] 주문 상태 업데이트 요청 이벤트 수신");
+                handleOrderStatusUpdateRequest(values);
+                log.debug("✅ [ORDER] 주문 상태 업데이트 요청 처리 완료 - recordId: {}", recordId);
+                return;
+            }
 
             if ("order-info-requests".equals(streamName)) {
                 log.info("📨 [ORDER] Order 정보 요청 이벤트 수신");
@@ -81,6 +101,84 @@ public class OrderRedisStreamListener implements StreamListener<String, MapRecor
         } catch (Exception e) {
             log.error("🚨 [ORDER] Stream 메시지 처리 실패 - record: {}, error: {}",
                     record, e.getMessage(), e);
+        }
+    }
+
+    private void handleOrderQueryRequest(Map<String, Object> values) {
+        try {
+            String orderIdStr = normalizeUuidString((String) values.get("orderId"));
+            String correlationId = (String) values.get("correlationId");
+
+            if (orderIdStr == null || orderIdStr.isBlank()) {
+                log.warn("🔍 [ORDER] 주문 조회 요청 필수 데이터 누락 - values: {}", values);
+                return;
+            }
+
+            UUID orderId = UUID.fromString(orderIdStr);
+            orderRepository.findById(orderId).ifPresentOrElse(order -> {
+                try {
+                    Map<String, Object> response = new HashMap<>();
+                    response.put("id", order.getId());
+                    response.put("orderNo", order.getOrderNo());
+                    response.put("customerId", order.getCustomerId());
+                    response.put("totalAmount", order.getTotalAmount() != null ? order.getTotalAmount() : 0);
+                    response.put("status", order.getStatus() != null ? order.getStatus().name() : "UNKNOWN");
+                    response.put("orderType", order.getOrderType() != null ? order.getOrderType().name() : "UNKNOWN");
+                    response.put("createdAt", order.getCreatedAt() != null ? order.getCreatedAt().toString() : "");
+
+                    String cacheKey = "order:cache:" + orderId;
+                    String json = objectMapper.writeValueAsString(response);
+                    redisTemplate.opsForValue().set(cacheKey, json, Duration.ofSeconds(30));
+
+                    log.info("✅ [ORDER] 주문 조회 응답 캐시 저장 - orderId: {}, correlationId: {}",
+                            orderId, correlationId);
+                } catch (Exception e) {
+                    log.error("🚨 [ORDER] 주문 조회 응답 캐시 저장 실패 - orderId: {}, error: {}",
+                            orderId, e.getMessage(), e);
+                }
+            }, () -> log.warn("🔍 [ORDER] 주문 조회 요청 대상 없음 - orderId: {}", orderIdStr));
+        } catch (Exception e) {
+            log.error("🚨 [ORDER] 주문 조회 요청 처리 실패 - values: {}, error: {}", values, e.getMessage(), e);
+        }
+    }
+
+    private String normalizeUuidString(String value) {
+        if (value == null) {
+            return null;
+        }
+        String trimmed = value.trim();
+        if (trimmed.length() >= 2) {
+            char first = trimmed.charAt(0);
+            char last = trimmed.charAt(trimmed.length() - 1);
+            if ((first == '"' && last == '"') || (first == '\'' && last == '\'')) {
+                return trimmed.substring(1, trimmed.length() - 1).trim();
+            }
+        }
+        return trimmed;
+    }
+
+    private void handleOrderStatusUpdateRequest(Map<String, Object> values) {
+        try {
+            String orderIdStr = normalizeUuidString((String) values.get("orderId"));
+            String newStatus = (String) values.get("newStatus");
+            String reason = (String) values.get("reason");
+            String correlationId = (String) values.get("correlationId");
+
+            if (orderIdStr == null || orderIdStr.isBlank() || newStatus == null) {
+                log.warn("🔄 [ORDER] 주문 상태 업데이트 요청 필수 데이터 누락 - values: {}", values);
+                return;
+            }
+
+            UUID orderId = UUID.fromString(orderIdStr);
+            orderCommandService.updateOrderStatus(orderId, newStatus, reason != null ? reason : "");
+
+            String responseKey = "order:update:response:" + correlationId;
+            redisTemplate.opsForValue().set(responseKey, "OK", Duration.ofSeconds(30));
+
+            log.info("✅ [ORDER] 주문 상태 업데이트 응답 저장 - orderId: {}, correlationId: {}",
+                    orderId, correlationId);
+        } catch (Exception e) {
+            log.error("🚨 [ORDER] 주문 상태 업데이트 요청 처리 실패 - values: {}, error: {}", values, e.getMessage(), e);
         }
     }
 

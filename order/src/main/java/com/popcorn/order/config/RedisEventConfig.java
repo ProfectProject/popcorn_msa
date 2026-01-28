@@ -2,7 +2,8 @@ package com.popcorn.order.config;
 
 import com.popcorn.order.event.OrderRedisStreamListener;
 import lombok.RequiredArgsConstructor;
-import lombok.extern.slf4j.Slf4j;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 import org.springframework.boot.autoconfigure.condition.ConditionalOnProperty;
 import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.Configuration;
@@ -26,8 +27,9 @@ import java.util.Map;
 @Configuration
 @RequiredArgsConstructor
 @ConditionalOnProperty(name = "redis.events.enabled", havingValue = "true", matchIfMissing = true)
-@Slf4j
 public class RedisEventConfig {
+
+    private static final Logger log = LoggerFactory.getLogger(RedisEventConfig.class);
 
     private final OrderRedisStreamListener orderRedisStreamListener;
     private final RedisTemplate<String, Object> redisTemplate;
@@ -90,9 +92,17 @@ public class RedisEventConfig {
             RedisConnectionFactory connectionFactory) {
 
         var options = StreamMessageListenerContainer.StreamMessageListenerContainerOptions
-                        .<String, MapRecord<String, String, Object>>builder()
-                        .batchSize(10)  // 한 번에 처리할 메시지 수
-                        .pollTimeout(Duration.ofMillis(100))  // 폴링 타임아웃
+                        .<String, MapRecord<String, String, String>>builder()
+                        .batchSize(5)  // 배치 크기를 더 줄임 (안정성 최우선)
+                        .pollTimeout(Duration.ofSeconds(5))  // 폴링 타임아웃 5초로 대폭 증가
+                        .errorHandler(t -> {
+                            if (t.getCause() instanceof org.springframework.dao.QueryTimeoutException) {
+                                log.warn("🔄 Redis Stream 타임아웃 발생, 재시도 예정: {}", t.getMessage());
+                                // 타임아웃은 정상적인 상황으로 간주 (스택트레이스 출력 안함)
+                            } else {
+                                log.error("❌ Redis Stream 처리 중 예상치 못한 오류: {}", t.getMessage(), t);
+                            }
+                        })
                         .build();
 
         var container = StreamMessageListenerContainer.create(connectionFactory, options);

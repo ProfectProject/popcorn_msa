@@ -10,12 +10,18 @@ spring:
     activate:
       on-profile: local
 
-  # 데이터베이스 설정 (로컬 환경용)
+  # 데이터베이스 설정 (로컬 환경용, 성능 최적화)
   datasource:
     url: jdbc:postgresql://${DB_HOST:localhost}:${DB_PORT:5430}/${DB_NAME:popcorn_db}
     username: ${ORDER_DB_USERNAME:order_app}
     password: ${ORDER_DB_PASSWORD:order123}
     driver-class-name: org.postgresql.Driver
+    hikari:
+      maximum-pool-size: 30          # 로컬은 30으로 설정
+      minimum-idle: 5                # 최소 유휴
+      connection-timeout: 3000       # 3초 연결 타임아웃
+      idle-timeout: 300000           # 5분 유휴 타임아웃
+      max-lifetime: 1800000          # 30분 최대 생명주기
 
   # JPA 설정
   jpa:
@@ -50,25 +56,33 @@ spring:
       host: ${REDIS_HOST:localhost}
       port: ${REDIS_PORT:6379}
       password: ${REDIS_PASSWORD:}
-      timeout: 2000ms  # Redis Stream 안정성 위해 기본 타임아웃 복구
+      timeout: 10000ms  # 2초 → 10초 (타임아웃 대폭 증가)
+      command-timeout: 10000ms  # 명령 실행 타임아웃
       database: 0  # Payment, Stores 서비스와 동일한 database 0 사용
-      connection-timeout: 2000ms  # 연결 지연에 대비해 타임아웃 완화
-      jedis:
+      connection-timeout: 10000ms  # 연결 타임아웃도 증가
+      lettuce:
         pool:
-          max-active: 20  # 10 → 20 (더 많은 동시 연결)
-          max-idle: 16   # 8 → 16 (더 많은 유휴 연결)
-          min-idle: 8    # 2 → 8 (더 많은 최소 연결)
-          max-wait: 2000ms # 커넥션 풀 대기 여유 확대
+          max-active: 100  # 50 → 20 (연결 수 줄여서 안정성 확보)
+          max-idle: 30   # 25 → 10 (유휴 연결 줄임)
+          min-idle: 10    # 10 → 5 (최소 연결 줄임)
+          max-wait: 3000ms # 대기 시간 증가
+          time-between-eviction-runs: 60s
+        shutdown-timeout: 2000ms
 
 # 인증 설정
 passport:
   secret: ${PASSPORT_SECRET:passport-shared-secret}
   ttl-seconds: 60
 
-# Redis 이벤트 설정
+# Redis 이벤트 설정 (타임아웃 해결)
 redis:
   events:
-    enabled: true
+    enabled: true      # Redis Stream 활성화
+
+# 비동기 주문 처리 비활성화 (Redis Stream 사용)
+async:
+  order:
+    enabled: false      # 비동기 주문 처리 비활성화
 
 jwt:
   secret: ${JWT_SECRET:dGVzdC1qd3Qtc2VjcmV0LWtleS1mb3ItbG9jYWwtZGV2ZWxvcG1lbnQtb25seS1kb25vdC11c2UtaW4tcHJvZHVjdGlvbg==}
@@ -147,7 +161,7 @@ order:
     max-quantity: ${ORDER_MAX_QUANTITY:100}  # 최대 주문 수량
     min-quantity: ${ORDER_MIN_QUANTITY:1}    # 최소 주문 수량
   reservation:
-    wait-timeout-ms: ${ORDER_RESERVATION_WAIT_TIMEOUT_MS:5000}  # 예약 응답 대기 시간 (기본 5초)
+    wait-timeout-ms: ${ORDER_RESERVATION_WAIT_TIMEOUT_MS:15000}  # 예약 응답 대기 시간 (5초 → 15초)
   notification:
     enabled: ${ORDER_NOTIFICATION_ENABLED:true}  # 알림 활성화
     retry-count: ${ORDER_NOTIFICATION_RETRY:2}   # ⚡ 알림 재시도 횟수: 3 → 2 (빠른 실패)

@@ -91,7 +91,7 @@ public class OrderCommandService {
     @org.springframework.beans.factory.annotation.Value("${frontend.base-url:${FRONTEND_BASE_URL:http://localhost:3000}}")
     private String frontendBaseUrl;
 
-    @org.springframework.beans.factory.annotation.Value("${order.reservation.wait-timeout-ms:5000}")
+    @org.springframework.beans.factory.annotation.Value("${order.reservation.wait-timeout-ms:15000}")
     private long reservationWaitTimeoutMs;
 
     // 성능 통계 카운터
@@ -179,17 +179,17 @@ public class OrderCommandService {
         // 주문 생성 이벤트 발행
         eventPublisher.publishEvent(new OrderCreatedEvent(savedOrder, null));
 
-        // 예약/재고 응답 대기 (극한 타임아웃 최적화: 5000ms → 800ms)
+        // 예약/재고 응답 대기 (Redis Stream 타임아웃 해결)
         tracker.markEventStart();
         OrderReservationAwaiter.ReservationOutcome outcome;
         try {
-            long ultraOptimizedTimeout = reservationWaitTimeoutMs; // config에서 800ms로 설정
+            long optimizedTimeout = reservationWaitTimeoutMs; // 15초 타임아웃
             outcome = orderReservationAwaiter.await(savedOrder.getId(),
-                    java.time.Duration.ofMillis(ultraOptimizedTimeout));
+                    java.time.Duration.ofMillis(optimizedTimeout));
 
             long waitTime = System.currentTimeMillis() - startTime;
-            log.info("🚀 ULTRA-FAST 재고 예약 응답 완료 - 주문번호: {}, 대기시간: {}ms (극한 타임아웃: {}ms)",
-                    savedOrder.getOrderNo(), waitTime, ultraOptimizedTimeout);
+            log.info("🚀 Redis Stream 재고 예약 응답 완료 - 주문번호: {}, 대기시간: {}ms (타임아웃: {}ms)",
+                    savedOrder.getOrderNo(), waitTime, optimizedTimeout);
 
         } catch (java.util.concurrent.TimeoutException e) {
             tracker.markEventEnd();
