@@ -186,6 +186,24 @@ public class OrderCacheService {
     }
 
     /**
+     * 결제 URL 캐시 삭제 (결제 완료/취소 시)
+     */
+    @PerformanceMonitoring(threshold = 100, category = "cache")
+    public void evictPaymentUrlCache(UUID orderId) {
+        if (orderId == null) {
+            return;
+        }
+
+        String key = PAYMENT_URL_PREFIX + orderId;
+        try {
+            redisTemplate.delete(key);
+            log.debug("🗑️ 결제 URL 캐시 삭제 완료 - 주문ID: {}, key: {}", orderId, key);
+        } catch (Exception e) {
+            log.error("⚠️ 결제 URL 캐시 삭제 실패 - 주문ID: {}, 오류: {}", orderId, e.getMessage());
+        }
+    }
+
+    /**
      * 주문 통계 데이터 캐시
      *
      * 계산 비용이 높은 통계 데이터를 장기간 캐시합니다.

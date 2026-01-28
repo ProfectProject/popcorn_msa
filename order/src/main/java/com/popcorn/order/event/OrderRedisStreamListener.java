@@ -8,10 +8,14 @@ import com.popcorn.order.entity.OrderStatus;
 import com.popcorn.order.event.PopupInfoLookupResponseEvent;
 import com.popcorn.order.repository.OrderRepository;
 import com.popcorn.order.service.OrderCommandService;
+import com.popcorn.order.service.OrderInfoResponseService;
+import com.popcorn.order.service.PaymentCacheService;
+import com.popcorn.order.service.OrderCacheService;
 import com.popcorn.order.service.OrderPopupLookupService;
 import com.popcorn.order.service.OrderPriceLookupService;
 import com.popcorn.order.service.OrderUserLookupService;
 import com.popcorn.order.service.OrderReservationAwaiter;
+import com.popcorn.order.service.OrderIdempotencyService;
 import com.popcorn.order.dto.payment.PaymentUrlResponse;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
@@ -41,8 +45,12 @@ public class OrderRedisStreamListener implements StreamListener<String, MapRecor
     private final OrderRepository orderRepository;
     private final OrderPopupLookupService orderPopupLookupService;
     private final OrderReservationAwaiter orderReservationAwaiter;
+    private final OrderInfoResponseService orderInfoResponseService;
     private final ObjectMapper objectMapper;
     private final ApplicationEventPublisher eventPublisher;
+    private final PaymentCacheService paymentCacheService;
+    private final OrderCacheService orderCacheService;
+    private final OrderIdempotencyService orderIdempotencyService;
 
     @Override
     public void onMessage(MapRecord<String, String, Object> record) {
@@ -53,6 +61,13 @@ public class OrderRedisStreamListener implements StreamListener<String, MapRecor
 
             log.info("🔔 [ORDER] Stream 메시지 수신 - stream: {}, recordId: {}, eventType: {}",
                     streamName, recordId, values.get("eventType"));
+
+            if ("order-info-requests".equals(streamName)) {
+                log.info("📨 [ORDER] Order 정보 요청 이벤트 수신");
+                orderInfoResponseService.handleOrderInfoRequest(values);
+                log.debug("✅ [ORDER] Order 정보 요청 처리 완료 - recordId: {}", recordId);
+                return;
+            }
 
             String eventType = (String) values.get("eventType");
             // eventType에서 따옴표 제거
@@ -215,9 +230,29 @@ public class OrderRedisStreamListener implements StreamListener<String, MapRecor
                     .build();
 
             eventPublisher.publishEvent(event);
+
+            // ✅ 스케줄 예약 완료 신호를 OrderReservationAwaiter에 전송
+            UUID orderId = UUID.fromString(orderIdStr);
+            orderRepository.findById(orderId).ifPresent(order -> {
+                PaymentUrlResponse paymentUrl = orderCommandService.generatePaymentUrlAfterReservation(order);
+                orderReservationAwaiter.completeSuccess(orderId, paymentUrl);
+                log.info("📅✅ [ORDER] 스케줄 예약 완료 신호 전송 - orderId: {}, orderNo: {}", orderId, orderNo);
+            });
         } catch (Exception e) {
             log.error("🚨 [ORDER] 스케줄 예약 성공 이벤트 처리 실패 - values: {}, error: {}",
                     values, e.getMessage(), e);
+
+            // ✅ 처리 실패 시에도 실패 신호를 전송하여 타임아웃 방지
+            try {
+                String orderIdStr = normalizeQuotedString((String) values.get("orderId"));
+                if (orderIdStr != null && !orderIdStr.isEmpty()) {
+                    UUID orderId = UUID.fromString(orderIdStr);
+                    orderReservationAwaiter.completeFailure(orderId, "스케줄 예약 성공 이벤트 처리 실패: " + e.getMessage());
+                    log.info("📅❌ [ORDER] 스케줄 예약 처리 실패로 인한 실패 신호 전송 - orderId: {}", orderId);
+                }
+            } catch (Exception failureEx) {
+                log.error("스케줄 예약 실패 신호 전송 중 오류 발생: {}", failureEx.getMessage(), failureEx);
+            }
         }
     }
 
@@ -268,9 +303,26 @@ public class OrderRedisStreamListener implements StreamListener<String, MapRecor
                     .build();
 
             eventPublisher.publishEvent(event);
+
+            // ✅ 스케줄 예약 실패 신호를 OrderReservationAwaiter에 전송
+            UUID orderId = UUID.fromString(orderIdStr);
+            orderReservationAwaiter.completeFailure(orderId, failureReason != null ? failureReason : "스케줄 예약 실패");
+            log.info("📅❌ [ORDER] 스케줄 예약 실패 신호 전송 - orderId: {}, orderNo: {}, reason: {}", orderId, orderNo, failureReason);
         } catch (Exception e) {
             log.error("🚨 [ORDER] 스케줄 예약 실패 이벤트 처리 실패 - values: {}, error: {}",
                     values, e.getMessage(), e);
+
+            // ✅ 실패 이벤트 처리 실패 시에도 실패 신호를 전송하여 타임아웃 방지
+            try {
+                String orderIdStr = normalizeQuotedString((String) values.get("orderId"));
+                if (orderIdStr != null && !orderIdStr.isEmpty()) {
+                    UUID orderId = UUID.fromString(orderIdStr);
+                    orderReservationAwaiter.completeFailure(orderId, "스케줄 예약 실패 이벤트 처리 실패: " + e.getMessage());
+                    log.info("📅❌ [ORDER] 스케줄 예약 실패 이벤트 처리 실패로 인한 실패 신호 전송 - orderId: {}", orderId);
+                }
+            } catch (Exception failureEx) {
+                log.error("스케줄 예약 실패 신호 전송 중 오류 발생: {}", failureEx.getMessage(), failureEx);
+            }
         }
     }
 
@@ -637,6 +689,27 @@ public class OrderRedisStreamListener implements StreamListener<String, MapRecor
                 orderCommandService.updateOrderStatus(orderUuid, OrderStatus.PAID.name(),
                     "결제 승인 완료 - 결제ID: " + paymentId);
 
+                // 1-1. 결제 관련 캐시 무효화 (결제 URL, 토큰 등)
+                try {
+                    paymentCacheService.evictPaymentCache(orderUuid);
+                    orderCacheService.evictPaymentUrlCache(orderUuid);
+                    log.info("🗑️ [ORDER] 결제 캐시 무효화 완료 - orderId: {} (PaymentCache + OrderCache)", orderId);
+                } catch (Exception cacheEx) {
+                    log.warn("⚠️ [ORDER] 결제 캐시 무효화 실패 - orderId: {}, error: {}", orderId, cacheEx.getMessage());
+                }
+
+                // 1-2. 멱등성 키 무효화 (주문 생성 중복 방지 키 해제)
+                try {
+                    var order = orderRepository.findById(orderUuid).orElse(null);
+                    if (order != null && order.getCustomerId() != null && order.getPopupId() != null) {
+                        String idempotencyKey = "order:create:" + order.getCustomerId() + ":" + order.getPopupId();
+                        orderIdempotencyService.invalidateKey(idempotencyKey, "결제 승인 완료");
+                        log.info("🔑 [ORDER] 멱등성 키 무효화 완료 - orderId: {}, key: {}", orderId, idempotencyKey);
+                    }
+                } catch (Exception idempEx) {
+                    log.warn("⚠️ [ORDER] 멱등성 키 무효화 실패 - orderId: {}, error: {}", orderId, idempEx.getMessage());
+                }
+
                 // 2. 내부 PaymentCompletedEvent 발행하여 재고 차감 프로세스 시작
                 try {
                     PaymentCompletedEvent paymentEvent = PaymentCompletedEvent.builder()
@@ -911,6 +984,27 @@ public class OrderRedisStreamListener implements StreamListener<String, MapRecor
 
             if (orderId != null && !orderId.isEmpty()) {
                 UUID orderUuid = UUID.fromString(orderId);
+
+                // 결제 취소 시 캐시 무효화
+                try {
+                    paymentCacheService.evictPaymentCache(orderUuid);
+                    orderCacheService.evictPaymentUrlCache(orderUuid);
+                    log.info("🗑️ [ORDER] 결제 취소로 인한 캐시 무효화 완료 - orderId: {} (PaymentCache + OrderCache)", orderId);
+                } catch (Exception cacheEx) {
+                    log.warn("⚠️ [ORDER] 결제 취소 캐시 무효화 실패 - orderId: {}, error: {}", orderId, cacheEx.getMessage());
+                }
+
+                // 멱등성 키 무효화 (주문 생성 중복 방지 키 해제)
+                try {
+                    var order = orderRepository.findById(orderUuid).orElse(null);
+                    if (order != null && order.getCustomerId() != null && order.getPopupId() != null) {
+                        String idempotencyKey = "order:create:" + order.getCustomerId() + ":" + order.getPopupId();
+                        orderIdempotencyService.invalidateKey(idempotencyKey, "결제 취소 - " + (reason != null ? reason : "사용자 요청"));
+                        log.info("🔑 [ORDER] 멱등성 키 무효화 완료 - orderId: {}, key: {}, reason: {}", orderId, idempotencyKey, reason);
+                    }
+                } catch (Exception idempEx) {
+                    log.warn("⚠️ [ORDER] 멱등성 키 무효화 실패 - orderId: {}, error: {}", orderId, idempEx.getMessage());
+                }
 
                 // 재고 예약 해제
                 orderCommandService.cancelStockReservationsForOrder(orderUuid);

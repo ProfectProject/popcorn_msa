@@ -137,8 +137,8 @@ public class Order extends BaseEntity {
      */
     public static String generateOrderNo() {
         String dateStr = LocalDateTime.now().format(DateTimeFormatter.ofPattern("yyyyMMdd"));
-        long sequence = System.currentTimeMillis() % 1000000;
-        return "O" + dateStr + "-" + String.format("%06d", sequence);
+        String uniqueId = UUID.randomUUID().toString().replace("-", "").substring(0, 8).toUpperCase();
+        return "O" + dateStr + "-" + uniqueId;
     }
 
     /**

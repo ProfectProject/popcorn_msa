@@ -90,6 +90,7 @@ public class JwtFilter implements GlobalFilter, Ordered{
 
         // 모든 요청 로깅
         log.info("🌐 Gateway 요청 - Method: {}, Path: {}", method, path);
+        log.info("🔍 Gateway passport.secret: {}", passportSecret);
 
         // OPTIONS 요청은 항상 허용
         if (HttpMethod.OPTIONS.equals(exchange.getRequest().getMethod())) {
@@ -175,7 +176,9 @@ public class JwtFilter implements GlobalFilter, Ordered{
                     try {
                         // payload를 안정적으로 직렬화(서명 대상)
                         String payloadJson = objectMapper.writeValueAsString(payload);
+                        log.info("🔍 Gateway payloadJson: {}", payloadJson);
                         String integrity = HmacUtil.hmacSha256Base64Url(passportSecret, payloadJson);
+                        log.info("🔍 Gateway integrity: {}", integrity);
 
                         PassportEnvelope envelope = new PassportEnvelope(payload, integrity);
                         String passportJson = objectMapper.writeValueAsString(envelope);

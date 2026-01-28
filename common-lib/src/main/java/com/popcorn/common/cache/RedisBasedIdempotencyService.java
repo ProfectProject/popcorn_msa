@@ -249,8 +249,19 @@ public class RedisBasedIdempotencyService implements IdempotencyService {
 		try {
 			return objectMapper.writeValueAsString(response);
 		} catch (JsonProcessingException e) {
-			metrics.recordSerializationError();
-			throw new IdempotencyException("응답 직렬화 실패", e);
+			log.warn("📝 응답 직렬화 실패, 대체 처리 시도 - 응답 타입: {}, 오류: {}",
+				response != null ? response.getClass().getSimpleName() : "null", e.getMessage());
+
+			// 대체 처리: toString 기반 간단 직렬화 시도
+			try {
+				String fallback = response != null ? response.toString() : "null";
+				log.debug("✅ 대체 직렬화 성공 - 길이: {}", fallback.length());
+				return fallback;
+			} catch (Exception fallbackError) {
+				log.error("❌ 대체 직렬화도 실패 - 오류: {}", fallbackError.getMessage());
+				metrics.recordSerializationError();
+				throw new IdempotencyException("응답 직렬화 실패 (대체 처리 포함)", e);
+			}
 		}
 	}
 
@@ -284,8 +295,27 @@ public class RedisBasedIdempotencyService implements IdempotencyService {
 		try {
 			return objectMapper.writeValueAsString(record);
 		} catch (JsonProcessingException e) {
-			metrics.recordSerializationError();
-			throw new IdempotencyException("레코드 직렬화 실패", e);
+			log.warn("📝 레코드 직렬화 실패, 안전한 레코드로 재시도 - 키: {}, 오류: {}",
+				record.key(), e.getMessage());
+
+			// 안전한 레코드 생성 시도
+			try {
+				IdempotencyRecord safeRecord = new IdempotencyRecord(
+					record.key(),
+					"SERIALIZATION_FAILED: " + (record.responseData() != null ? "data exists" : "null"),
+					record.completedAt()
+				);
+				String safeResult = objectMapper.writeValueAsString(safeRecord);
+				log.debug("✅ 안전한 레코드 직렬화 성공 - 키: {}", record.key());
+				return safeResult;
+			} catch (Exception fallbackError) {
+				log.error("❌ 안전한 레코드 직렬화도 실패 - 키: {}, 오류: {}",
+					record.key(), fallbackError.getMessage());
+				metrics.recordSerializationError();
+				// 최후 수단: 매우 간단한 문자열 반환
+				return String.format("{\"key\":\"%s\",\"responseData\":\"FAILED\",\"completedAt\":\"%s\"}",
+					record.key(), record.completedAt().toString());
+			}
 		}
 	}
 
@@ -305,8 +335,11 @@ public class RedisBasedIdempotencyService implements IdempotencyService {
 	}
 
 	private static class IdempotencyRecord {
+		@JsonProperty("key")
 		private final String key;
+		@JsonProperty("responseData")
 		private final String responseData;
+		@JsonProperty("completedAt")
 		private final LocalDateTime completedAt;
 
 		@JsonCreator
@@ -323,6 +356,10 @@ public class RedisBasedIdempotencyService implements IdempotencyService {
 		public String key() { return key; }
 		public String responseData() { return responseData; }
 		public LocalDateTime completedAt() { return completedAt; }
+
+		public String getKey() { return key; }
+		public String getResponseData() { return responseData; }
+		public LocalDateTime getCompletedAt() { return completedAt; }
 	}
 
 	private static class IdempotencyMetrics {

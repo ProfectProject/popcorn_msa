@@ -37,21 +37,36 @@ public class OrderInfoResponseService {
      * Order 정보 요청 처리 및 응답
      */
     public void handleOrderInfoRequest(Map<String, Object> requestData) {
+        String requestId = null;
         try {
-            String requestId = (String) requestData.get("requestId");
+            log.info("🔄 [ORDER-INFO] Order 정보 요청 처리 시작 - requestData: {}", requestData);
+
+            requestId = (String) requestData.get("requestId");
             String orderIdStr = (String) requestData.get("requestedOrderId");
             String responseService = (String) requestData.get("responseService");
+
+            // 데이터 정제 (따옴표 제거)
+            if (requestId != null) requestId = requestId.trim().replaceAll("^\"|\"$", "");
+            if (orderIdStr != null) orderIdStr = orderIdStr.trim().replaceAll("^\"|\"$", "");
+            if (responseService != null) responseService = responseService.trim().replaceAll("^\"|\"$", "");
 
             log.info("🔄 [ORDER-INFO] Order 정보 요청 수신 - requestId: {}, orderId: {}, from: {}",
                     requestId, orderIdStr, responseService);
 
-            if (requestId == null || orderIdStr == null) {
+            if (requestId == null || requestId.isEmpty() || orderIdStr == null || orderIdStr.isEmpty()) {
                 log.warn("⚠️ [ORDER-INFO] 필수 정보 누락 - requestId: {}, orderId: {}", requestId, orderIdStr);
                 publishOrderInfoResponse(requestId, false, null, "필수 정보 누락");
                 return;
             }
 
-            UUID orderId = UUID.fromString(orderIdStr);
+            UUID orderId;
+            try {
+                orderId = UUID.fromString(orderIdStr);
+            } catch (IllegalArgumentException e) {
+                log.warn("⚠️ [ORDER-INFO] 잘못된 UUID 형식 - orderId: {}, error: {}", orderIdStr, e.getMessage());
+                publishOrderInfoResponse(requestId, false, null, "잘못된 UUID 형식");
+                return;
+            }
 
             // Order 조회
             Order order = orderRepository.findById(orderId).orElse(null);
@@ -68,9 +83,21 @@ public class OrderInfoResponseService {
                     requestId, order.getOrderNo());
 
         } catch (Exception e) {
-            log.error("❌ [ORDER-INFO] Order 정보 요청 처리 실패 - error: {}", e.getMessage(), e);
-            String requestId = (String) requestData.get("requestId");
-            publishOrderInfoResponse(requestId, false, null, "처리 중 오류 발생");
+            log.error("❌ [ORDER-INFO] Order 정보 요청 처리 실패 - requestId: {}, error: {}", requestId, e.getMessage(), e);
+
+            // requestId가 없을 경우 원본 데이터에서 다시 추출 시도
+            if (requestId == null) {
+                try {
+                    requestId = (String) requestData.get("requestId");
+                    if (requestId != null) {
+                        requestId = requestId.trim().replaceAll("^\"|\"$", "");
+                    }
+                } catch (Exception ex) {
+                    log.error("❌ [ORDER-INFO] requestId 추출도 실패: {}", ex.getMessage());
+                }
+            }
+
+            publishOrderInfoResponse(requestId, false, null, "처리 중 오류 발생: " + e.getMessage());
         }
     }
 
@@ -104,9 +131,10 @@ public class OrderInfoResponseService {
             StringRecord record = StreamRecords.string(responseData)
                     .withStreamKey(ORDER_INFO_RESPONSES_STREAM);
 
-            redisTemplate.opsForStream().add(record);
+            String recordId = redisTemplate.opsForStream().add(record).getValue();
 
-            log.info("📤 [ORDER-INFO] Order 정보 응답 발행 - requestId: {}, success: {}", requestId, success);
+            log.info("📤 [ORDER-INFO] Order 정보 응답 발행 완료 - requestId: {}, success: {}, recordId: {}",
+                     requestId, success, recordId);
 
         } catch (Exception e) {
             log.error("❌ [ORDER-INFO] Order 정보 응답 발행 실패 - requestId: {}, error: {}",

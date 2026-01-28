@@ -46,6 +46,7 @@ public class StoreRedisEventConfig {
     private static final String STOCK_EVENTS_STREAM = "stock-events";        // 재고 차감
     private static final String PRICE_EVENTS_STREAM = "price-events";        // 가격 조회
     private static final String STORE_LOOKUP_STREAM = "store-lookup-requests";
+    private static final String INVENTORY_EVENTS_STREAM = "inventory-events"; // 결제→재고 확정/복구
 
     // Consumer Group 이름
     private static final String STORE_CONSUMER_GROUP = "store-service-group";
@@ -62,6 +63,7 @@ public class StoreRedisEventConfig {
             createConsumerGroupIfNotExists(STOCK_EVENTS_STREAM);
             createConsumerGroupIfNotExists(PRICE_EVENTS_STREAM);
             createConsumerGroupIfNotExists(STORE_LOOKUP_STREAM);
+            createConsumerGroupIfNotExists(INVENTORY_EVENTS_STREAM);
 
             log.info("✅ Redis Stream Consumer Groups 초기화 완료");
         } catch (Exception e) {
@@ -123,6 +125,7 @@ public class StoreRedisEventConfig {
         registerStreamConsumer(container, STOCK_EVENTS_STREAM);
         registerStreamConsumer(container, PRICE_EVENTS_STREAM);
         registerStreamConsumer(container, STORE_LOOKUP_STREAM);
+        registerStreamConsumer(container, INVENTORY_EVENTS_STREAM);
 
         container.start();
         log.info("🚀 Store Redis Stream Listener Container 시작됨");

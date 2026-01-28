@@ -25,26 +25,36 @@ class PaymentOrderInfoService(
     private val pendingRequests = ConcurrentHashMap<String, CompletableFuture<OrderInfoResponseEvent>>()
 
     /**
-     * Order 정보 요청 (비동기)
+     * Order 정보 요청 (이벤트 기반 - Redis Stream)
      */
-    fun requestOrderInfo(orderId: UUID, timeoutMs: Long = 3000): CompletableFuture<OrderInfoResponseEvent?> {
+    fun requestOrderInfo(orderId: UUID, timeoutMs: Long = 15000): CompletableFuture<OrderInfoResponseEvent?> {
         val request = OrderInfoRequestEvent.create(orderId)
         val future = CompletableFuture<OrderInfoResponseEvent>()
 
         pendingRequests[request.requestId!!] = future
 
         try {
-            log.info("🔄 Order 정보 요청 발행 - orderId: {}, requestId: {}", orderId, request.requestId)
+            log.info("🔄 [EVENT] Order 정보 요청 이벤트 발행 - orderId: {}, requestId: {}", orderId, request.requestId)
 
-            // Redis Stream으로 요청 이벤트 발행 (별도 stream 사용)
+            // Redis Stream으로 요청 이벤트 발행
             publishOrderInfoRequest(request)
 
             return future.completeOnTimeout(null, timeoutMs, TimeUnit.MILLISECONDS)
-                .whenComplete { _, _ -> pendingRequests.remove(request.requestId) }
+                .whenComplete { result, throwable ->
+                    pendingRequests.remove(request.requestId)
+                    if (result == null) {
+                        log.warn("🔄 [EVENT] Order 정보 요청 타임아웃 - orderId: {}, requestId: {}, timeout: {}ms",
+                            orderId, request.requestId, timeoutMs)
+                    }
+                    if (throwable != null) {
+                        log.error("🔄 [EVENT] Order 정보 요청 중 예외 발생 - orderId: {}, requestId: {}, error: {}",
+                            orderId, request.requestId, throwable.message)
+                    }
+                }
 
         } catch (e: Exception) {
             pendingRequests.remove(request.requestId)
-            log.error("❌ Order 정보 요청 발행 실패 - orderId: {}, error: {}", orderId, e.message, e)
+            log.error("❌ [EVENT] Order 정보 요청 발행 실패 - orderId: {}, error: {}", orderId, e.message, e)
             return CompletableFuture.completedFuture(null)
         }
     }

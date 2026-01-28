@@ -41,26 +41,27 @@ public class OrderResilienceConfig {
     }
 
     /**
-     * 결제 서비스 전용 서킷 브레이커 설정
+     * 결제 서비스 전용 서킷 브레이커 설정 (🚀 극한 성능 최적화)
      *
      * 결제 서비스는 중요도가 높아 더 엄격한 설정을 적용:
-     * - 빠른 장애 감지 (5회 실패시)
-     * - 짧은 복구 대기 시간 (30초)
+     * - 초고속 장애 감지 (3회 실패시)
+     * - 극한 타임아웃 (5초 → 800ms, 84% 단축)
+     * - 짧은 복구 대기 시간 (30초 → 15초)
      */
     @Bean
     public Customizer<Resilience4JCircuitBreakerFactory> paymentServiceCustomizer() {
         return factory -> factory.configure(builder -> builder
                 .circuitBreakerConfig(CircuitBreakerConfig.custom()
-                    .slidingWindowSize(10)              // 최근 10회 요청 기준으로 판단
-                    .failureRateThreshold(50.0f)        // 50% 실패시 OPEN
-                    .minimumNumberOfCalls(5)             // 최소 5회 호출 후 통계 시작
-                    .waitDurationInOpenState(Duration.ofSeconds(30))  // 30초 후 HALF_OPEN
-                    .permittedNumberOfCallsInHalfOpenState(3)         // HALF_OPEN에서 3회 테스트
-                    .slowCallRateThreshold(80.0f)       // 80% 느린 호출시 OPEN
-                    .slowCallDurationThreshold(Duration.ofSeconds(3)) // 3초 이상이 느린 호출
+                    .slidingWindowSize(8)               // 최근 8회 요청 기준으로 판단 (빠른 감지)
+                    .failureRateThreshold(40.0f)        // 40% 실패시 OPEN (더 민감한 감지)
+                    .minimumNumberOfCalls(3)             // 최소 3회 호출 후 통계 시작 (빠른 반응)
+                    .waitDurationInOpenState(Duration.ofSeconds(15))  // 15초 후 HALF_OPEN (빠른 복구)
+                    .permittedNumberOfCallsInHalfOpenState(2)         // HALF_OPEN에서 2회 테스트 (빠른 판단)
+                    .slowCallRateThreshold(70.0f)       // 70% 느린 호출시 OPEN (더 민감)
+                    .slowCallDurationThreshold(Duration.ofMillis(500)) // 500ms 이상이 느린 호출 (극한 기준)
                     .build())
                 .timeLimiterConfig(TimeLimiterConfig.custom()
-                    .timeoutDuration(Duration.ofSeconds(5))  // 결제는 5초 타임아웃
+                    .timeoutDuration(Duration.ofMillis(800))  // 🚀 5초 → 800ms (84% 단축) - 극한 성능 최적화
                     .build())
                 .build(), "payment-service");
     }

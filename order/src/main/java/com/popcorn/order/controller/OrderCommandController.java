@@ -193,7 +193,7 @@ public class OrderCommandController {
             )
         )
     )
-    @PreAuthorize("hasRole('CUSTOMER')")
+    @PreAuthorize("hasRole('CUSTOMER') or hasRole('SYSTEM')")
     public ResponseEntity<BaseResponse<OrderCreateResponse>> createOrder(
             @Valid @RequestBody OrderCreateRequest request,
             @AuthenticationPrincipal PassportPrincipal principal,
@@ -254,6 +254,15 @@ public class OrderCommandController {
 
         } catch (IdempotencyService.IdempotencyException e) {
             long processingTime = System.currentTimeMillis() - startTime;
+
+            if (e.getCause() != null) {
+                log.warn("❌ [REQ-{}] 주문 생성 실패(멱등성 래핑) - {}ms: {}",
+                        requestId, processingTime, e.getCause().getMessage());
+                if (e.getCause() instanceof RuntimeException) {
+                    throw (RuntimeException) e.getCause();
+                }
+                throw new RuntimeException(e.getCause());
+            }
 
             log.warn("⏳ [REQ-{}] 주문 생성 중복 요청 - {}ms: {}",
                     requestId, processingTime, e.getMessage());

@@ -24,12 +24,20 @@ public class PassportVerifier {
             String expected =
                     HmacUtil.hmacSha256Base64Url(secret, payloadJson);
 
+            // 디버그 로그 추가
+            System.out.println("🔍 PassportVerifier - payloadJson: " + payloadJson);
+            System.out.println("🔍 PassportVerifier - expected: " + expected);
+            System.out.println("🔍 PassportVerifier - actual: " + envelope.userIntegrity());
+
             if (!expected.equals(envelope.userIntegrity())) {
                 throw new SecurityException("Passport integrity mismatch");
             }
 
             long now = Instant.now().getEpochSecond();
-            if (envelope.payload().exp() < now) {
+            long exp = envelope.payload().exp();
+            System.out.println("🔍 PassportVerifier - now: " + now + ", exp: " + exp + ", valid: " + (exp >= now));
+
+            if (exp < now) {
                 throw new SecurityException("Passport expired");
             }
 

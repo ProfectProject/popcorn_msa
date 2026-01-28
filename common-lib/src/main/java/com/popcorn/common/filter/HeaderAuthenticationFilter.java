@@ -43,6 +43,7 @@ public class HeaderAuthenticationFilter extends OncePerRequestFilter {
             System.out.println("🔍 X-Internal-Service: " + internalServiceHeader);
             System.out.println("🔍 X-Internal-Call: " + internalCallHeader);
             System.out.println("🔍 X-Passport: " + passportHeader);
+            System.out.println("🔍 passport.secret: " + passportSecret);
 
             if (passportHeader != null) {
                 try {

@@ -24,21 +24,21 @@ spring:
   cache:
     type: simple
 
-  # Redis 설정 (Order 서비스와 동일한 database 사용)
+  # Redis 설정 (Order 서비스와 동일한 database 사용) - ⚡ 극한 성능 최적화
   data:
     redis:
       host: ${REDIS_HOST:localhost}
       port: ${REDIS_PORT:6379}
       password: ${REDIS_PASSWORD:}
-      timeout: 2000ms
+      timeout: 2000ms  # Redis Stream 안정성 위해 기본 타임아웃 복구
       database: 0  # Payment, Order 서비스와 동일한 database 0 사용
-      connection-timeout: 2000ms
+      connection-timeout: 2000ms  # 연결 지연에 대비해 타임아웃 완화
       jedis:
         pool:
-          max-active: 10
-          max-idle: 8
-          min-idle: 2
-          max-wait: 2000ms
+          max-active: 20  # 10 → 20 (더 많은 동시 연결)
+          max-idle: 16   # 8 → 16 (더 많은 유휴 연결)
+          min-idle: 8    # 2 → 8 (더 많은 최소 연결)
+          max-wait: 2000ms # 커넥션 풀 대기 여유 확대
 
   flyway:
     enabled: true

@@ -47,7 +47,7 @@ jwt:
   expiration: 3600000
   refresh-expiration-ms: 1209600000
 passport:
-  secret: ${PASSPORT_SECRET}
+  secret: ${PASSPORT_SECRET:passport-shared-secret}
   ttl-seconds: 60
 
 logging:

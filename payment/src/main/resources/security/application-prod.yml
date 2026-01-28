@@ -92,13 +92,8 @@ toss:
     client-key: ${TOSS_PAYMENTS_CLIENT_KEY}
     test-mode: ${TOSS_PAYMENTS_TEST_MODE:false}  # 프로덕션에서는 실제 결제
 
-# 프로덕션 마이크로서비스 통신 설정
-microservices:
-  order:
-    base-url: ${ORDER_SERVICE_URL}
-    timeout: 10s  # 프로덕션에서는 더 짧은 타임아웃
-  gateway:
-    base-url: ${GATEWAY_URL}
+# 이벤트 기반 아키텍처 - HTTP 통신 제거 (프로덕션)
+# microservices 통신은 Redis Stream 이벤트로 대체
 
 # 프로덕션 Payment 서비스 비즈니스 설정
 payment:

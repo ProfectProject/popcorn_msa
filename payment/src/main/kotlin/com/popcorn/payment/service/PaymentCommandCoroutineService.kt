@@ -311,7 +311,8 @@ class PaymentCommandCoroutineService(
                         lines = orderInfo.actualLines ?: emptyList()
                     )
                 } else {
-                    log.warn("⚠️ Order 정보 조회 실패 - 기본값으로 이벤트 발행: orderId={}", payment.orderId)
+                    log.warn("⚠️ Order 정보 조회 실패 - 기본값으로 이벤트 발행: orderId={}, orderInfo={}",
+                        payment.orderId, orderInfo)
 
                     StandardPaymentApprovedEvent.create(
                         paymentId = payment.id,

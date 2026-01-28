@@ -1,211 +1,260 @@
-# Payment Service 기본 설정
-# 프로필별 상세 설정은 security/ 폴더 참조
+# Spring Boot 기본 설정 (stores 서비스 방식)
+spring:
+  application:
+    name: payments
+  data:
+    redis:
+      repositories:
+        enabled: false
+  autoconfigure:
+    exclude: org.springframework.boot.autoconfigure.jdbc.DataSourceTransactionManagerAutoConfiguration
+  profiles:
+    default: local
+
+passport:
+  secret: ${PASSPORT_SECRET:passport-shared-secret}
+  ttl-seconds: 60
+
+jwt:
+  secret: ${JWT_SECRET:dGVzdC1qd3Qtc2VjcmV0LWtleS1mb3ItbG9jYWwtZGV2ZWxvcG1lbnQtb25seS1kb25vdC11c2UtaW4tcHJvZHVjdGlvbg==}
+  expiration: 3600000
+  refresh-expiration-ms: 1209600000
+
+# 이벤트 기반 아키텍처 - HTTP 통신 제거
+external:
+  http:
+    enabled: false  # HTTP 기반 외부 서비스 호출 비활성화
+
+---
+# Test 환경 설정 (PostgreSQL 사용 - stores 서비스 방식)
+spring:
+  config:
+    import: optional:file:.env[.properties]
+    activate:
+      on-profile: test
+  # PostgreSQL 테스트 데이터베이스 설정 (.env 파일에서 읽기)
+  datasource:
+    url: jdbc:postgresql://${DB_HOST}:${DB_PORT}/${TEST_DB_NAME}
+    username: ${PAYMENT_DB_USERNAME}
+    password: ${PAYMENT_DB_PASSWORD}
+    driver-class-name: org.postgresql.Driver
+  jpa:
+    hibernate:
+      ddl-auto: none
+    properties:
+      hibernate:
+        type:
+          preferred_enum_jdbc_type: NAMED_ENUM
+        dialect: org.hibernate.dialect.PostgreSQLDialect
+  cache:
+    type: simple
+  flyway:
+    enabled: true
+    user: ${PAYMENT_FLYWAY_USERNAME}
+    password: ${PAYMENT_FLYWAY_PASSWORD}
+    default-schema: payment
+    schemas: payment
+    locations: classpath:db/migration/schema
+    baseline-on-migrate: true
+    validate-on-migrate: false  # 테스트에서는 검증 비활성화
+    clean-disabled: false  # 테스트 환경에서는 허용
+  # Redis 설정 (테스트용 - .env에서 읽기)
+  data:
+    redis:
+      host: ${REDIS_HOST}
+      port: ${REDIS_PORT}
+      password: ${REDIS_PASSWORD}
+      timeout: 300ms
+      database: 1  # 테스트용 별도 데이터베이스
+      connection-timeout: 300ms
+      jedis:
+        pool:
+          max-active: 8
+          max-idle: 8
+          min-idle: 2
+          max-wait: 200ms
+
+redis:
+  idempotency:
+    clear-on-startup: true
+  events:
+    enabled: true
+
+# Toss Payments 설정 (테스트용 - .env에서 읽기)
+payment:
+  toss:
+    base-url: ${TOSS_PAYMENTS_BASE_URL}
+    secret-key: ${TOSS_SECRET_KEY}
+    client-key: ${TOSS_CLIENT_KEY}
+
+---
+# Local 환경 설정 (.env 파일 직접 사용)
+spring:
+  config:
+    import: optional:file:.env[.properties]
+    activate:
+      on-profile: local
+  # PostgreSQL 로컬 데이터베이스 설정 (.env 파일에서 읽기)
+  datasource:
+    url: jdbc:postgresql://${DB_HOST}:${DB_PORT}/${DB_NAME}
+    username: ${PAYMENT_DB_USERNAME}
+    password: ${PAYMENT_DB_PASSWORD}
+    driver-class-name: org.postgresql.Driver
+  jpa:
+    open-in-view: false
+    hibernate:
+      ddl-auto: none
+    properties:
+      hibernate:
+        type:
+          preferred_enum_jdbc_type: NAMED_ENUM
+        dialect: org.hibernate.dialect.PostgreSQLDialect
+  cache:
+    type: simple
+  flyway:
+    enabled: true
+    user: ${PAYMENT_FLYWAY_USERNAME}
+    password: ${PAYMENT_FLYWAY_PASSWORD}
+    default-schema: payment
+    schemas: payment
+    locations: classpath:db/migration/schema,classpath:db/migration/seed
+    baseline-on-migrate: true
+    validate-on-migrate: true
+    clean-disabled: false  # 개발 환경에서만 허용
+  # Redis 설정 (로컬용 - .env에서 읽기)
+  data:
+    redis:
+      host: ${REDIS_HOST}
+      port: ${REDIS_PORT}
+      password: ${REDIS_PASSWORD}
+      timeout: 300ms
+      database: 0  # 로컬 환경용 database 0
+      connection-timeout: 300ms
+      jedis:
+        pool:
+          max-active: 20
+          max-idle: 16
+          min-idle: 8
+          max-wait: 200ms
 
 server:
   port: 8085
+  shutdown: immediate
+  tomcat:
+    uri-encoding: UTF-8
 
-spring:
-  application:
-    name: payment-service
-  # 기본 프로필 설정
-  profiles:
-    active: ${SPRING_PROFILES_ACTIVE:local}
+# Toss Payments 설정 (로컬용 - .env에서 읽기)
+payment:
+  toss:
+    base-url: ${TOSS_PAYMENTS_BASE_URL}
+    secret-key: ${TOSS_SECRET_KEY}
+    client-key: ${TOSS_CLIENT_KEY}
 
-  passport:
-    secret: ${PASSPORT_SECRET:passport-shared-secret}
-    ttl-seconds: 60
+# 커스텀 설정 (Local 프로필)
+order:
+  timeout: ${ORDER_PAYMENT_TIMEOUT}
 
-  jwt:
-    secret: ${JWT_SECRET:dGVzdC1qd3Qtc2VjcmV0LWtleS1mb3ItbG9jYWwtZGV2ZWxvcG1lbnQtb25seS1kb25vdC11c2UtaW4tcHJvZHVjdGlvbg==}
-    expiration: 3600000
-    refresh-expiration-ms: 1209600000
+# 프론트엔드 주소 설정 (Local 프로필)
+frontend:
+  base-url: ${FRONTEND_BASE_URL}
 
-# JWT 설정 (기존 backend와 동일한 secret 사용)
+springdoc:
+  api-docs:
+    enabled: true
+    path: /v3/api-docs
+  swagger-ui:
+    enabled: true
+    path: /swagger-ui.html
 
-  # 설정 파일 import
-  config:
-    import:
-      - optional:file:.env[.properties]
-      - optional:file:../.env[.properties]
-      - classpath:security/application-${spring.profiles.active}.yml
-
-  # 기본 데이터베이스 설정 (프로필별로 오버라이드 가능)
-  datasource:
-    url: jdbc:postgresql://${DB_HOST:localhost}:${DB_PORT:5430}/${DB_NAME:popcorn_db}
-    username: ${PAYMENT_DB_USERNAME:payment_app}
-    password: ${PAYMENT_DB_PASSWORD:payment123}
-    driver-class-name: org.postgresql.Driver
-
-  # 기본 JPA 설정 (프로필별로 오버라이드 가능)
-  jpa:
-    hibernate:
-      ddl-auto: ${JPA_DDL_AUTO:validate}  # 기본값은 validate
-    show-sql: ${JPA_SHOW_SQL:true}        # 기본값은 true (개발용)
-    properties:
-      hibernate:
-        dialect: org.hibernate.dialect.PostgreSQLDialect
-        format_sql: ${JPA_FORMAT_SQL:true}  # 기본값은 true (개발용)
-
-  # 기본 Flyway 설정
-  flyway:
-    enabled: ${FLYWAY_ENABLED:true}
-    baseline-on-migrate: ${FLYWAY_BASELINE:true}
-    locations: classpath:db/migration
-    user: ${PAYMENT_DB_MIGRATION_USERNAME:${PAYMENT_DB_USERNAME:payment_app}}
-    password: ${PAYMENT_DB_MIGRATION_PASSWORD:${PAYMENT_DB_PASSWORD:payment123}}
-
-  # Docker Compose 자동 실행 비활성화 (개발 편의성)
-  docker:
-    compose:
-      enabled: ${DOCKER_COMPOSE_AUTO:false}  # Docker 자동 실행 끄기
-
-  # Redis 설정 (결제 세션 캐싱용)
-  data:
-    redis:
-      host: ${REDIS_HOST:localhost}
-      port: ${REDIS_PORT:6379}
-      password: ${REDIS_PASSWORD:}  # Redis 패스워드 (필요시 설정)
-      timeout: 2000ms
-      database: 2  # Payment 서비스 전용 DB (0은 backend, 1은 order, 2는 payment)
-      connection-timeout: 2000ms
-      jedis:
-        pool:
-          max-active: 15
-          max-idle: 10
-          min-idle: 3
-          max-wait: 3000ms
-
-  # 캐시 설정
-  cache:
-    type: redis
-    redis:
-      time-to-live: 300000  # 5분 TTL (결제 세션은 짧게)
-      cache-null-values: false
-
-# 기본 로깅 설정 (프로필별로 오버라이드 가능)
 logging:
   level:
-    com.popcorn.payment: ${LOG_LEVEL_PAYMENT:DEBUG}
-    org.springframework.web: ${LOG_LEVEL_WEB:INFO}
-    org.hibernate.SQL: ${LOG_LEVEL_SQL:DEBUG}
-    org.hibernate.type.descriptor.sql.BasicBinder: ${LOG_LEVEL_BINDER:TRACE}
-  pattern:
-    console: "%d{yyyy-MM-dd HH:mm:ss} - %msg%n"
+    com.popcorn.payment: DEBUG
+    org.springframework.web: DEBUG
+    org.springframework.boot.web: DEBUG
+    org.hibernate.SQL: DEBUG
+    org.springframework.security: DEBUG
 
-# 관리용 엔드포인트 (모니터링)
+redis:
+  idempotency:
+    clear-on-startup: true
+  events:
+    enabled: true
+---
+# Development 환경 설정 (보안 설정 분리)
+spring:
+  config:
+    import: classpath:security/application-dev.yml
+    activate:
+      on-profile: dev
+
+  # Flyway 설정 (Dev)
+  flyway:
+    enabled: true
+    baseline-on-migrate: true
+    locations:
+      - classpath:db/migration/schema
+#      - classpath:db/migration/seed
+    schemas: payment
+    create-schemas: true
+    clean-disabled: true  # 개발/운영 환경에서는 비활성화
+
+---
+# Production 환경 설정 (보안 설정 분리)
+spring:
+  config:
+    import: classpath:security/application-prod.yml
+    activate:
+      on-profile: prod
+
+  # Flyway 설정 (Prod)
+  flyway:
+    enabled: true
+    baseline-on-migrate: false  # 운영 환경에서는 false
+    locations:
+      - classpath:db/migration/schema
+#      - classpath:db/migration/seed
+    schemas: payment
+    create-schemas: false  # 운영 환경에서는 false
+    clean-disabled: true  # 운영 환경에서는 반드시 true
+    validate-on-migrate: true  # 운영 환경에서 마이그레이션 검증
+
+# Actuator 설정
 management:
   endpoints:
     web:
       exposure:
-        include: health,info,metrics,prometheus
+        include: health,info,metrics,prometheus,circuitbreakers,retries
   endpoint:
     health:
       show-details: always
+      show-components: always
+  health:
+    circuitbreakers:
+      enabled: true
 
-# OpenAPI 문서 설정
+# SpringDoc OpenAPI 설정
 springdoc:
   api-docs:
     path: /v3/api-docs
   swagger-ui:
-    path: /swagger-ui.html
+    groups-order: ASC
+    operations-sorter: method
+    tags-sorter: order
+    urls:
+      - name: payments-toss
+        url: /v3/api-docs/toss
+      - name: payments-qr
+        url: /v3/api-docs/qr
 
-# 애플리케이션 정보
-info:
-  app:
-    name: Payment Service
-    description: 결제 관리 마이크로서비스
-    version: 1.0.0
+---
+# 기본 테스트 프로파일 설정
+spring:
+  config:
+    activate:
+      on-profile: test
 
-# Resilience4j 설정 (Circuit Breaker, Retry, Rate Limiter)
-resilience4j:
-  circuitbreaker:
-    instances:
-      orderService:
-        failure-rate-threshold: 60
-        minimum-number-of-calls: 5
-        sliding-window-size: 15
-        wait-duration-in-open-state: 10s
-        permitted-number-of-calls-in-half-open-state: 3
-        automatic-transition-from-open-to-half-open-enabled: true
-      tossPayments:
-        failure-rate-threshold: 70  # 외부 결제 API는 더 관대하게
-        minimum-number-of-calls: 3
-        sliding-window-size: 10
-        wait-duration-in-open-state: 15s
-      tossPaymentApprove:
-        failure-rate-threshold: 65
-        minimum-number-of-calls: 5
-        sliding-window-size: 10
-        wait-duration-in-open-state: 15s
-        permitted-number-of-calls-in-half-open-state: 3
-      tossPaymentCancel:
-        failure-rate-threshold: 50
-        minimum-number-of-calls: 3
-        sliding-window-size: 6
-        wait-duration-in-open-state: 10s
-        permitted-number-of-calls-in-half-open-state: 2
-      default:
-        failure-rate-threshold: 50
-        minimum-number-of-calls: 5
-        sliding-window-size: 10
-        wait-duration-in-open-state: 5s
-  retry:
-    instances:
-      orderService:
-        max-attempts: 3
-        wait-duration: 2s
-        exponential-backoff-multiplier: 2
-      tossPayments:
-        max-attempts: 2  # 결제 API는 재시도 적게
-        wait-duration: 3s
-      default:
-        max-attempts: 3
-        wait-duration: 1s
-  ratelimiter:
-    instances:
-      orderService:
-        limit-for-period: 100
-        limit-refresh-period: 1s
-        timeout-duration: 1s
-      tossPayments:
-        limit-for-period: 50  # 외부 결제 API 호출 제한
-        limit-refresh-period: 1s
-        timeout-duration: 2s
-
-# 이벤트 기반 아키텍처 - 직접적인 서비스 호출 제거
-# Payment 서비스는 이벤트 발행을 통해서만 다른 서비스와 통신
-# microservices 설정 제거: 모든 통신이 이벤트 기반으로 처리됨
-
-# Toss Payments 설정 (환경별로 오버라이드)
-toss:
-  payments:
-    base-url: ${TOSS_PAYMENTS_BASE_URL:https://api.tosspayments.com}
-    secret-key: ${TOSS_SECRET_KEY:}
-    client-key: ${TOSS_CLIENT_KEY:}
-    test-mode: ${TOSS_PAYMENTS_TEST_MODE:true}  # 기본값은 테스트 모드
-
-# 커스텀 Payment 설정
-payment:
-  token:
-    secret: ${PAYMENT_TOKEN_SECRET:${JWT_SECRET:dGVzdC1qd3Qtc2VjcmV0LWtleS1mb3ItbG9jYWwtZGV2ZWxvcG1lbnQtb25seS1kb25vdC11c2UtaW4tcHJvZHVjdGlvbg==}}
-    ttl-minutes: ${PAYMENT_TOKEN_TTL_MINUTES:30}
-  # Toss Payments 설정 (코루틴 클라이언트용)
-  toss:
-    base-url: ${TOSS_PAYMENTS_BASE_URL:https://api.tosspayments.com}
-    secret-key: ${TOSS_SECRET_KEY:test_secret_key}
-    client-key: ${TOSS_CLIENT_KEY:test_client_key}
-  # 결제 관련 비즈니스 설정
-  webhook:
-    timeout: ${PAYMENT_WEBHOOK_TIMEOUT:30000}  # 웹훅 타임아웃 (30초)
-  validation:
-    max-amount: ${PAYMENT_MAX_AMOUNT:500000}  # 최대 결제 금액 (50만원)
-  notification:
-    enabled: ${PAYMENT_NOTIFICATION_ENABLED:true}  # 알림 활성화
-    retry-count: ${PAYMENT_NOTIFICATION_RETRY:3}   # 알림 재시도 횟수
-    timeout: 5000  # 알림 타임아웃 5초
-  qr:
-    enabled: true  # QR 코드 생성 활성화
-    expiration-minutes: 10  # QR 코드 만료 시간 (10분)
-
+# 기본 테스트 환경 설정 (application-test.yml이 추가 설정 제공)
 jwt:
   secret: ${JWT_SECRET:dGVzdC1qd3Qtc2VjcmV0LWtleS1mb3ItbG9jYWwtZGV2ZWxvcG1lbnQtb25seS1kb25vdC11c2UtaW4tcHJvZHVjdGlvbg==}
+  expiration: 3600000
+  refresh-expiration-ms: 1209600000

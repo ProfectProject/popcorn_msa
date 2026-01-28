@@ -1,32 +1,29 @@
-# Order Service 기본 설정
-# 프로필별 상세 설정은 security/ 폴더 참조
-
-server:
-  port: 8084
-
+# Spring Boot 기본 설정
 spring:
   application:
     name: order-service
 
   # 기본 프로필 설정
   profiles:
-    active: ${SPRING_PROFILES_ACTIVE:local}
+    default: local
 
-  passport:
-    secret: ${PASSPORT_SECRET:passport-shared-secret}
-    ttl-seconds: 60
+passport:
+  secret: ${PASSPORT_SECRET:passport-shared-secret}
+  ttl-seconds: 60
 
-  jwt:
-    secret: ${JWT_SECRET:dGVzdC1qd3Qtc2VjcmV0LWtleS1mb3ItbG9jYWwtZGV2ZWxvcG1lbnQtb25seS1kb25vdC11c2UtaW4tcHJvZHVjdGlvbg==}
-    expiration: 3600000
-    refresh-expiration-ms: 1209600000
+jwt:
+  secret: ${JWT_SECRET:dGVzdC1qd3Qtc2VjcmV0LWtleS1mb3ItbG9jYWwtZGV2ZWxvcG1lbnQtb25seS1kb25vdC11c2UtaW4tcHJvZHVjdGlvbg==}
+  expiration: 3600000
+  refresh-expiration-ms: 1209600000
 
-  # 설정 파일 import
+---
+# Local 환경 설정
+spring:
   config:
-    import:
-      - classpath:security/application-${spring.profiles.active}.yml
-
-  # 기본 데이터베이스 설정 (프로필별로 오버라이드 가능)
+    import: optional:file:.env[.properties]
+    activate:
+      on-profile: local
+  # PostgreSQL 테스트 데이터베이스 설정 (.env 파일에서 읽기)
   datasource:
     url: jdbc:postgresql://${DB_HOST:localhost}:${DB_PORT:5430}/${DB_NAME:popcorn_db}
     username: ${ORDER_DB_USERNAME:order_app}
@@ -48,6 +45,9 @@ spring:
 
   # 기본 Flyway 설정
   flyway:
+    url: jdbc:postgresql://${DB_HOST:localhost}:${DB_PORT:5430}/${DB_NAME:popcorn_db}
+    user: ${ORDER_FLYWAY_USERNAME:order_migrator}
+    password: ${ORDER_FLYWAY_PASSWORD:order321}
     enabled: ${FLYWAY_ENABLED:true}
     baseline-on-migrate: ${FLYWAY_BASELINE:false}
     locations: classpath:db/migration
@@ -62,24 +62,75 @@ spring:
     redis:
       host: ${REDIS_HOST:localhost}
       port: ${REDIS_PORT:6379}
-      password: ${REDIS_PASSWORD:}  # Redis 패스워드 (필요시 설정)
-      timeout: 2000ms
-      database: ${REDIS_DATABASE:1}  # Order 서비스 전용 DB (0은 backend, 1은 order)
-      connection-timeout: 2000ms
+      password: ${REDIS_PASSWORD:}
+      timeout: 300ms
+      database: 0  # 테스트용 별도 데이터베이스
+      connection-timeout: 300ms
       jedis:
         pool:
           max-active: 10
           max-idle: 8
           min-idle: 2
-          max-wait: 2000ms
+          max-wait: 200ms
 
-  # 캐시 설정
+redis:
+  idempotency:
+    clear-on-startup: true
+  events:
+    enabled: true
+
+---
+# Local 환경 설정 (.env 파일 직접 사용)
+spring:
+  config:
+    import: optional:file:.env[.properties]
+    activate:
+      on-profile: local
+  # PostgreSQL 로컬 데이터베이스 설정 (.env 파일에서 읽기)
+  datasource:
+    url: jdbc:postgresql://${DB_HOST}:${DB_PORT}/${DB_NAME}
+    username: ${ORDER_DB_USERNAME}
+    password: ${ORDER_DB_PASSWORD}
+    driver-class-name: org.postgresql.Driver
+  jpa:
+    open-in-view: false
+    hibernate:
+      ddl-auto: none
+    properties:
+      hibernate:
+        type:
+          preferred_enum_jdbc_type: NAMED_ENUM
+        dialect: org.hibernate.dialect.PostgreSQLDialect
   cache:
     type: redis
     redis:
       time-to-live: 600000  # 10분 TTL
       cache-null-values: false
 
+# 커스텀 설정 (Local 프로필)
+order:
+  payment:
+    timeout: ${ORDER_PAYMENT_TIMEOUT}
+    token-cache-ttl: 1800
+    url-cache-ttl: 1800
+    status-cache-ttl: 300
+  cancel:
+    timeout: ${ORDER_CANCEL_TIMEOUT}
+  validation:
+    max-quantity: ${ORDER_MAX_QUANTITY}
+    min-quantity: ${ORDER_MIN_QUANTITY}
+  reservation:
+    wait-timeout-ms: ${ORDER_RESERVATION_WAIT_TIMEOUT_MS:5000}
+  notification:
+    enabled: ${ORDER_NOTIFICATION_ENABLED}
+    retry-count: ${ORDER_NOTIFICATION_RETRY}
+    async: true
+
+# 프론트엔드 주소 설정 (Local 프로필)
+frontend:
+  base-url: ${FRONTEND_BASE_URL}
+
+---
 # 기본 로깅 설정 (프로필별로 오버라이드 가능)
 logging:
   level:
@@ -158,17 +209,10 @@ resilience4j:
         limit-refresh-period: 1s
         timeout-duration: 1s
 
-# 마이크로서비스 간 통신 설정 (환경별 자동 전환)
-microservices:
-  # 결제 서비스 (Gateway를 통한 접근)
-  payment:
-    base-url: ${PAYMENT_SERVICE_URL:http://localhost:8080}
-    timeout: 30s
-
-  # 체크인 서비스 (Gateway를 통한 접근)
-  checkins:
-    base-url: ${CHECKINS_SERVICE_URL:http://localhost:8080}
-    timeout: 10s
+# 이벤트 기반 아키텍처 - HTTP 통신 제거
+external:
+  http:
+    enabled: false  # HTTP 기반 외부 서비스 호출 비활성화
 
 # 프론트엔드 주소 설정
 frontend:

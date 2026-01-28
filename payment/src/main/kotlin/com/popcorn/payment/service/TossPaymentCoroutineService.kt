@@ -310,6 +310,17 @@ class TossPaymentCoroutineService(
         throw PaymentException.externalApiError("토스 결제 취소 실패(서킷 브레이커): ${throwable.message}")
     }
 
+    @Suppress("unused")
+    fun cancelPaymentFallback(
+        orderId: UUID,
+        cancelReason: String,
+        continuation: Continuation<*>,
+        throwable: Throwable
+    ): Any {
+        log.error("🚨 토스 결제 취소 CircuitBreaker OPEN - orderId={}, error={}", orderId, throwable.message, throwable)
+        throw PaymentException.externalApiError("토스 결제 취소 실패(서킷 브레이커): ${throwable.message}")
+    }
+
     /**
      * 멱등성 체크 - paymentKey 기반 중복 결제 확인 (이벤트 기반)
      *

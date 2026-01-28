@@ -7,6 +7,8 @@ import java.util.UUID;
 import com.popcorn.order.entity.Order;
 import com.popcorn.order.entity.OrderItem;
 
+import com.fasterxml.jackson.annotation.JsonCreator;
+import com.fasterxml.jackson.annotation.JsonProperty;
 import lombok.Builder;
 import lombok.Getter;
 
@@ -47,6 +49,31 @@ public class OrderCreateResponse {
     /** 결제 정보 - 주문 생성 후 결제 프로세스 시작 시 포함 */
     private final PaymentInfo paymentInfo;
 
+    @JsonCreator
+    public OrderCreateResponse(
+            @JsonProperty("orderId") UUID orderId,
+            @JsonProperty("orderNo") String orderNo,
+            @JsonProperty("orderType") String orderType,
+            @JsonProperty("status") String status,
+            @JsonProperty("popupId") UUID popupId,
+            @JsonProperty("totalAmount") Integer totalAmount,
+            @JsonProperty("cancelableUntil") LocalDateTime cancelableUntil,
+            @JsonProperty("createdAt") LocalDateTime createdAt,
+            @JsonProperty("items") List<OrderItemResponse> items,
+            @JsonProperty("paymentInfo") PaymentInfo paymentInfo
+    ) {
+        this.orderId = orderId;
+        this.orderNo = orderNo;
+        this.orderType = orderType;
+        this.status = status;
+        this.popupId = popupId;
+        this.totalAmount = totalAmount;
+        this.cancelableUntil = cancelableUntil;
+        this.createdAt = createdAt;
+        this.items = items;
+        this.paymentInfo = paymentInfo;
+    }
+
     @Getter
     @Builder
     public static class OrderItemResponse {
@@ -55,6 +82,21 @@ public class OrderCreateResponse {
         private final Integer qty;
         private final Integer unitPrice;
         private final Integer lineAmount;
+
+        @JsonCreator
+        public OrderItemResponse(
+                @JsonProperty("itemId") UUID itemId,
+                @JsonProperty("orderItemType") String orderItemType,
+                @JsonProperty("qty") Integer qty,
+                @JsonProperty("unitPrice") Integer unitPrice,
+                @JsonProperty("lineAmount") Integer lineAmount
+        ) {
+            this.itemId = itemId;
+            this.orderItemType = orderItemType;
+            this.qty = qty;
+            this.unitPrice = unitPrice;
+            this.lineAmount = lineAmount;
+        }
     }
 
     @Getter
@@ -66,6 +108,23 @@ public class OrderCreateResponse {
         private final String paymentUrl;
         private final LocalDateTime expiresAt;
         private final String message;
+
+        @JsonCreator
+        public PaymentInfo(
+                @JsonProperty("paymentId") UUID paymentId,
+                @JsonProperty("paymentStatus") String paymentStatus,
+                @JsonProperty("paymentMethod") String paymentMethod,
+                @JsonProperty("paymentUrl") String paymentUrl,
+                @JsonProperty("expiresAt") LocalDateTime expiresAt,
+                @JsonProperty("message") String message
+        ) {
+            this.paymentId = paymentId;
+            this.paymentStatus = paymentStatus;
+            this.paymentMethod = paymentMethod;
+            this.paymentUrl = paymentUrl;
+            this.expiresAt = expiresAt;
+            this.message = message;
+        }
     }
 
     public static OrderCreateResponse fromOrder(Order order) {

@@ -40,6 +40,8 @@ public class RedisEventConfig {
     private static final String PAYMENT_EVENTS_STREAM = "payment-events";
     private static final String STORE_LOOKUP_RESPONSES_STREAM = "store-lookup-responses";
     private static final String SCHEDULE_EVENTS_STREAM = "schedule-events";
+    private static final String ORDER_QUERY_STREAM = "order:query:stream";
+    private static final String ORDER_UPDATE_STREAM = "order:update:stream";
 
     // Consumer Group 이름
     private static final String ORDER_CONSUMER_GROUP = "order-service-group";
@@ -61,6 +63,8 @@ public class RedisEventConfig {
             createConsumerGroupIfNotExists(PAYMENT_EVENTS_STREAM); // Payment 이벤트 수신용
             createConsumerGroupIfNotExists(STORE_LOOKUP_RESPONSES_STREAM); // Store 조회 응답 수신용
             createConsumerGroupIfNotExists(SCHEDULE_EVENTS_STREAM); // 스케줄 예약 결과 수신용
+            createConsumerGroupIfNotExists(ORDER_QUERY_STREAM); // 주문 조회 요청 수신용
+            createConsumerGroupIfNotExists(ORDER_UPDATE_STREAM); // 주문 상태 업데이트 요청 수신용
 
             log.info("✅ Order Service Redis Stream Consumer Groups 초기화 완료");
         } catch (Exception e) {
@@ -156,6 +160,22 @@ public class RedisEventConfig {
                 (org.springframework.data.redis.stream.StreamListener) orderRedisStreamListener
         );
         log.info("📝 Redis Stream Consumer 등록: {} - {}", SCHEDULE_EVENTS_STREAM, "schedule-consumer-1");
+
+        // 주문 조회 요청 Stream 구독 (Payment 서비스 등)
+        container.receive(
+                Consumer.from(ORDER_CONSUMER_GROUP, "order-query-consumer-1"),
+                StreamOffset.create(ORDER_QUERY_STREAM, ReadOffset.lastConsumed()),
+                (org.springframework.data.redis.stream.StreamListener) orderRedisStreamListener
+        );
+        log.info("📝 Redis Stream Consumer 등록: {} - {}", ORDER_QUERY_STREAM, "order-query-consumer-1");
+
+        // 주문 상태 업데이트 요청 Stream 구독 (Payment 서비스 등)
+        container.receive(
+                Consumer.from(ORDER_CONSUMER_GROUP, "order-update-consumer-1"),
+                StreamOffset.create(ORDER_UPDATE_STREAM, ReadOffset.lastConsumed()),
+                (org.springframework.data.redis.stream.StreamListener) orderRedisStreamListener
+        );
+        log.info("📝 Redis Stream Consumer 등록: {} - {}", ORDER_UPDATE_STREAM, "order-update-consumer-1");
 
         try {
             container.start();

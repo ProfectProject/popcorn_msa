@@ -191,7 +191,7 @@ jwt:
   expiration: 3600000
 
 passport:
-  secret: ${PASSPORT_SECRET}
+  secret: my-super-secret-key-for-popcorn-msa-development-only-do-not-use-in-production
   ttl-seconds: 60
 
 # Redis 이벤트 설정

@@ -165,12 +165,57 @@ public class StoreRedisStreamListener implements StreamListener<String, MapRecor
                     log.info("📅🔒 [STORES] 스케줄 확정 요청 이벤트 수신");
                     handleScheduleConfirmationRequested(values);
                     break;
+                case "inventory-confirmation-requested":
+                    log.info("📦🔒 [STORES] 재고 확정/복구 요청 이벤트 수신");
+                    handleInventoryConfirmationRequested(values);
+                    break;
                 default:
                     log.info("🔔 [STORES] 알 수 없는 이벤트 타입 - type: {}", eventType);
                     break;
             }
         } catch (Exception e) {
             log.error("🚨 [STORES] 이벤트 처리 실패 - eventType: {}, error: {}", eventType, e.getMessage(), e);
+        }
+    }
+
+    private void handleInventoryConfirmationRequested(Map<String, Object> values) {
+        try {
+            String paymentIdStr = normalizeUuidString((String) values.get("paymentId"));
+            String orderIdStr = normalizeUuidString((String) values.get("orderId"));
+            String actionType = normalizeQuotedString((String) values.get("actionType"));
+            String reason = normalizeQuotedString((String) values.get("reason"));
+            String requestedAt = normalizeQuotedString((String) values.get("requestedAt"));
+            String occurredAt = normalizeQuotedString((String) values.get("occurredAt"));
+            String eventId = normalizeQuotedString((String) values.get("eventId"));
+
+            if (orderIdStr == null || orderIdStr.isBlank()) {
+                log.warn("📦🔒 [STORES] 재고 확정 요청 필수 데이터 누락 - values: {}", values);
+                return;
+            }
+
+            UUID orderId = UUID.fromString(orderIdStr);
+            UUID paymentId = paymentIdStr != null && !paymentIdStr.isBlank()
+                    ? UUID.fromString(paymentIdStr)
+                    : new UUID(0, 0);
+
+            InventoryConfirmationRequestedEvent event =
+                    InventoryConfirmationRequestedEvent.fromPayload(
+                            paymentId,
+                            orderId,
+                            actionType,
+                            reason,
+                            requestedAt,
+                            occurredAt,
+                            eventId
+                    );
+
+            eventPublisher.publishEvent(event);
+            log.info("✅ [STORES] 재고 확정/복구 이벤트 전달 완료 - orderId: {}, action: {}",
+                    orderId, event.getActionType());
+
+        } catch (Exception e) {
+            log.error("🚨 [STORES] 재고 확정/복구 요청 처리 실패 - values: {}, error: {}",
+                    values, e.getMessage(), e);
         }
     }
 

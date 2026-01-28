@@ -1,5 +1,9 @@
 server:
   port: 8084
+  shutdown: immediate
+  tomcat:
+    uri-encoding: UTF-8
+
 
 spring:
   config:
@@ -40,80 +44,124 @@ spring:
     validate-on-migrate: true
     clean-disabled: false
 
-  # Redis 설정
+  # Redis 설정 (stores 서비스와 동일한 극한 성능 최적화)
   data:
     redis:
-      host: localhost
-      port: 6379
-      database: 0  # Payment 서비스와 동일한 database 사용 (이벤트 통신용)
-      timeout: 2000ms
-      connection-timeout: 2000ms
+      host: ${REDIS_HOST:localhost}
+      port: ${REDIS_PORT:6379}
+      password: ${REDIS_PASSWORD:}
+      timeout: 2000ms  # Redis Stream 안정성 위해 기본 타임아웃 복구
+      database: 0  # Payment, Stores 서비스와 동일한 database 0 사용
+      connection-timeout: 2000ms  # 연결 지연에 대비해 타임아웃 완화
       jedis:
         pool:
-          max-active: 10
-          max-idle: 8
-          min-idle: 2
-          max-wait: 2000ms
+          max-active: 20  # 10 → 20 (더 많은 동시 연결)
+          max-idle: 16   # 8 → 16 (더 많은 유휴 연결)
+          min-idle: 8    # 2 → 8 (더 많은 최소 연결)
+          max-wait: 2000ms # 커넥션 풀 대기 여유 확대
 
-  # DevTools 활성화
-  devtools:
-    restart:
-      enabled: true
-
-  # RabbitMQ 비활성화 (개발 환경)
-  rabbitmq:
-    listener:
-      simple:
-        auto-startup: false
-      direct:
-        auto-startup: false
-  autoconfigure:
-    exclude:
-      - org.springframework.boot.autoconfigure.amqp.RabbitAutoConfiguration
+# 인증 설정
+passport:
+  secret: ${PASSPORT_SECRET:passport-shared-secret}
+  ttl-seconds: 60
 
 # Redis 이벤트 설정
 redis:
   events:
     enabled: true
 
-# 로깅 설정 (로컬 환경용)
-logging:
-  level:
-    com.popcorn.order: DEBUG
-    org.springframework.web: DEBUG
-    org.hibernate.SQL: DEBUG
-    org.hibernate.type.descriptor.sql.BasicBinder: TRACE
-    org.springframework.security: DEBUG
-
-passport:
-  secret: ${PASSPORT_SECRET:passport-shared-secret}
-  ttl-seconds: 60
-
 jwt:
   secret: ${JWT_SECRET:dGVzdC1qd3Qtc2VjcmV0LWtleS1mb3ItbG9jYWwtZGV2ZWxvcG1lbnQtb25seS1kb25vdC11c2UtaW4tcHJvZHVjdGlvbg==}
   expiration: 3600000
   refresh-expiration-ms: 1209600000
 
-# 마이크로서비스 간 통신 설정 (로컬용)
-microservices:
-  store:
-    base-url: ${STORE_SERVICE_URL:http://localhost:8083}
-    timeout: 30s
-  payment:
-    base-url: ${PAYMENT_SERVICE_URL:http://localhost:8080}
-    timeout: 30s
-  user:
-    base-url: http://localhost:8082
-    timeout: 30s
-  gateway:
-    base-url: http://localhost:8080
+springdoc:
+  api-docs:
+    enabled: true
+    path: /v3/api-docs
+  swagger-ui:
+    enabled: true
+    path: /swagger-ui.html
 
+# Resilience4j 설정 (Circuit Breaker, Retry, Rate Limiter)
+resilience4j:
+  circuitbreaker:
+    instances:
+      paymentService:
+        failure-rate-threshold: 60
+        minimum-number-of-calls: 5
+        sliding-window-size: 15
+        wait-duration-in-open-state: 10s
+        permitted-number-of-calls-in-half-open-state: 3
+        automatic-transition-from-open-to-half-open-enabled: true
+      userService:
+        failure-rate-threshold: 50
+        minimum-number-of-calls: 5
+        sliding-window-size: 10
+        wait-duration-in-open-state: 5s
+      default:
+        failure-rate-threshold: 50
+        minimum-number-of-calls: 5
+        sliding-window-size: 10
+        wait-duration-in-open-state: 5s
+  retry:
+    instances:
+      paymentService:
+        max-attempts: 2  # 3 → 2 (빠른 실패)
+        wait-duration: 200ms  # 2s → 200ms (90% 단축)
+        exponential-backoff-multiplier: 1.5  # 2 → 1.5 (더 짧은 백오프)
+      userService:
+        max-attempts: 2  # 3 → 2 (빠른 실패)
+        wait-duration: 100ms  # 1s → 100ms (90% 단축)
+      default:
+        max-attempts: 2  # 3 → 2 (빠른 실패)
+        wait-duration: 100ms  # 1s → 100ms (90% 단축)
+  ratelimiter:
+    instances:
+      paymentService:
+        limit-for-period: 150  # 100 → 150 (더 높은 처리량)
+        limit-refresh-period: 1s
+        timeout-duration: 200ms  # 1s → 200ms (80% 단축)
+      userService:
+        limit-for-period: 300  # 200 → 300 (더 높은 처리량)
+        limit-refresh-period: 1s
+        timeout-duration: 200ms  # 1s → 200ms (80% 단축)
+
+
+
+# 프론트엔드 주소 설정
+frontend:
+  base-url: ${FRONTEND_BASE_URL:http://localhost:3000}
+
+# 커스텀 설정
 order:
+  # 주문 관련 비즈니스 설정
   payment:
-    timeout: 60000  # 로컬에서는 긴 타임아웃
+    timeout: ${ORDER_PAYMENT_TIMEOUT:5000}  # ⚡ 결제 대기 시간: 30초 → 5초 (83% 단축) - 극한 성능 최적화
+    token-cache-ttl: 1800  # 결제 토큰 캐시 TTL (30분)
+    url-cache-ttl: 1800    # 결제 URL 캐시 TTL (30분)
+    status-cache-ttl: 300  # 결제 상태 캐시 TTL (5분)
   cancel:
-    timeout: 3600   # 로컬에서는 1시간
+    timeout: ${ORDER_CANCEL_TIMEOUT:600}   # ⚡ 취소 가능 시간: 30분 → 10분 (67% 단축)
   validation:
-    max-quantity: 1000  # 로컬에서는 더 큰 수량 허용
-  price-lookup:
-    timeout-ms: 2000  # 가격 조회 타임아웃 5000ms → 2000ms 단축 (속도 개선)
+    max-quantity: ${ORDER_MAX_QUANTITY:100}  # 최대 주문 수량
+    min-quantity: ${ORDER_MIN_QUANTITY:1}    # 최소 주문 수량
+  reservation:
+    wait-timeout-ms: ${ORDER_RESERVATION_WAIT_TIMEOUT_MS:5000}  # 예약 응답 대기 시간 (기본 5초)
+  notification:
+    enabled: ${ORDER_NOTIFICATION_ENABLED:true}  # 알림 활성화
+    retry-count: ${ORDER_NOTIFICATION_RETRY:2}   # ⚡ 알림 재시도 횟수: 3 → 2 (빠른 실패)
+    async: true  # 비동기 알림 처리 (성능 최적화)
+
+logging:
+  level:
+    com.popcorn.order: DEBUG
+    org.springframework.web: DEBUG
+    org.springframework.boot.web: DEBUG
+    org.hibernate.SQL: DEBUG
+    org.springframework.security: DEBUG
+
+# 이벤트 기반 아키텍처 - HTTP 통신 제거 (극한 성능 최적화)
+external:
+  http:
+    enabled: false  # HTTP 기반 외부 서비스 호출 비활성화

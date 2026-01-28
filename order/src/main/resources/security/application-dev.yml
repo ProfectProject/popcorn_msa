@@ -54,16 +54,8 @@ logging:
     org.hibernate.SQL: DEBUG
     org.hibernate.type.descriptor.sql.BasicBinder: TRACE
 
-# 마이크로서비스 간 통신 설정
-microservices:
-  payment:
-    base-url: ${PAYMENT_SERVICE_URL:http://localhost:8080}
-    timeout: 30s
-  user:
-    base-url: ${USER_SERVICE_URL:http://localhost:8082}
-    timeout: 30s
-  gateway:
-    base-url: ${GATEWAY_URL:http://localhost:8080}
+# 이벤트 기반 아키텍처 - HTTP 통신 제거
+# microservices 통신은 Redis Stream 이벤트로 대체
 
 # Order 서비스 비즈니스 설정
 order:
