@@ -36,6 +36,17 @@ public class InventoryRedisHoldService {
     private final RedisScript<Long> releaseHoldScript;
     private final ObjectMapper objectMapper;
 
+    public boolean ensureGoodsAvailabilityKey(UUID popupId, UUID goodsId, int available) {
+        String key = buildGoodsKey(popupId, goodsId);
+        Boolean inserted = redisTemplate.opsForValue()
+                .setIfAbsent(key, String.valueOf(available), HOLD_TTL);
+        if (Boolean.TRUE.equals(inserted)) {
+            log.info("[GOODS_INIT] key initialized - popupId={}, goodsId={}, available={}", popupId, goodsId, available);
+            return true;
+        }
+        return false;
+    }
+
     public HoldResult holdSchedule(UUID orderId, UUID popupId, UUID scheduleId, int scheduleQty) {
         validateHoldInputs(orderId, popupId, scheduleId, scheduleQty);
         List<String> keys = Collections.singletonList(buildScheduleKey(popupId, scheduleId));
@@ -186,6 +197,10 @@ public class InventoryRedisHoldService {
         return items.stream()
                 .map(item -> String.format(GOODS_KEY_TEMPLATE, popupId, item.getGoodsId()))
                 .collect(Collectors.toList());
+    }
+
+    private String buildGoodsKey(UUID popupId, UUID goodsId) {
+        return String.format(GOODS_KEY_TEMPLATE, popupId, goodsId);
     }
 
     private String buildScheduleKey(UUID popupId, UUID scheduleId) {

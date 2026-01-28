@@ -156,7 +156,7 @@ public class StoreRedisEventPublisher {
     /**
      * 굿즈 예약 성공 이벤트 발행
      */
-    public void publishGoodsReservedEvent(java.util.UUID orderId, java.util.UUID popupId,
+    public void publishGoodsReservedEvent(java.util.UUID orderId, String orderNo, java.util.UUID popupId,
                                         java.util.UUID goodsId, int quantity) {
         try {
             log.info("🚀 [STORES] 굿즈 예약 성공 이벤트 Stream 발행 - orderId: {}, goodsId: {}, quantity: {}",
@@ -167,6 +167,7 @@ public class StoreRedisEventPublisher {
                 "eventType", "goods-reserved",
                 "eventId", eventId,
                 "orderId", orderId.toString(),
+                "orderNo", orderNo != null ? orderNo : "",
                 "popupId", popupId.toString(),
                 "goodsId", goodsId.toString(),
                 "quantity", Integer.toString(quantity),

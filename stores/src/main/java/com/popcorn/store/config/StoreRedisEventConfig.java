@@ -110,7 +110,7 @@ public class StoreRedisEventConfig {
             RedisConnectionFactory connectionFactory) {
 
         var options = StreamMessageListenerContainer.StreamMessageListenerContainerOptions
-                        .<String, MapRecord<String, String, Object>>builder()
+                        .<String, MapRecord<String, String, String>>builder()
                         .batchSize(10)  // 한 번에 처리할 메시지 수
                         .pollTimeout(Duration.ofMillis(100))  // 폴링 타임아웃
                         .build();

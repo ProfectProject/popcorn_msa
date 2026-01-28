@@ -3,8 +3,10 @@ package com.popcorn.store.event.inventory;
 import com.popcorn.store.domain.goods.entity.GoodsOrderReservation;
 import com.popcorn.store.domain.goods.entity.ReservationStatus;
 import com.popcorn.store.domain.goods.entity.ReservationType;
+import com.popcorn.store.domain.goods.entity.GoodsVariant;
 import com.popcorn.store.domain.goods.service.GoodsOrderReservationService;
 import com.popcorn.store.domain.goods.service.GoodsService;
+import com.popcorn.store.domain.goods.repository.GoodsVariantRepository;
 import com.popcorn.store.event.order.OrderPaidEvent;
 import com.popcorn.store.event.order.StockDeductionFailedEvent;
 import com.popcorn.store.event.order.StockDeductionSuccessEvent;
@@ -37,6 +39,7 @@ public class GoodsInventorySagaListener {
     private static final String INVENTORY_CONFIRMATION_GOODS_SCOPE = "inventory-confirmation-goods";
 
     private final GoodsService goodsService;
+    private final GoodsVariantRepository goodsVariantRepository;
     private final GoodsOrderReservationService reservationService;
     private final StoreInventoryEventPublisher eventPublisher;
     private final InventoryRedisHoldService inventoryHoldService;
@@ -49,115 +52,35 @@ public class GoodsInventorySagaListener {
     @EventListener
     @Transactional
     public void handleOrderPaid(OrderPaidEvent event) {
-        if (!shouldProcessOrderPaid(event)) {
-            return;
-        }
-        List<OrderPaidEvent.OrderItemInfo> goodsItems = event.getGoodsItems();
-        if (goodsItems.isEmpty()) {
-            log.info("굿즈가 포함되지 않은 주문 - orderId: {}", event.getOrderId());
-            return;
-        }
+        log.info("order-paid 예약 처리 비활성화 - orderId: {}, eventId: {}", event.getOrderId(), event.getEventId());
+        return;
+    }
 
-        List<GoodsOrderReservation> existingReservations =
-                reservationService.findByOrderIdAndType(event.getOrderId(), ReservationType.GOODS);
-        List<GoodsOrderReservation> heldReservations = existingReservations.stream()
-                .filter(reservation -> ReservationStatus.HELD == reservation.getStatus())
-                .collect(Collectors.toList());
-
-        if (!heldReservations.isEmpty()) {
-            List<StockReservedEvent.ReservedStockItem> reservedItems = goodsItems.stream()
-                    .filter(item -> item.getGoodsId() != null && item.getQuantity() != null && item.getQuantity() > 0)
-                    .map(item -> StockReservedEvent.ReservedStockItem.goods(
-                            item.getGoodsId(),
-                            item.getQuantity(),
-                            item.getUnitPrice(),
-                            resolveProductName(item)
-                    ))
-                    .toList();
-
-            if (!reservedItems.isEmpty()) {
-                eventPublisher.publishStockReservedEvent(event, reservedItems);
+    private void initializeGoodsAvailabilityKeys(UUID popupId, List<OrderPaidEvent.OrderItemInfo> goodsItems) {
+        for (OrderPaidEvent.OrderItemInfo item : goodsItems) {
+            if (item.getGoodsId() == null) {
+                continue;
             }
-            return;
+            GoodsVariant variant = goodsVariantRepository.findById(item.getGoodsId()).orElse(null);
+            if (variant == null) {
+                continue;
+            }
+            int available = Math.max(0, variant.getStock() - variant.getReservationStock());
+            inventoryHoldService.ensureGoodsAvailabilityKey(popupId, item.getGoodsId(), available);
         }
+    }
 
-        List<GoodsOrderReservation> createdReservations = new ArrayList<>();
-        List<StockReservedEvent.ReservedStockItem> reservedItems = new ArrayList<>();
-        List<OrderPaidEvent.OrderItemInfo> scheduleItems = event.getReservationItems();
-        List<GoodsHoldItem> goodsHoldItems = buildGoodsHoldItems(goodsItems);
-        HoldResult holdResult = null;
+    private void handleReservationFailure(OrderPaidEvent event,
+                                          List<OrderPaidEvent.OrderItemInfo> goodsItems,
+                                          List<GoodsOrderReservation> createdReservations,
+                                          String reason) {
+        log.error("재고 예약 실패 - orderId: {}, error: {}", event.getOrderId(), reason);
+        inventoryHoldService.releaseHold(event.getOrderId());
+        createdReservations.forEach(reservation -> reservationService.updateStatus(
+                reservation, ReservationStatus.FAILED, reason));
 
-        try {
-            if (!goodsHoldItems.isEmpty()) {
-                UUID resolvedPopupId = resolvePopupIdForGoods(event, goodsHoldItems);
-                if (!scheduleItems.isEmpty()) {
-                    OrderPaidEvent.OrderItemInfo scheduleItem = scheduleItems.get(0);
-                    if (scheduleItem.getSessionId() != null && scheduleItem.getQuantity() != null
-                            && scheduleItem.getQuantity() > 0) {
-                        holdResult = inventoryHoldService.holdBoth(
-                                event.getOrderId(),
-                                resolvedPopupId,
-                                scheduleItem.getSessionId(),
-                                scheduleItem.getQuantity(),
-                                goodsHoldItems
-                        );
-                    }
-                } else {
-                    holdResult = inventoryHoldService.holdGoods(
-                            event.getOrderId(),
-                            resolvedPopupId,
-                            goodsHoldItems
-                    );
-                }
-                if (holdResult != null && !holdResult.isSuccess()) {
-                    throw new RuntimeException("Redis HOLD 실패: " + holdResult.getDetail());
-                }
-            }
-
-            for (OrderPaidEvent.OrderItemInfo item : goodsItems) {
-                if (item.getGoodsId() == null || item.getQuantity() == null || item.getQuantity() <= 0) {
-                    log.warn("잘못된 굿즈 항목 - orderId: {}, goodsId: {}, quantity: {}",
-                            event.getOrderId(), item.getGoodsId(), item.getQuantity());
-                    continue;
-                }
-
-                UUID popupId = event.getPopupId();
-                if (popupId == null) {
-                    popupId = goodsService.resolvePopupId(item.getGoodsId());
-                }
-
-                GoodsOrderReservation reservation = reservationService.createGoodsReservation(
-                        event.getOrderId(),
-                        event.getOrderNo(),
-                        popupId,
-                        item.getGoodsId(),
-                        item.getQuantity()
-                );
-                createdReservations.add(reservation);
-
-                reservedItems.add(StockReservedEvent.ReservedStockItem.goods(
-                        item.getGoodsId(),
-                        item.getQuantity(),
-                        item.getUnitPrice(),
-                        resolveProductName(item)
-                ));
-            }
-
-            if (!reservedItems.isEmpty()) {
-                eventPublisher.publishStockReservedEvent(event, reservedItems);
-            }
-
-        } catch (Exception e) {
-            log.error("재고 예약 실패 - orderId: {}, error: {}", event.getOrderId(), e.getMessage(), e);
-            inventoryHoldService.releaseHold(event.getOrderId());
-            createdReservations.forEach(reservation -> reservationService.updateStatus(
-                    reservation, ReservationStatus.FAILED, e.getMessage()));
-
-            List<StockReservationFailedEvent.FailedStockItem> failedItems = buildFailedItems(goodsItems, e.getMessage());
-            eventPublisher.publishStockReservationFailedEvent(event, failedItems, e.getMessage());
-
-            throw new RuntimeException("재고 예약 처리 중 오류 발생", e);
-        }
+        List<StockReservationFailedEvent.FailedStockItem> failedItems = buildFailedItems(goodsItems, reason);
+        eventPublisher.publishStockReservationFailedEvent(event, failedItems, reason);
     }
 
     /**

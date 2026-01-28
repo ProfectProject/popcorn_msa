@@ -42,6 +42,7 @@ public class StoreInventoryEventPublisher {
             }
             redisEventPublisher.publishGoodsReservedEvent(
                     event.getOrderId(),
+                    event.getOrderNo(),
                     event.getPopupId(),
                     item.getGoodsId(),
                     item.getQuantity()

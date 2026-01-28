@@ -652,6 +652,9 @@ public class OrderEventListener {
             // 주문 조회
             Order order = orderRepository.findById(event.getOrderId())
                     .orElseThrow(() -> new IllegalArgumentException("주문을 찾을 수 없습니다: " + event.getOrderId()));
+            // 주문 항목 로드 (혼합 주문에서 굿즈 여부 판단)
+            List<OrderItem> orderItems = orderItemRepository.findByOrderId(order.getId());
+            order.setOrderItems(orderItems);
 
             // 주문 상태를 RESERVED로 변경
             order.updateStatus(OrderStatus.RESERVED);

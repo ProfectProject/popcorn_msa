@@ -1129,6 +1129,17 @@ public class OrderRedisStreamListener implements StreamListener<String, MapRecor
             if (orderId != null) orderId = orderId.trim().replaceAll("^\"|\"$", "");
             if (orderNo != null) orderNo = orderNo.trim().replaceAll("^\"|\"$", "");
 
+            if ((orderNo == null || orderNo.isBlank()) && orderId != null && !orderId.isBlank()) {
+                try {
+                    UUID orderUuid = UUID.fromString(orderId);
+                    orderNo = orderRepository.findById(orderUuid)
+                        .map(o -> o.getOrderNo())
+                        .orElse(null);
+                } catch (Exception ignored) {
+                    // best-effort only
+                }
+            }
+
             log.info("📦✅ [ORDER] 굿즈 예약 성공 처리 - orderId: {}, orderNo: {}", orderId, orderNo);
 
             if (orderId != null && !orderId.isEmpty()) {

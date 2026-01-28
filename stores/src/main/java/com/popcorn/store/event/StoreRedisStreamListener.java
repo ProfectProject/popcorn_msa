@@ -29,6 +29,7 @@ import com.popcorn.store.inventory.redis.InventoryRedisHoldService.GoodsHoldItem
 import com.popcorn.store.inventory.redis.InventoryRedisHoldService.HoldResult;
 
 import java.util.ArrayList;
+import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.UUID;
@@ -42,7 +43,7 @@ import java.util.UUID;
 @Component
 @RequiredArgsConstructor
 @Slf4j
-public class StoreRedisStreamListener implements StreamListener<String, MapRecord<String, String, Object>> {
+public class StoreRedisStreamListener implements StreamListener<String, MapRecord<String, String, String>> {
 
     private final ObjectMapper objectMapper;
     private final ApplicationEventPublisher eventPublisher;
@@ -58,14 +59,17 @@ public class StoreRedisStreamListener implements StreamListener<String, MapRecor
     private final ScheduleInventoryApiService scheduleInventoryApiService;
 
     @Override
-    public void onMessage(MapRecord<String, String, Object> record) {
+    public void onMessage(MapRecord<String, String, String> record) {
         try {
             String streamName = record.getStream();
             String recordId = record.getId().getValue();
-            Map<String, Object> values = record.getValue();
+            Map<String, Object> values = new HashMap<>(record.getValue());
+            String debugEventId = normalizeQuotedString((String) values.get("eventId"));
 
             log.info("🔔 [STORES] Stream 메시지 수신 - stream: {}, recordId: {}, eventType: {}",
                     streamName, recordId, values.get("eventType"));
+            log.debug("🧩 [STORES] 수신 이벤트 메타 - stream: {}, recordId: {}, eventId: {}, orderId: {}",
+                    streamName, recordId, debugEventId, values.get("orderId"));
 
             String eventType = (String) values.get("eventType");
             String originalEventType = eventType;
@@ -260,7 +264,8 @@ public class StoreRedisStreamListener implements StreamListener<String, MapRecor
                     .build();
 
             eventPublisher.publishEvent(event);
-            log.info("📨 [STORES] 주문 결제 완료 이벤트 발행 - orderId: {}", event.getOrderId());
+            log.info("📨 [STORES] 주문 결제 완료 이벤트 발행 - orderId: {}, eventId: {}",
+                    event.getOrderId(), eventId);
 
         } catch (Exception e) {
             log.error("🚨 [STORES] 주문 결제 완료 이벤트 변환 실패 - values: {}, error: {}",
@@ -270,6 +275,7 @@ public class StoreRedisStreamListener implements StreamListener<String, MapRecor
 
     private void publishGoodsReservationRequestedEvent(Map<String, Object> values) {
         try {
+            String eventId = normalizeQuotedString((String) values.get("eventId"));
             String reservationItemsJson = (String) values.get("reservationItems");
 
             // JSON 문자열 정규화 (Redis Stream에서 전송된 JSON 문자열 처리)
@@ -308,6 +314,8 @@ public class StoreRedisStreamListener implements StreamListener<String, MapRecor
             String orderNo = (String) values.get("orderNo");
             UUID popupId = (popupIdStr == null || popupIdStr.isEmpty()) ?
                     null : UUID.fromString(popupIdStr);
+            log.info("📦 [STORES] 굿즈 예약 요청 수신 - orderId: {}, eventId: {}, items: {}",
+                    orderId, eventId, reservationItems.size());
 
             if (reservationItems == null || reservationItems.isEmpty()) {
                 log.warn("📋 [STORES] 굿즈 재고 예약 요청 항목이 없음 - orderId: {}", orderId);
@@ -336,7 +344,7 @@ public class StoreRedisStreamListener implements StreamListener<String, MapRecor
                             orderId, item.goodsId, item.quantity);
 
                     storeRedisEventPublisher.publishGoodsReservedEvent(
-                            orderId, resolvedPopupId, item.goodsId, item.quantity
+                            orderId, orderNo, resolvedPopupId, item.goodsId, item.quantity
                     );
 
                 } catch (Exception e) {

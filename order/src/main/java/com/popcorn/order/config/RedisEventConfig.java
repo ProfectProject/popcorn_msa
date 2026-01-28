@@ -13,10 +13,12 @@ import org.springframework.data.redis.connection.stream.MapRecord;
 import org.springframework.data.redis.connection.stream.ReadOffset;
 import org.springframework.data.redis.connection.stream.StreamOffset;
 import org.springframework.data.redis.core.RedisTemplate;
+import org.springframework.data.redis.connection.stream.StreamRecords;
 import org.springframework.data.redis.stream.StreamMessageListenerContainer;
 
 import jakarta.annotation.PostConstruct;
 import java.time.Duration;
+import java.util.Map;
 import java.util.Map;
 
 /**
@@ -79,9 +81,29 @@ public class RedisEventConfig {
             redisTemplate.opsForStream().createGroup(streamName, ReadOffset.from("0"), ORDER_CONSUMER_GROUP);
             log.info("📝 Order Consumer Group 생성: {} - {}", streamName, ORDER_CONSUMER_GROUP);
         } catch (Exception e) {
-            // Consumer Group이 이미 존재하는 경우 무시
-            log.debug("Order Consumer Group 이미 존재: {} - {}", streamName, ORDER_CONSUMER_GROUP);
+            if (isStreamMissing(e)) {
+                String recordId = redisTemplate.opsForStream()
+                        .add(StreamRecords.mapBacked(Map.of("_init", "1")).withStreamKey(streamName))
+                        .getValue();
+                if (recordId != null) {
+                    redisTemplate.opsForStream().delete(streamName, recordId);
+                }
+                redisTemplate.opsForStream().createGroup(streamName, ReadOffset.from("0"), ORDER_CONSUMER_GROUP);
+                log.info("📝 Order Consumer Group 생성(MKSTREAM): {} - {}", streamName, ORDER_CONSUMER_GROUP);
+            } else {
+                // Consumer Group이 이미 존재하는 경우 무시
+                log.debug("Order Consumer Group 이미 존재: {} - {}", streamName, ORDER_CONSUMER_GROUP);
+            }
         }
+    }
+
+    private boolean isStreamMissing(Exception e) {
+        String message = e.getMessage();
+        if (message == null) {
+            return false;
+        }
+        String lower = message.toLowerCase();
+        return lower.contains("requires the key to exist") || lower.contains("no such key");
     }
 
     /**
