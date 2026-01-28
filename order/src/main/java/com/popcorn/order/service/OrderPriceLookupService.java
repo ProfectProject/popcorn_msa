@@ -28,7 +28,7 @@ public class OrderPriceLookupService {
     private final ConcurrentHashMap<String, CompletableFuture<PriceLookupResponseEvent>> pendingResponses =
             new ConcurrentHashMap<>();
 
-    @Value("${order.price-lookup.timeout-ms:1000}")
+    @Value("${order.price-lookup.timeout-ms:200}")
     private long timeoutMs;
 
     public Integer requestSessionPrice(UUID sessionId) {

@@ -73,6 +73,27 @@ public class OrderUserLookupService {
     }
 
     /**
+     * 사용자 기본 주소 조회 요청만 발행 (비동기 보강용)
+     */
+    public void requestDefaultAddressAsync(Long userId) {
+        try {
+            String correlationId = UUID.randomUUID().toString();
+            UserAddressLookupRequestedEvent requestEvent = UserAddressLookupRequestedEvent.builder()
+                    .eventId(UUID.randomUUID().toString())
+                    .correlationId(correlationId)
+                    .requestType("DEFAULT_ADDRESS")
+                    .userId(userId)
+                    .requestedAt(LocalDateTime.now())
+                    .build();
+
+            redisEventPublisher.publishUserAddressLookupRequest(requestEvent);
+            log.info("사용자 주소 조회 요청 이벤트 발행(비동기) - userId: {}, correlationId: {}", userId, correlationId);
+        } catch (Exception e) {
+            log.warn("사용자 주소 조회 요청 이벤트 발행 실패 - userId: {}, error: {}", userId, e.getMessage());
+        }
+    }
+
+    /**
      * User 서비스로부터 주소 조회 응답 처리
      */
     public void handleUserAddressLookupResponse(UserAddressLookupResponseEvent response) {

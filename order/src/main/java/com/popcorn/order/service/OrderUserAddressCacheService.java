@@ -44,22 +44,11 @@ public class OrderUserAddressCacheService {
         }
 
         // 2. 캐시 미스 - 원본 서비스 호출
-        log.debug("🔍 [CACHE-MISS] 사용자 주소 원본 조회 시작 - userId: {}", userId);
-        Optional<UserAddressResponse> addressOpt = originalUserLookupService.getDefaultAddress(userId);
+        log.debug("🔍 [CACHE-MISS] 사용자 주소 원본 조회 요청(비동기) - userId: {}", userId);
+        originalUserLookupService.requestDefaultAddressAsync(userId);
 
-        // 3. 조회 성공 시 캐시 저장
-        if (addressOpt.isPresent()) {
-            UserAddressResponse address = addressOpt.get();
-            setCachedAddress(cacheKey, address, USER_ADDRESS_TTL);
-            log.info("💾 [CACHE-SET] 사용자 주소 캐시 저장 - userId: {}, addressId: {}, ttl: {}시간",
-                    userId, address.getAddressId(), USER_ADDRESS_TTL.toHours());
-        } else {
-            // 주소 없음도 캐시하여 반복 조회 방지 (짧은 TTL)
-            setCachedAddress(cacheKey, UserAddressResponse.empty(), Duration.ofMinutes(10));
-            log.info("💾 [CACHE-SET] 사용자 주소 없음 캐시 저장 - userId: {}, ttl: 10분", userId);
-        }
-
-        return addressOpt;
+        // 캐시 미스 시 즉시 반환 (비동기 보강)
+        return Optional.empty();
     }
 
     /**
@@ -84,6 +73,19 @@ public class OrderUserAddressCacheService {
         log.info("🔥 [CACHE-WARMUP] 사용자 주소 캐시 워밍업 시작 - userId: {}", userId);
         getDefaultAddress(userId);
         log.info("✅ [CACHE-WARMUP] 사용자 주소 캐시 워밍업 완료 - userId: {}", userId);
+    }
+
+    /**
+     * 사용자 기본 주소 캐시 저장 (비동기 응답 보강용)
+     */
+    public void cacheDefaultAddress(Long userId, UserAddressResponse address) {
+        if (address == null) {
+            return;
+        }
+        String cacheKey = "order:address:user:" + userId + ":default";
+        setCachedAddress(cacheKey, address, USER_ADDRESS_TTL);
+        log.info("💾 [CACHE-SET] 사용자 주소 캐시 저장 - userId: {}, addressId: {}, ttl: {}시간",
+                userId, address.getAddressId(), USER_ADDRESS_TTL.toHours());
     }
 
     // === Private Helper Methods ===

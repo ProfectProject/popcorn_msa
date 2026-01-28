@@ -13,6 +13,7 @@ import com.popcorn.order.service.OrderCacheService;
 import com.popcorn.order.service.OrderPopupLookupService;
 import com.popcorn.order.service.OrderPriceLookupService;
 import com.popcorn.order.service.OrderUserLookupService;
+import com.popcorn.order.service.OrderUserAddressCacheService;
 import com.popcorn.order.service.OrderReservationAwaiter;
 import com.popcorn.order.service.OrderIdempotencyService;
 import com.popcorn.order.dto.payment.PaymentUrlResponse;
@@ -45,6 +46,7 @@ public class OrderRedisStreamListener implements StreamListener<String, MapRecor
 
     private final OrderPriceLookupService orderPriceLookupService;
     private final OrderUserLookupService orderUserLookupService;
+    private final OrderUserAddressCacheService orderUserAddressCacheService;
     private final OrderCommandService orderCommandService;
     private final OrderRepository orderRepository;
     private final OrderPopupLookupService orderPopupLookupService;
@@ -677,6 +679,11 @@ public class OrderRedisStreamListener implements StreamListener<String, MapRecor
                     .message(message)
                     .respondedAt(java.time.LocalDateTime.now())
                     .build();
+
+            if (success && userId != null && addresses != null && !addresses.isEmpty()) {
+                UserAddressResponse address = addresses.get(0);
+                orderUserAddressCacheService.cacheDefaultAddress(userId, address);
+            }
 
             // OrderUserLookupService에 응답 전달
             orderUserLookupService.handleUserAddressLookupResponse(response);
