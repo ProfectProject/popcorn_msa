@@ -71,7 +71,8 @@ public class StoreRedisStreamListener implements StreamListener<String, MapRecor
             log.debug("🧩 [STORES] 수신 이벤트 메타 - stream: {}, recordId: {}, eventId: {}, orderId: {}",
                     streamName, recordId, debugEventId, values.get("orderId"));
 
-            String eventType = (String) values.get("eventType");
+            // eventType 필수 검증
+            String eventType = validateEventType(values, streamName, recordId);
             String originalEventType = eventType;
             // eventType에서 따옴표 제거
             if (eventType != null) {
@@ -89,7 +90,9 @@ public class StoreRedisStreamListener implements StreamListener<String, MapRecor
         } catch (Exception e) {
             log.error("🚨 [STORES] Stream 메시지 처리 실패 - record: {}, error: {}",
                     record, e.getMessage(), e);
-            // TODO: 실패한 메시지를 DLQ(Dead Letter Queue)로 이동하거나 재시도 로직 구현
+
+            // 실패한 메시지를 DLQ로 이동
+            sendToDeadLetterQueue(record, e);
         }
     }
 
@@ -179,6 +182,8 @@ public class StoreRedisStreamListener implements StreamListener<String, MapRecor
             }
         } catch (Exception e) {
             log.error("🚨 [STORES] 이벤트 처리 실패 - eventType: {}, error: {}", eventType, e.getMessage(), e);
+            // 이벤트 처리 실패 시에도 DLQ 정보 기록
+            sendEventFailureToDLQ(eventType, values, e);
         }
     }
 
@@ -1206,5 +1211,96 @@ public class StoreRedisStreamListener implements StreamListener<String, MapRecor
                 // 추가 오류 무시
             }
         }
+    }
+
+    /**
+     * 실패한 메시지를 Dead Letter Queue로 전송
+     */
+    private void sendToDeadLetterQueue(MapRecord<String, String, String> record, Exception e) {
+        try {
+            Map<String, Object> dlqMessage = new HashMap<>();
+            dlqMessage.put("original_stream", record.getStream());
+            dlqMessage.put("original_id", record.getId().getValue());
+            dlqMessage.put("failed_at", System.currentTimeMillis());
+            dlqMessage.put("error_message", e.getMessage());
+            dlqMessage.put("error_class", e.getClass().getSimpleName());
+            dlqMessage.put("original_data", record.getValue());
+
+            // DLQ Stream에 실패 메시지 저장
+            redisTemplate.opsForStream().add("store-failed-events", dlqMessage);
+
+            log.warn("📮 [STORES] 실패한 메시지를 DLQ로 이동: stream={}, id={}, error={}",
+                    record.getStream(), record.getId().getValue(), e.getMessage());
+
+        } catch (Exception dlqError) {
+            log.error("🚨 [STORES] DLQ 전송 실패: {}", dlqError.getMessage(), dlqError);
+        }
+    }
+
+    /**
+     * 이벤트 처리 실패를 DLQ에 기록
+     */
+    private void sendEventFailureToDLQ(String eventType, Map<String, Object> values, Exception e) {
+        try {
+            Map<String, Object> dlqMessage = new HashMap<>();
+            dlqMessage.put("failed_event_type", eventType);
+            dlqMessage.put("failed_at", System.currentTimeMillis());
+            dlqMessage.put("error_message", e.getMessage());
+            dlqMessage.put("error_class", e.getClass().getSimpleName());
+            dlqMessage.put("event_data", values);
+
+            // DLQ Stream에 실패한 이벤트 기록
+            redisTemplate.opsForStream().add("store-event-failures", dlqMessage);
+
+            log.warn("📮 [STORES] 실패한 이벤트를 DLQ로 기록: eventType={}, error={}",
+                    eventType, e.getMessage());
+
+        } catch (Exception dlqError) {
+            log.error("🚨 [STORES] 이벤트 실패 DLQ 기록 실패: {}", dlqError.getMessage(), dlqError);
+        }
+    }
+
+    /**
+     * 수신한 이벤트의 eventType 필수 검증
+     */
+    private String validateEventType(Map<String, Object> values, String streamName, String recordId) {
+        Object eventTypeObj = values.get("eventType");
+
+        if (eventTypeObj == null) {
+            String errorMessage = String.format(
+                "[CRITICAL] eventType이 누락된 이벤트 수신! stream=%s, recordId=%s, values=%s",
+                streamName, recordId, values
+            );
+            log.error(errorMessage);
+            throw new IllegalArgumentException("eventType은 필수 항목입니다: " + streamName);
+        }
+
+        String eventType = eventTypeObj.toString().trim();
+        if (eventType.isEmpty()) {
+            String errorMessage = String.format(
+                "[CRITICAL] eventType이 비어있음! stream=%s, recordId=%s",
+                streamName, recordId
+            );
+            log.error(errorMessage);
+            throw new IllegalArgumentException("eventType은 필수 항목입니다: " + streamName);
+        }
+
+        // 기존 따옴표 제거 로직 유지하면서 검증
+        eventType = normalizeQuotedString(eventType);
+
+        // eventType 형식 검증 (kebab-case)
+        if (!eventType.matches("^[a-z0-9]+(-[a-z0-9]+)*$")) {
+            String errorMessage = String.format(
+                "[CRITICAL] eventType 형식 오류! eventType=%s, stream=%s, recordId=%s (kebab-case 형식 필요)",
+                eventType, streamName, recordId
+            );
+            log.error(errorMessage);
+            throw new IllegalArgumentException("eventType은 kebab-case 형식이어야 합니다: " + eventType);
+        }
+
+        log.debug("✅ [STORES] eventType 검증 통과: {} (stream: {}, recordId: {})",
+                eventType, streamName, recordId);
+
+        return eventType;
     }
 }

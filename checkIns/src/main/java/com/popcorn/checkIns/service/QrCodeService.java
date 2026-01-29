@@ -131,7 +131,6 @@ public class QrCodeService {
 		));
 
 		// 표준 체크인 생성 이벤트 발행
-		@Mock
 		publishStandardCheckinCreatedEvent(checkinId, row, null, null);
 
 		return QrVerifyResponse.builder()

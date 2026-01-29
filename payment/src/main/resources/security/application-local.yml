@@ -53,7 +53,7 @@ spring:
 
 # 인증 설정
 passport:
-  secret: ${PASSPORT_SECRET:passport-shared-secret}
+  secret: ${PASSPORT_SECRET:my-super-secret-key-for-popcorn-msa-development-only-do-not-use-in-production}
   ttl-seconds: 60
 
 # Redis 이벤트 설정
@@ -78,8 +78,8 @@ springdoc:
 payment:
   toss:
     base-url: ${TOSS_PAYMENTS_BASE_URL:https://api.tosspayments.com}
-    secret-key: ${TOSS_SECRET_KEY:test_sk_default}
-    client-key: ${TOSS_CLIENT_KEY:test_ck_default}
+    secret-key: ${TOSS_SECRET_KEY:test_sk_Poxy1XQL8Rxpno1voaJZV7nO5Wml}
+    client-key: ${TOSS_CLIENT_KEY:test_ck_AQ92ymxN34LKgMYlpPZy3ajRKXvd}
 
 logging:
   level:

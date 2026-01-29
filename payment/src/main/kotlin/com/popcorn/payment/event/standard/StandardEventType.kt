@@ -10,6 +10,7 @@ enum class StandardEventType(val value: String) {
     ORDER_CREATED("ORDER_CREATED"),
     ORDER_STATUS_UPDATED("ORDER_STATUS_UPDATED"),
     ORDER_DELETED("ORDER_DELETED"),
+    ORDER_INFO_REQUEST("order-info-request"), // kebab-case 형식
 
     // 💳 Payment Events
     PAYMENT_CREATED("PAYMENT_CREATED"),

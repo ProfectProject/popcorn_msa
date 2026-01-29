@@ -32,6 +32,9 @@ import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.UUID;
+import java.util.concurrent.Executors;
+import java.util.concurrent.ScheduledExecutorService;
+import java.util.concurrent.TimeUnit;
 
 /**
  * Order 서비스 Redis Stream 이벤트 리스너
@@ -58,6 +61,12 @@ public class OrderRedisStreamListener implements StreamListener<String, MapRecor
     private final PaymentCacheService paymentCacheService;
     private final OrderCacheService orderCacheService;
     private final OrderIdempotencyService orderIdempotencyService;
+    private final ScheduledExecutorService retryExecutor =
+            Executors.newSingleThreadScheduledExecutor(r -> {
+                Thread t = new Thread(r, "order-redis-retry");
+                t.setDaemon(true);
+                return t;
+            });
 
     @Override
     public void onMessage(MapRecord<String, String, String> record) {
@@ -67,8 +76,11 @@ public class OrderRedisStreamListener implements StreamListener<String, MapRecor
 
             Map<String, Object> values = new HashMap<>(record.getValue());
 
+            // eventType 필수 검증
+            String eventType = validateEventType(values, streamName, recordId);
+
             log.info("🔔 [ORDER] Stream 메시지 수신 - stream: {}, recordId: {}, eventType: {}",
-                    streamName, recordId, values.get("eventType"));
+                    streamName, recordId, eventType);
 
             if ("order:query:stream".equals(streamName)) {
                 log.info("🔍 [ORDER] 주문 조회 요청 이벤트 수신");
@@ -91,11 +103,6 @@ public class OrderRedisStreamListener implements StreamListener<String, MapRecor
                 return;
             }
 
-            String eventType = (String) values.get("eventType");
-            // eventType에서 따옴표 제거
-            if (eventType != null) {
-                eventType = eventType.trim().replaceAll("^\"|\"$", "");
-            }
             handleStreamEvent(eventType, values);
 
             log.debug("✅ [ORDER] 메시지 처리 완료 - stream: {}, recordId: {}", streamName, recordId);
@@ -103,6 +110,9 @@ public class OrderRedisStreamListener implements StreamListener<String, MapRecor
         } catch (Exception e) {
             log.error("🚨 [ORDER] Stream 메시지 처리 실패 - record: {}, error: {}",
                     record, e.getMessage(), e);
+
+            // 실패한 메시지를 DLQ로 이동
+            sendToDeadLetterQueue(record, e);
         }
     }
 
@@ -270,6 +280,14 @@ public class OrderRedisStreamListener implements StreamListener<String, MapRecor
                     // Order가 발행한 이벤트이므로 수신 시 무시
                     log.debug("🔕 [ORDER] 굿즈 재고 예약 요청 이벤트 무시 - eventId: {}",
                             values.get("eventId"));
+                    break;
+                case "mixed-reservation-success":
+                    log.info("🔗✅ [ORDER] 복합형 예약 성공 이벤트 수신");
+                    handleMixedReservationSuccess(values);
+                    break;
+                case "mixed-reservation-failed":
+                    log.info("🔗❌ [ORDER] 복합형 예약 실패 이벤트 수신");
+                    handleMixedReservationFailed(values);
                     break;
                 default:
                     log.debug("🔔 [ORDER] 알 수 없는 이벤트 타입 - type: {}", eventType);
@@ -1151,21 +1169,7 @@ public class OrderRedisStreamListener implements StreamListener<String, MapRecor
 
             if (orderId != null && !orderId.isEmpty()) {
                 UUID orderUuid = UUID.fromString(orderId);
-
-                // 주문 생성 트랜잭션 커밋 전에 이벤트가 도착할 수 있으므로 재시도
-                boolean updated = tryUpdateOrderStatusWithRetry(orderUuid);
-                if (!updated) {
-                    log.warn("📦✅ [ORDER] 굿즈 예약 성공 처리 재시도 실패 - orderId: {}", orderId);
-                    return;
-                }
-
-                // 결제 생성 요청 이벤트 발행
-                orderCommandService.publishPaymentCreateRequestedEvent(orderUuid);
-
-                orderRepository.findById(orderUuid).ifPresent(order -> {
-                    PaymentUrlResponse paymentUrl = orderCommandService.generatePaymentUrlAfterReservation(order);
-                    orderReservationAwaiter.completeSuccess(orderUuid, paymentUrl);
-                });
+                scheduleOrderStatusUpdate(orderUuid, 1);
             }
 
         } catch (Exception e) {
@@ -1174,30 +1178,26 @@ public class OrderRedisStreamListener implements StreamListener<String, MapRecor
         }
     }
 
-    private boolean tryUpdateOrderStatusWithRetry(UUID orderId) {
+    private void scheduleOrderStatusUpdate(UUID orderId, int attempt) {
         int maxAttempts = 10;
         long delayMillis = 200L;
 
-        for (int attempt = 1; attempt <= maxAttempts; attempt++) {
+        retryExecutor.schedule(() -> {
             try {
                 var orderOpt = orderRepository.findById(orderId);
                 if (orderOpt.isEmpty()) {
                     if (attempt < maxAttempts) {
-                        try {
-                            Thread.sleep(delayMillis);
-                        } catch (InterruptedException interruptedException) {
-                            Thread.currentThread().interrupt();
-                            return false;
-                        }
-                        continue;
+                        scheduleOrderStatusUpdate(orderId, attempt + 1);
+                    } else {
+                        log.warn("📦✅ [ORDER] 굿즈 예약 성공 처리 재시도 실패 - orderId: {}", orderId);
                     }
-                    return false;
+                    return;
                 }
 
                 OrderStatus currentStatus = orderOpt.get().getStatus();
                 if (currentStatus == OrderStatus.PAYMENT_PENDING) {
                     log.info("📦✅ [ORDER] 이미 PAYMENT_PENDING 상태 - orderId: {}", orderId);
-                    return false;
+                    return;
                 }
                 if (currentStatus == OrderStatus.PAID
                         || currentStatus == OrderStatus.COMPLETED
@@ -1205,27 +1205,28 @@ public class OrderRedisStreamListener implements StreamListener<String, MapRecor
                         || currentStatus == OrderStatus.REJECTED) {
                     log.warn("📦✅ [ORDER] 예약 성공 이벤트 무시 - 현재 상태: {}, orderId: {}",
                             currentStatus, orderId);
-                    return false;
+                    return;
                 }
 
                 orderCommandService.updateOrderStatus(orderId, OrderStatus.PAYMENT_PENDING.name(),
                         "재고 예약 완료 - 결제 진행");
-                return true;
+
+                // 결제 생성 요청 이벤트 발행
+                orderCommandService.publishPaymentCreateRequestedEvent(orderId);
+
+                orderRepository.findById(orderId).ifPresent(order -> {
+                    PaymentUrlResponse paymentUrl = orderCommandService.generatePaymentUrlAfterReservation(order);
+                    orderReservationAwaiter.completeSuccess(orderId, paymentUrl);
+                });
             } catch (Exception e) {
                 String message = e.getMessage() != null ? e.getMessage() : "";
                 if (message.contains("주문을 찾을 수 없어요") && attempt < maxAttempts) {
-                    try {
-                        Thread.sleep(delayMillis);
-                    } catch (InterruptedException interruptedException) {
-                        Thread.currentThread().interrupt();
-                        return false;
-                    }
-                    continue;
+                    scheduleOrderStatusUpdate(orderId, attempt + 1);
+                    return;
                 }
-                throw e;
+                log.error("🚨 [ORDER] 굿즈 예약 성공 처리 실패 - orderId: {}, error: {}", orderId, e.getMessage(), e);
             }
-        }
-        return false;
+        }, delayMillis, TimeUnit.MILLISECONDS);
     }
 
     /**
@@ -1253,5 +1254,139 @@ public class OrderRedisStreamListener implements StreamListener<String, MapRecor
             log.error("🚨 [ORDER] 굿즈 예약 실패 이벤트 처리 실패 - values: {}, error: {}",
                     values, e.getMessage(), e);
         }
+    }
+
+    /**
+     * 복합형 예약 성공 이벤트 처리
+     */
+    private void handleMixedReservationSuccess(Map<String, Object> values) {
+        try {
+            String orderIdStr = normalizeUuidString((String) values.get("orderId"));
+            String orderNo = (String) values.get("orderNo");
+            String reservationToken = (String) values.get("reservationToken");
+
+            log.info("🔗✅ [ORDER] 복합형 예약 성공 처리 - orderId: {}, orderNo: {}, token: {}",
+                    orderIdStr, orderNo, reservationToken);
+
+            if (orderIdStr != null && !orderIdStr.isEmpty()) {
+                UUID orderId = UUID.fromString(orderIdStr);
+
+                // 주문 상태를 RESERVED로 업데이트
+                orderCommandService.updateOrderStatus(orderId, OrderStatus.RESERVED.name(),
+                        "복합형 예약 성공 (스케줄+상품)");
+
+                // 예약 대기자에게 성공 알림
+                orderRepository.findById(orderId).ifPresent(order -> {
+                    PaymentUrlResponse paymentUrlResponse = orderCommandService
+                            .generatePaymentUrlAfterReservation(order);
+                    orderReservationAwaiter.completeSuccess(orderId, paymentUrlResponse);
+                });
+
+                log.info("✅ [ORDER] 복합형 예약 성공 처리 완료 - orderId: {}", orderId);
+            }
+
+        } catch (Exception e) {
+            log.error("🚨 [ORDER] 복합형 예약 성공 이벤트 처리 실패 - values: {}, error: {}",
+                    values, e.getMessage(), e);
+        }
+    }
+
+    /**
+     * 복합형 예약 실패 이벤트 처리
+     */
+    private void handleMixedReservationFailed(Map<String, Object> values) {
+        try {
+            String orderIdStr = normalizeUuidString((String) values.get("orderId"));
+            String orderNo = (String) values.get("orderNo");
+            String failureReason = (String) values.get("failureReason");
+
+            log.warn("🔗❌ [ORDER] 복합형 예약 실패 처리 - orderId: {}, orderNo: {}, reason: {}",
+                    orderIdStr, orderNo, failureReason);
+
+            if (orderIdStr != null && !orderIdStr.isEmpty()) {
+                UUID orderId = UUID.fromString(orderIdStr);
+
+                // 주문 상태를 CANCELLED로 업데이트
+                orderCommandService.updateOrderStatus(orderId, OrderStatus.CANCELLED.name(),
+                        "복합형 예약 실패: " + (failureReason != null ? failureReason : "알 수 없는 이유"));
+
+                // 예약 대기자에게 실패 알림
+                orderReservationAwaiter.completeFailure(orderId,
+                        failureReason != null ? failureReason : "복합형 예약 실패");
+
+                log.warn("❌ [ORDER] 복합형 예약 실패 처리 완료 - orderId: {}", orderId);
+            }
+
+        } catch (Exception e) {
+            log.error("🚨 [ORDER] 복합형 예약 실패 이벤트 처리 실패 - values: {}, error: {}",
+                    values, e.getMessage(), e);
+        }
+    }
+
+    /**
+     * 실패한 메시지를 Dead Letter Queue로 전송
+     */
+    private void sendToDeadLetterQueue(MapRecord<String, String, String> record, Exception e) {
+        try {
+            Map<String, Object> dlqMessage = new HashMap<>();
+            dlqMessage.put("original_stream", record.getStream());
+            dlqMessage.put("original_id", record.getId().getValue());
+            dlqMessage.put("failed_at", System.currentTimeMillis());
+            dlqMessage.put("error_message", e.getMessage());
+            dlqMessage.put("error_class", e.getClass().getSimpleName());
+            dlqMessage.put("original_data", new HashMap<>(record.getValue()));
+
+            // DLQ Stream에 실패 메시지 저장
+            redisTemplate.opsForStream().add("order-failed-events", dlqMessage);
+
+            log.warn("📮 [ORDER] 실패한 메시지를 DLQ로 이동: stream={}, id={}, error={}",
+                    record.getStream(), record.getId().getValue(), e.getMessage());
+
+        } catch (Exception dlqError) {
+            log.error("🚨 [ORDER] DLQ 전송 실패: {}", dlqError.getMessage(), dlqError);
+        }
+    }
+
+    /**
+     * 수신한 이벤트의 eventType 필수 검증
+     */
+    private String validateEventType(Map<String, Object> values, String streamName, String recordId) {
+        Object eventTypeObj = values.get("eventType");
+
+        if (eventTypeObj == null) {
+            String errorMessage = String.format(
+                "[CRITICAL] eventType이 누락된 이벤트 수신! stream=%s, recordId=%s, values=%s",
+                streamName, recordId, values
+            );
+            log.error(errorMessage);
+            throw new IllegalArgumentException("eventType은 필수 항목입니다: " + streamName);
+        }
+
+        String eventType = eventTypeObj.toString().trim();
+        // 따옴표 제거
+        eventType = eventType.replaceAll("^\"|\"$", "").trim();
+        if (eventType.isEmpty()) {
+            String errorMessage = String.format(
+                "[CRITICAL] eventType이 비어있음! stream=%s, recordId=%s",
+                streamName, recordId
+            );
+            log.error(errorMessage);
+            throw new IllegalArgumentException("eventType은 필수 항목입니다: " + streamName);
+        }
+
+        // eventType 형식 검증 (kebab-case)
+        if (!eventType.matches("^[a-z0-9]+(-[a-z0-9]+)*$")) {
+            String errorMessage = String.format(
+                "[CRITICAL] eventType 형식 오류! eventType=%s, stream=%s, recordId=%s (kebab-case 형식 필요)",
+                eventType, streamName, recordId
+            );
+            log.error(errorMessage);
+            throw new IllegalArgumentException("eventType은 kebab-case 형식이어야 합니다: " + eventType);
+        }
+
+        log.debug("✅ [ORDER] eventType 검증 통과: {} (stream: {}, recordId: {})",
+                eventType, streamName, recordId);
+
+        return eventType;
     }
 }

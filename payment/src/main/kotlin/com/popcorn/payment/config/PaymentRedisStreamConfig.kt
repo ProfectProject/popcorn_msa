@@ -72,8 +72,8 @@ class PaymentRedisStreamConfig(
         @Suppress("UNCHECKED_CAST")
         val options = StreamMessageListenerContainer.StreamMessageListenerContainerOptions
             .builder()
-            .batchSize(10)  // Payment 관련 이벤트 처리량
-            .pollTimeout(Duration.ofMillis(100))
+            .batchSize(20)  // 배치 처리량 증가
+            .pollTimeout(Duration.ofMillis(1000))  // 폴링 타임아웃 상향
             .build()
 
         val container = StreamMessageListenerContainer.create(connectionFactory, options)

@@ -41,7 +41,7 @@ class OrderInfoRequestEvent(
                 responseService = "payment-service",
                 requestedAt = LocalDateTime.now()
             ).apply {
-                this.eventType = StandardEventType.ORDER_CREATED // 임시로 사용
+                this.eventType = StandardEventType.ORDER_INFO_REQUEST // kebab-case 형식 사용
                 this.producer = "payment-service"
                 this.orderId = orderId
             }

@@ -92,6 +92,9 @@ dependencies {
     implementation("org.springframework.boot:spring-boot-starter-data-redis")
     implementation("org.springframework.boot:spring-boot-starter-cache")
 
+    // === Environment Variables ===
+    implementation("io.github.cdimascio:dotenv-java:3.0.0")
+
     // === API 문서화 ===
     implementation("org.springdoc:springdoc-openapi-starter-webmvc-ui:${property("springdocVersion")}")
     implementation("org.springdoc:springdoc-openapi-starter-webmvc-api:${property("springdocVersion")}")

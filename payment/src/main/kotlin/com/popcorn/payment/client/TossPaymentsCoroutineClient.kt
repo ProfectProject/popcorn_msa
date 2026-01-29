@@ -181,9 +181,11 @@ class TossPaymentsCoroutineClient(
      */
     private fun buildAuthorizationHeader(): String {
         val secretKey = properties.secretKey
+        log.debug("🔑 [DEBUG] secretKey: ${secretKey.take(10)}... (length: ${secretKey.length})")
         val token = if (secretKey.isNullOrBlank()) "" else secretKey
         val encoded = Base64.getEncoder()
             .encodeToString("$token:".toByteArray(StandardCharsets.UTF_8))
+        log.debug("🔑 [DEBUG] Authorization: Basic ${encoded.take(20)}...")
         return "Basic $encoded"
     }
 

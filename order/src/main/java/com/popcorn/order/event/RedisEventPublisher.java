@@ -18,6 +18,7 @@ import java.util.Map;
  * - 메시지 지속성 보장 (Pub/Sub은 휘발성)
  * - Consumer Group을 통한 부하 분산
  * - 메시지 ACK 및 재처리 지원
+ * - eventType 필수 검증 지원
  */
 @Component
 @RequiredArgsConstructor
@@ -60,11 +61,8 @@ public class RedisEventPublisher {
             eventData.put("paidAt", event.getPaidAt().toString());
             eventData.put("eventTime", LocalDateTime.now().toString());
 
-            StringRecord record = StreamRecords.string(eventData).withStreamKey(ORDER_EVENTS_STREAM);
-            redisTemplate.opsForStream().add(record);
-
-            log.info("주문 결제 완료 이벤트 Stream 발행 완료 - orderId: {}, eventId: {}",
-                    event.getOrderId(), event.getEventId());
+            // eventType 검증 및 통합 발행
+            validateAndPublish(eventData, ORDER_EVENTS_STREAM, "publishOrderPaidEvent");
 
         } catch (Exception e) {
             log.error("주문 결제 완료 이벤트 Stream 발행 실패 - orderId: {}, eventId: {}, error: {}",
@@ -541,4 +539,63 @@ public class RedisEventPublisher {
         }
     }
 
+    /**
+     * 이벤트 데이터에서 eventType 필수 검증
+     * 모든 Redis Stream 이벤트는 반드시 eventType을 포함해야 함
+     */
+    private void validateEventType(Map<String, String> eventData, String methodName) {
+        String eventType = eventData.get("eventType");
+
+        if (eventType == null || eventType.trim().isEmpty()) {
+            String errorMessage = String.format(
+                "[CRITICAL] eventType이 누락되었습니다! method=%s, eventData=%s",
+                methodName, eventData
+            );
+            log.error(errorMessage);
+            throw new IllegalArgumentException("eventType은 필수 항목입니다: " + methodName);
+        }
+
+        // eventType 형식 검증 (kebab-case)
+        if (!eventType.matches("^[a-z0-9]+(-[a-z0-9]+)*$")) {
+            String errorMessage = String.format(
+                "[CRITICAL] eventType 형식이 잘못되었습니다! eventType=%s, method=%s (kebab-case 형식 필요)",
+                eventType, methodName
+            );
+            log.error(errorMessage);
+            throw new IllegalArgumentException("eventType은 kebab-case 형식이어야 합니다: " + eventType);
+        }
+
+        log.debug("✅ eventType 검증 통과: {} (method: {})", eventType, methodName);
+    }
+
+    /**
+     * Redis Stream 발행 전 통합 검증
+     */
+    private void validateAndPublish(Map<String, String> eventData, String streamName, String methodName) {
+        // 1. eventType 필수 검증
+        validateEventType(eventData, methodName);
+
+        // 2. 기본 필수 필드 검증
+        if (!eventData.containsKey("eventId") || eventData.get("eventId").trim().isEmpty()) {
+            throw new IllegalArgumentException("eventId는 필수 항목입니다: " + methodName);
+        }
+
+        if (!eventData.containsKey("eventTime") || eventData.get("eventTime").trim().isEmpty()) {
+            throw new IllegalArgumentException("eventTime은 필수 항목입니다: " + methodName);
+        }
+
+        // 3. Redis Stream 발행
+        try {
+            StringRecord record = StreamRecords.string(eventData).withStreamKey(streamName);
+            String recordId = redisTemplate.opsForStream().add(record).getValue();
+
+            log.info("✅ [{}] 이벤트 Stream 발행 성공: eventType={}, recordId={}, stream={}",
+                    methodName, eventData.get("eventType"), recordId, streamName);
+
+        } catch (Exception e) {
+            log.error("❌ [{}] 이벤트 Stream 발행 실패: eventType={}, stream={}, error={}",
+                    methodName, eventData.get("eventType"), streamName, e.getMessage());
+            throw new RuntimeException("Redis Stream 발행 실패: " + methodName, e);
+        }
+    }
 }

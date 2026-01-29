@@ -20,6 +20,8 @@ import com.popcorn.users.users.repository.UserRepository;
 //추가
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
+import org.springframework.security.core.Authentication;
+import org.springframework.security.core.context.SecurityContextHolder;
 
 
 import lombok.RequiredArgsConstructor;
@@ -27,6 +29,8 @@ import lombok.RequiredArgsConstructor;
 @Service
 @RequiredArgsConstructor
 public class UserService {
+    private static final Logger log = LoggerFactory.getLogger(UserService.class);
+
     private final UserRepository userRepository;
     private final PasswordEncoder passwordEncoder;
     private final UserAddressRepository userAddressRepository;
@@ -138,15 +142,22 @@ public class UserService {
 
     // 주소 목록 조회
     public List<UserAddress> getUserAddresses(Long userId) {
+        // 사용자 접근 권한 검증
+        validateUserAccess(userId);
+
         return userAddressRepository.findByUserUserId(userId);
     }
 
     // 주소 생성
     @Transactional
     public UserAddress createUserAddress(Long userId, UserAddressRequest request) {
-        System.out.println("createUserAddress called with userId: " + userId + ", request: " + request);
+        log.debug("createUserAddress called with userId: {}", userId);
+
+        // 사용자 접근 권한 검증
+        validateUserAccess(userId);
+
         User user = getUserById(userId);
-        System.out.println("User found: " + user);
+        log.debug("User found for userId: {}", userId);
         
         // 기본 주소로 설정하는 경우, 기존 기본 주소들을 false로 변경
         if (request.getIsDefault() != null && request.getIsDefault()) {
@@ -163,9 +174,9 @@ public class UserService {
         address.setPostalCode(request.getPostalCode());
         address.setIsDefault(request.getIsDefault() != null ? request.getIsDefault() : false);
         
-        System.out.println("Saving address: " + address);
+        log.debug("Saving address for userId: {}", userId);
         UserAddress savedAddress = userAddressRepository.save(address);
-        System.out.println("Address saved successfully: " + savedAddress);
+        log.debug("Address saved successfully with id: {}", savedAddress.getId());
         return savedAddress;
     }
 
@@ -174,6 +185,9 @@ public class UserService {
      */
     @Transactional
     public UserAddress updateUserAddress(Long userId, UUID addressId, UserAddressRequest request) {
+        // 사용자 접근 권한 검증
+        validateUserAccess(userId);
+
         User user = getUserById(userId);
         UserAddress address = userAddressRepository.findById(addressId)
                 .orElseThrow(() -> new RuntimeException("주소를 찾을 수 없습니다: " + addressId));
@@ -217,6 +231,9 @@ public class UserService {
      */
     @Transactional
     public void deleteUserAddress(Long userId, UUID addressId) {
+        // 사용자 접근 권한 검증
+        validateUserAccess(userId);
+
         User user = getUserById(userId);
         UserAddress address = userAddressRepository.findById(addressId)
                 .orElseThrow(() -> new RuntimeException("주소를 찾을 수 없습니다: " + addressId));
@@ -235,16 +252,19 @@ public class UserService {
     @Transactional
     public UserAddress setDefaultAddress(Long userId, UUID addressId) {
         try {
-            System.out.println("setDefaultAddress called with userId: " + userId + ", addressId: " + addressId);
-            
+            log.debug("setDefaultAddress called with userId: {}, addressId: {}", userId, addressId);
+
+            // 사용자 접근 권한 검증
+            validateUserAccess(userId);
+
             // 사용자 존재 확인
             User user = getUserById(userId);
-            System.out.println("User found with ID: " + user.getUserId());
-            
+            log.debug("User found with ID: {}", user.getUserId());
+
             // 주소 존재 확인
             UserAddress address = userAddressRepository.findById(addressId)
                     .orElseThrow(() -> new RuntimeException("주소를 찾을 수 없습니다: " + addressId));
-            System.out.println("Address found with ID: " + address.getId());
+            log.debug("Address found with ID: {}", address.getId());
             
             // 주소가 해당 사용자의 것인지 확인
             if (!address.getUser().getUserId().equals(userId)) {
@@ -253,19 +273,19 @@ public class UserService {
             
             // 기존 기본 주소들을 모두 false로 변경
             List<UserAddress> existingAddresses = userAddressRepository.findByUserUserId(userId);
-            System.out.println("Found " + existingAddresses.size() + " existing addresses");
-            
+            log.debug("Found {} existing addresses for userId: {}", existingAddresses.size(), userId);
+
             for (UserAddress existingAddr : existingAddresses) {
                 existingAddr.setIsDefault(false);
             }
             userAddressRepository.saveAll(existingAddresses);
-            
+
             // 선택한 주소를 기본 주소로 설정
             address.setIsDefault(true);
-            System.out.println("Setting address " + addressId + " as default");
+            log.debug("Setting address {} as default for userId: {}", addressId, userId);
             
             UserAddress savedAddress = userAddressRepository.save(address);
-            System.out.println("Address saved successfully with ID: " + savedAddress.getId());
+            log.debug("Default address set successfully with ID: {} for userId: {}", savedAddress.getId(), userId);
             
             return savedAddress;
         } catch (Exception e) {
@@ -273,5 +293,41 @@ public class UserService {
             e.printStackTrace();
             throw e;
         }
+    }
+
+    /**
+     * 현재 인증된 사용자 ID 가져오기
+     */
+    private Long getCurrentAuthenticatedUserId() {
+        try {
+            Authentication authentication = SecurityContextHolder.getContext().getAuthentication();
+            if (authentication == null || !authentication.isAuthenticated()) {
+                throw new RuntimeException("인증되지 않은 사용자입니다.");
+            }
+
+            // JWT에서 사용자 ID 추출 (실제 구현에 따라 수정 필요)
+            String userIdStr = authentication.getName();
+            return Long.parseLong(userIdStr);
+
+        } catch (Exception e) {
+            log.error("현재 사용자 ID 조회 실패: {}", e.getMessage());
+            throw new RuntimeException("사용자 인증 정보를 확인할 수 없습니다.");
+        }
+    }
+
+    /**
+     * 사용자 접근 권한 검증
+     * 현재 인증된 사용자가 요청한 사용자와 동일한지 확인
+     */
+    private void validateUserAccess(Long requestedUserId) {
+        Long currentUserId = getCurrentAuthenticatedUserId();
+
+        if (!currentUserId.equals(requestedUserId)) {
+            log.warn("권한 없는 사용자 접근 시도: currentUserId={}, requestedUserId={}",
+                    currentUserId, requestedUserId);
+            throw new RuntimeException("다른 사용자의 정보에 접근할 수 없습니다.");
+        }
+
+        log.debug("사용자 접근 권한 확인 완료: userId={}", currentUserId);
     }
 }

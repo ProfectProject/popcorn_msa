@@ -113,45 +113,6 @@ public class StoreRedisEventPublisher {
         }
     }
 
-    /**
-     * 재고 업데이트 이벤트 발행 (일반적인 재고 변경)
-     */
-    public void publishInventoryUpdatedEvent(java.util.UUID popupId, java.util.UUID goodsId,
-                                           int oldQuantity, int newQuantity, String reason) {
-        try {
-            log.info("🚀 [STORES] 재고 업데이트 이벤트 Stream 발행 - popupId: {}, goodsId: {}, {}→{}, reason: {}",
-                    popupId, goodsId, oldQuantity, newQuantity, reason);
-
-            String eventId = java.util.UUID.randomUUID().toString();
-            Map<String, Object> eventData = Map.of(
-                "eventType", "inventory-updated",
-                "eventId", eventId,
-                "popupId", popupId.toString(),
-                "goodsId", goodsId.toString(),
-                "oldQuantity", Integer.toString(oldQuantity),
-                "newQuantity", Integer.toString(newQuantity),
-                "reason", reason,
-                "updatedAt", java.time.LocalDateTime.now().toString(),
-                "eventTime", java.time.LocalDateTime.now().toString()
-            );
-
-            // Map<String, Object>를 Map<String, String>으로 변환
-            Map<String, String> stringEventData = eventData.entrySet().stream()
-                .collect(java.util.stream.Collectors.toMap(
-                    Map.Entry::getKey,
-                    e -> e.getValue() != null ? e.getValue().toString() : ""
-                ));
-            stringEventData.put("eventTime", LocalDateTime.now().toString());
-
-            StringRecord record = StreamRecords.string(stringEventData).withStreamKey(INVENTORY_EVENTS_STREAM);
-            redisTemplate.opsForStream().add(record);
-
-            log.info("✅ [STORES] 재고 업데이트 이벤트 Stream 발행 완료 - eventId: {}", eventId);
-
-        } catch (Exception e) {
-            log.error("❌ [STORES] 재고 업데이트 이벤트 Stream 발행 실패 - popupId: {}, error: {}", popupId, e.getMessage(), e);
-        }
-    }
 
     /**
      * 굿즈 예약 성공 이벤트 발행
