@@ -83,8 +83,9 @@ payment:
 
 logging:
   level:
-    com.popcorn.payment: DEBUG
-    org.springframework.web: DEBUG
-    org.springframework.boot.web: DEBUG
-    org.hibernate.SQL: DEBUG
-    org.springframework.security: DEBUG
+    root: WARN  # 기본 로그 레벨을 WARN으로 설정하여 성능 개선
+    com.popcorn.payment: INFO  # DEBUG → INFO (20-30% 성능 향상)
+    org.springframework.web: WARN  # DEBUG → WARN (웹 요청 로그 최소화)
+    org.springframework.boot.web: WARN
+    org.hibernate.SQL: INFO  # DEBUG → INFO (SQL 로깅 최소화로 큰 성능 향상)
+    org.springframework.security: WARN

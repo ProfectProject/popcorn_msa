@@ -18,6 +18,7 @@ import org.springframework.transaction.support.TransactionSynchronizationManager
 import org.springframework.transaction.support.TransactionTemplate;
 
 import com.popcorn.common.annotation.Idempotent;
+import com.popcorn.order.util.PerformanceLogger;
 
 import com.popcorn.order.dto.command.CreateOrderCommand;
 import com.popcorn.order.dto.response.OrderCreateResponse;
@@ -109,17 +110,23 @@ public class OrderCommandService {
         responseType = OrderCreateResponse.class
     )
     public OrderCreateResponse createOrder(CreateOrderCommand command) {
-        log.info("주문 생성 시작 - 사용자: {}, 팝업: {}", command.getUserId(), command.getPopupId());
+        return PerformanceLogger.logDetailedTime(
+            "주문 생성",
+            String.format("사용자: %s, 팝업: %s", command.getUserId(), command.getPopupId()),
+            () -> {
+                log.info("주문 생성 시작 - 사용자: {}, 팝업: {}", command.getUserId(), command.getPopupId());
 
-        try {
-            return executeOrderCreation(command);
-        } catch (com.popcorn.order.exception.OrderReservationFailedException
-                 | com.popcorn.order.exception.OrderReservationTimeoutException e) {
-            throw e;
-        } catch (Exception e) {
-            log.error("주문 생성 실패 - 사용자: {}, 에러: {}", command.getUserId(), e.getMessage(), e);
-            throw new RuntimeException("주문 생성 중 문제가 발생했어요: " + e.getMessage(), e);
-        }
+                try {
+                    return executeOrderCreation(command);
+                } catch (com.popcorn.order.exception.OrderReservationFailedException
+                         | com.popcorn.order.exception.OrderReservationTimeoutException e) {
+                    throw e;
+                } catch (Exception e) {
+                    log.error("주문 생성 실패 - 사용자: {}, 에러: {}", command.getUserId(), e.getMessage(), e);
+                    throw new RuntimeException("주문 생성 중 문제가 발생했어요: " + e.getMessage(), e);
+                }
+            }
+        );
     }
 
     /**

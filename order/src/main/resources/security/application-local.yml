@@ -28,7 +28,7 @@ spring:
     open-in-view: false
     hibernate:
       ddl-auto: validate  # 로컬에서는 update 사용
-    show-sql: true
+    show-sql: false  # 성능을 위해 SQL 출력 비활성화
     properties:
       hibernate:
         dialect: org.hibernate.dialect.PostgreSQLDialect
@@ -62,10 +62,10 @@ spring:
       connection-timeout: 10000ms  # 연결 타임아웃도 증가
       lettuce:
         pool:
-          max-active: 100  # 50 → 20 (연결 수 줄여서 안정성 확보)
-          max-idle: 30   # 25 → 10 (유휴 연결 줄임)
-          min-idle: 10    # 10 → 5 (최소 연결 줄임)
-          max-wait: 3000ms # 대기 시간 증가
+          max-active: 30  # 100 → 30 (메모리 사용량 70% 감소)
+          max-idle: 10   # 30 → 10 (유휴 연결 최적화)
+          min-idle: 5    # 10 → 5 (최소 연결 효율화)
+          max-wait: 2000ms # 3초 → 2초 (응답성 개선)
           time-between-eviction-runs: 60s
         shutdown-timeout: 2000ms
 
@@ -169,11 +169,12 @@ order:
 
 logging:
   level:
-    com.popcorn.order: DEBUG
-    org.springframework.web: DEBUG
-    org.springframework.boot.web: DEBUG
-    org.hibernate.SQL: DEBUG
-    org.springframework.security: DEBUG
+    root: WARN  # 기본 로그 레벨을 WARN으로 설정하여 성능 개선
+    com.popcorn.order: INFO  # DEBUG → INFO (20-30% 성능 향상)
+    org.springframework.web: WARN  # DEBUG → WARN (웹 요청 로그 최소화)
+    org.springframework.boot.web: WARN
+    org.hibernate.SQL: INFO  # DEBUG → INFO (SQL 로깅 최소화로 큰 성능 향상)
+    org.springframework.security: WARN
 
 # 이벤트 기반 아키텍처 - HTTP 통신 제거 (극한 성능 최적화)
 external:

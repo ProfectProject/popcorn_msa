@@ -18,6 +18,7 @@ import com.popcorn.order.dto.response.OrderSummaryResponse;
 import com.popcorn.order.entity.Order;
 import com.popcorn.order.entity.ItemType;
 import com.popcorn.order.entity.OrderStatus;
+import com.popcorn.order.util.PerformanceLogger;
 import com.popcorn.order.entity.OrderStatusHistory;
 import com.popcorn.order.repository.OrderRepository;
 import com.popcorn.order.repository.OrderStatusHistoryRepository;
@@ -60,21 +61,23 @@ public class OrderQueryService {
      * @return 주문 상세 정보 (없으면 Optional.empty())
      */
     public Optional<OrderDetailResponse> findOrderById(UUID orderId) {
-        log.debug("주문 상세 조회 - ID: {}", orderId);
+        return PerformanceLogger.logTimeWithReturn("주문 상세 조회", () -> {
+            log.debug("주문 상세 조회 - ID: {}", orderId);
 
-        Optional<Order> orderOpt = orderRepository.findById(orderId);
-        if (orderOpt.isEmpty()) {
-            log.warn("주문을 찾을 수 없음 - ID: {}", orderId);
-            return Optional.empty();
-        }
+            Optional<Order> orderOpt = orderRepository.findById(orderId);
+            if (orderOpt.isEmpty()) {
+                log.warn("주문을 찾을 수 없음 - ID: {}", orderId);
+                return Optional.<OrderDetailResponse>empty();
+            }
 
-        Order order = orderOpt.get();
-        List<OrderStatusHistory> statusHistories = orderStatusHistoryRepository.findByOrderIdOrderByChangedAtAsc(orderId);
+            Order order = orderOpt.get();
+            List<OrderStatusHistory> statusHistories = orderStatusHistoryRepository.findByOrderIdOrderByChangedAtAsc(orderId);
 
-        OrderDetailResponse response = OrderDetailResponse.fromOrder(order, statusHistories);
-        log.debug("주문 상세 조회 완료 - 주문번호: {}", order.getOrderNo());
+            OrderDetailResponse response = OrderDetailResponse.fromOrder(order, statusHistories);
+            log.debug("주문 상세 조회 완료 - 주문번호: {}", order.getOrderNo());
 
-        return Optional.of(response);
+            return Optional.of(response);
+        });
     }
 
     /**

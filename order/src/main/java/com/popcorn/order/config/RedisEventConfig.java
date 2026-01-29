@@ -115,8 +115,8 @@ public class RedisEventConfig {
 
         var options = StreamMessageListenerContainer.StreamMessageListenerContainerOptions
                         .<String, MapRecord<String, String, String>>builder()
-                        .batchSize(10)  // 배치 크기 상향
-                        .pollTimeout(Duration.ofSeconds(5))  // 폴링 타임아웃 5초로 대폭 증가
+                        .batchSize(50)  // 배치 크기 5배 증가 - 처리량 향상
+                        .pollTimeout(Duration.ofMillis(500))  // 폴링 타임아웃 0.5초 - 성능과 안정성 균형
                         .errorHandler(t -> {
                             if (t.getCause() instanceof org.springframework.dao.QueryTimeoutException) {
                                 log.warn("🔄 Redis Stream 타임아웃 발생, 재시도 예정: {}", t.getMessage());
