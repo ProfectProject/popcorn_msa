@@ -1,0 +1,104 @@
+spring:
+  application:
+    name: order
+  profiles:
+    active: ${SPRING_PROFILES_ACTIVE:local}
+  cloud:
+    compatibility-verifier:
+      enabled: false
+  mvc:
+    log-request-details: true
+
+jwt:
+  secret: ${JWT_SECRET:dGVzdC1qd3Qtc2VjcmV0LWtleS1mb3ItbG9jYWwtZGV2ZWxvcG1lbnQtb25seS1kb25vdC11c2UtaW4tcHJvZHVjdGlvbg==}
+  expiration: 3600000
+  refresh-expiration-ms: 1209600000
+
+payment:
+  token:
+    secret: ${PAYMENT_TOKEN_SECRET:${JWT_SECRET:dGVzdC1qd3Qtc2VjcmV0LWtleS1mb3ItbG9jYWwtZGV2ZWxvcG1lbnQtb25seS1kb25vdC11c2UtaW4tcHJvZHVjdGlvbg==}}
+
+# 상세 로깅 설정 (통신 문제 디버깅용)
+logging:
+  level:
+    root: INFO
+    com.popcorn.order: DEBUG
+    org.springframework.web: DEBUG
+    org.springframework.security: DEBUG
+    org.springframework.web.servlet.DispatcherServlet: DEBUG
+    org.springframework.web.filter: DEBUG
+    org.apache.http: DEBUG
+    org.springframework.security.web: DEBUG
+    org.springframework.security.authentication: DEBUG
+    org.springframework.security.oauth2: DEBUG
+    org.springframework.context.event: DEBUG
+    org.springframework.amqp: DEBUG
+    feign: DEBUG
+  pattern:
+    console: "%d{yyyy-MM-dd HH:mm:ss.SSS} [%thread] %-5level [%logger{36}:%line] - %msg%n"
+    file: "%d{yyyy-MM-dd HH:mm:ss.SSS} [%thread] %-5level [%logger{36}:%line] - %msg%n"
+  file:
+    name: logs/order-service.log
+    max-size: 100MB
+    max-history: 10
+
+# 상세 에러 로깅
+server:
+  port: 8084
+  error:
+    include-stacktrace: always
+    include-message: always
+    include-binding-errors: always
+
+# Actuator 상세 정보 (헬스체크 및 모니터링)
+management:
+  endpoints:
+    web:
+      exposure:
+        include: health,info,metrics,loggers,httptrace
+  endpoint:
+    health:
+      show-details: always
+
+# Swagger/OpenAPI 문서 설정
+springdoc:
+  api-docs:
+    path: /v3/api-docs
+  swagger-ui:
+    path: /swagger-ui.html
+    groups-order: ASC
+    operations-sorter: method
+    tags-sorter: order
+
+---
+
+spring:
+  config:
+    import: classpath:security/application-local.yml
+    activate:
+      on-profile: local
+
+---
+
+spring:
+  config:
+    import: classpath:security/application-dev.yml
+    activate:
+      on-profile: dev
+
+---
+
+spring:
+  config:
+    import: classpath:security/application-prod.yml
+    activate:
+      on-profile: prod
+
+---
+
+spring:
+  config:
+    activate:
+      on-profile: test
+  flyway:
+    enabled: false
