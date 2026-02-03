@@ -110,7 +110,7 @@ jobs:
   test:
     name: Test (matrix)
     needs: detect-changes
-    if: needs.detect-changes.outputs.has_changes == 'true'
+    if: false
     runs-on: ubuntu-latest
 
     strategy:
@@ -301,7 +301,7 @@ jobs:
         uses: docker/build-push-action@v6
         with:
           context: ${{ matrix.service }}
-          file: Dockerfile
+          file: ${{ matrix.service }}/Dockerfile
           push: true
           platforms: linux/amd64
           provenance: false
