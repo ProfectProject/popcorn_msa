@@ -4,7 +4,8 @@ import com.fasterxml.jackson.databind.ObjectMapper;
 import com.popcorn.order.entity.OrderStatus;
 import com.popcorn.order.repository.OrderRepository;
 import com.popcorn.order.event.payment.PaymentCompletedEvent;
-import com.popcorn.order.event.schedule.ScheduleReservationResultEvent;
+import com.popcorn.order.event.schedule.ScheduleReservationSucceededEvent;
+import com.popcorn.order.event.schedule.ScheduleReservationFailedEvent;
 import com.popcorn.order.service.core.OrderCommandService;
 import com.popcorn.order.service.util.OrderInfoResponseService;
 import com.popcorn.order.service.cache.PaymentCacheService;
@@ -24,6 +25,7 @@ import org.springframework.data.redis.stream.StreamListener;
 import org.springframework.stereotype.Component;
 
 import java.time.Duration;
+import java.time.LocalDateTime;
 import java.util.ArrayList;
 import java.util.HashMap;
 import java.util.List;
@@ -255,214 +257,123 @@ public class OrderRedisStreamListener implements StreamListener<String, MapRecor
         }
     }
 
+    /**
+     * 스케줄 예약 성공 이벤트 처리
+     */
     private void handleScheduleReservationSuccess(Map<String, Object> values) {
         try {
-            String eventId = normalizeQuotedString((String) values.get("eventId"));
-            String orderIdStr = normalizeQuotedString((String) values.get("orderId"));
-            String orderNo = normalizeQuotedString((String) values.get("orderNo"));
-            String popupIdStr = normalizeQuotedString((String) values.get("popupId"));
-            String reservedSessionsJson = normalizeJsonString((String) values.get("reservedSessions"));
-            String reservationToken = normalizeQuotedString((String) values.get("reservationToken"));
-            String reservedAtStr = normalizeQuotedString((String) values.get("reservedAt"));
-            String expiresAtStr = normalizeQuotedString((String) values.get("expiresAt"));
+            String orderId = (String) values.get("orderId");
+            String orderNo = (String) values.get("orderNo");
+            String token = (String) values.get("token");
+            String expiresAt = (String) values.get("expiresAt");
 
-            List<Map<String, Object>> reservedSessionsRaw = objectMapper.readValue(
-                    reservedSessionsJson, new com.fasterxml.jackson.core.type.TypeReference<List<Map<String, Object>>>() {}
-            );
+            // 따옴표 제거
+            if (orderId != null) orderId = orderId.trim().replaceAll("^\"|\"$", "");
+            if (orderNo != null) orderNo = orderNo.trim().replaceAll("^\"|\"$", "");
+            if (token != null) token = token.trim().replaceAll("^\"|\"$", "");
+            if (expiresAt != null) expiresAt = expiresAt.trim().replaceAll("^\"|\"$", "");
 
-            List<ScheduleReservationResultEvent.ReservedSession> sessions = new ArrayList<>();
-            for (Map<String, Object> raw : reservedSessionsRaw) {
-                String sessionIdStr = String.valueOf(raw.get("sessionOptionId"));
-                String reservedQtyStr = String.valueOf(raw.get("reservedQuantity"));
-                String sessionName = raw.get("sessionName") != null ? String.valueOf(raw.get("sessionName")) : null;
-                String sessionTimeStr = raw.get("sessionTime") != null ? String.valueOf(raw.get("sessionTime")) : null;
-                String remainingStr = raw.get("remainingSeats") != null ? String.valueOf(raw.get("remainingSeats")) : null;
-                String reservationCode = raw.get("reservationCode") != null ? String.valueOf(raw.get("reservationCode")) : null;
+            log.info("📅✅ [ORDER] 스케줄 예약 성공 처리 - orderId: {}, orderNo: {}, token: {}",
+                    orderId, orderNo, token);
 
-                sessions.add(ScheduleReservationResultEvent.ReservedSession.create(
-                        UUID.fromString(sessionIdStr),
-                        parseInt(reservedQtyStr),
-                        sessionName,
-                        sessionTimeStr != null && !sessionTimeStr.isBlank()
-                                ? java.time.LocalDateTime.parse(sessionTimeStr)
-                                : null,
-                        parseInt(remainingStr),
-                        reservationCode
-                ));
+            if (orderId != null && !orderId.isEmpty()) {
+                UUID orderUuid = UUID.fromString(orderId);
+
+                // 주문 상태 업데이트
+                orderCommandService.updateOrderStatus(orderUuid, OrderStatus.RESERVED.name(),
+                    "스케줄 예약 완료 - 토큰: " + token);
+
+                // 예약 대기자에게 성공 알림 (결제 URL 생성 포함)
+                final PaymentUrlResponse[] paymentUrlHolder = new PaymentUrlResponse[1];
+                try {
+                    orderRepository.findById(orderUuid).ifPresent(order -> {
+                        PaymentUrlResponse generated = orderCommandService.generatePaymentUrlAfterReservation(order);
+                        paymentUrlHolder[0] = generated;
+                        if (generated != null) {
+                            log.info("💳✅ [ORDER] 결제 URL 생성 완료 - orderId: {}", orderUuid);
+                        }
+                    });
+                } catch (Exception paymentError) {
+                    log.warn("⚠️ [ORDER] 결제 URL 생성 실패 - orderId: {}, error: {}",
+                            orderUuid, paymentError.getMessage());
+                }
+                // 결제 URL 생성 실패/주문 미조회여도 예약 성공은 완료 처리
+                orderReservationAwaiter.completeSuccess(orderUuid, paymentUrlHolder[0]);
+
+                // ScheduleReservationSucceededEvent 발행
+                try {
+                    ScheduleReservationSucceededEvent event = ScheduleReservationSucceededEvent.create(
+                        orderUuid,
+                        null,  // 예약된 세션 정보 (여기서는 단순화)
+                        token,
+                        expiresAt != null ? LocalDateTime.parse(expiresAt) : null
+                    );
+
+                    eventPublisher.publishEvent(event);
+                    log.info("📨 [ORDER] ScheduleReservationSucceededEvent 발행 완료 - orderId: {}", orderId);
+                } catch (Exception eventError) {
+                    log.warn("⚠️ [ORDER] ScheduleReservationSucceededEvent 발행 실패 - orderId: {}, error: {}",
+                            orderId, eventError.getMessage());
+                }
             }
 
-            ScheduleReservationResultEvent event = ScheduleReservationResultEvent.success(
-                    UUID.fromString(orderIdStr),
-                    null, // customerId
-                    Optional.ofNullable(orderNo),
-                    popupIdStr != null && !popupIdStr.isBlank() ? UUID.fromString(popupIdStr) : null,
-                    reservationToken,
-                    sessions
-            );
-
-            eventPublisher.publishEvent(event);
-
-            // ✅ 스케줄 예약 완료 신호를 OrderReservationAwaiter에 전송
-            UUID orderId = UUID.fromString(orderIdStr);
-            orderRepository.findById(orderId).ifPresent(order -> {
-                PaymentUrlResponse paymentUrl = orderCommandService.generatePaymentUrlAfterReservation(order);
-                orderReservationAwaiter.completeSuccess(orderId, paymentUrl);
-                log.info("📅✅ [ORDER] 스케줄 예약 완료 신호 전송 - orderId: {}, orderNo: {}", orderId, orderNo);
-            });
         } catch (Exception e) {
             log.error("🚨 [ORDER] 스케줄 예약 성공 이벤트 처리 실패 - values: {}, error: {}",
                     values, e.getMessage(), e);
-
-            // ✅ 처리 실패 시에도 실패 신호를 전송하여 타임아웃 방지
-            try {
-                String orderIdStr = normalizeQuotedString((String) values.get("orderId"));
-                if (orderIdStr != null && !orderIdStr.isEmpty()) {
-                    UUID orderId = UUID.fromString(orderIdStr);
-                    orderReservationAwaiter.completeFailure(orderId, "스케줄 예약 성공 이벤트 처리 실패: " + e.getMessage());
-                    log.info("📅❌ [ORDER] 스케줄 예약 처리 실패로 인한 실패 신호 전송 - orderId: {}", orderId);
-                }
-            } catch (Exception failureEx) {
-                log.error("스케줄 예약 실패 신호 전송 중 오류 발생: {}", failureEx.getMessage(), failureEx);
-            }
         }
     }
 
+    /**
+     * 스케줄 예약 실패 이벤트 처리
+     */
     private void handleScheduleReservationFailed(Map<String, Object> values) {
         try {
-            String eventId = normalizeQuotedString((String) values.get("eventId"));
-            String orderIdStr = normalizeQuotedString((String) values.get("orderId"));
-            String orderNo = normalizeQuotedString((String) values.get("orderNo"));
-            String popupIdStr = normalizeQuotedString((String) values.get("popupId"));
-            String failedSessionsJson = normalizeJsonString((String) values.get("failedSessions"));
-            String failureReason = normalizeQuotedString((String) values.get("failureReason"));
-            String failedAtStr = normalizeQuotedString((String) values.get("failedAt"));
+            String orderId = (String) values.get("orderId");
+            String orderNo = (String) values.get("orderNo");
+            String reason = (String) values.get("reason");
 
-            List<Map<String, Object>> failedSessionsRaw = objectMapper.readValue(
-                    failedSessionsJson, new com.fasterxml.jackson.core.type.TypeReference<List<Map<String, Object>>>() {}
-            );
+            // 따옴표 제거
+            if (orderId != null) orderId = orderId.trim().replaceAll("^\"|\"$", "");
+            if (orderNo != null) orderNo = orderNo.trim().replaceAll("^\"|\"$", "");
+            if (reason != null) reason = reason.trim().replaceAll("^\"|\"$", "");
 
-            List<ScheduleReservationResultEvent.FailedSession> sessions = new ArrayList<>();
-            for (Map<String, Object> raw : failedSessionsRaw) {
-                String sessionIdStr = String.valueOf(raw.get("sessionOptionId"));
-                String requestedQtyStr = String.valueOf(raw.get("requestedQuantity"));
-                String availableQtyStr = String.valueOf(raw.get("availableQuantity"));
-                String sessionName = raw.get("sessionName") != null ? String.valueOf(raw.get("sessionName")) : null;
-                String sessionTimeStr = raw.get("sessionTime") != null ? String.valueOf(raw.get("sessionTime")) : null;
-                String itemReason = raw.get("failureReason") != null ? String.valueOf(raw.get("failureReason")) : null;
+            log.warn("📅❌ [ORDER] 스케줄 예약 실패 처리 - orderId: {}, orderNo: {}, reason: {}",
+                    orderId, orderNo, reason);
 
-                sessions.add(ScheduleReservationResultEvent.FailedSession.create(
-                        UUID.fromString(sessionIdStr),
-                        parseInt(requestedQtyStr),
-                        parseInt(availableQtyStr),
-                        sessionName,
-                        sessionTimeStr != null && !sessionTimeStr.isBlank()
-                                ? java.time.LocalDateTime.parse(sessionTimeStr)
-                                : null,
-                        itemReason
-                ));
+            if (orderId != null && !orderId.isEmpty()) {
+                UUID orderUuid = UUID.fromString(orderId);
+
+                // 주문 상태를 CANCELLED로 업데이트
+                orderCommandService.updateOrderStatus(orderUuid, OrderStatus.CANCELLED.name(),
+                    "스케줄 예약 실패 - " + (reason != null ? reason : "알 수 없는 이유"));
+
+                // 예약 대기자에게 실패 알림
+                orderReservationAwaiter.completeFailure(orderUuid,
+                        reason != null ? reason : "스케줄 예약 실패");
+
+                // ScheduleReservationFailedEvent 발행
+                try {
+                    ScheduleReservationFailedEvent event = ScheduleReservationFailedEvent.create(
+                        orderUuid,
+                        null,  // 실패한 세션 정보 (여기서는 단순화)
+                        reason != null ? reason : "스케줄 예약 실패"
+                    );
+
+                    eventPublisher.publishEvent(event);
+                    log.info("📨 [ORDER] ScheduleReservationFailedEvent 발행 완료 - orderId: {}", orderId);
+                } catch (Exception eventError) {
+                    log.warn("⚠️ [ORDER] ScheduleReservationFailedEvent 발행 실패 - orderId: {}, error: {}",
+                            orderId, eventError.getMessage());
+                }
+
+                // 보상 트랜잭션: 재고 예약 해제
+                orderCommandService.cancelStockReservationsForOrder(orderUuid);
             }
 
-            ScheduleReservationResultEvent event = ScheduleReservationResultEvent.failure(
-                    UUID.fromString(orderIdStr),
-                    null, // customerId
-                    Optional.ofNullable(orderNo),
-                    popupIdStr != null && !popupIdStr.isBlank() ? UUID.fromString(popupIdStr) : null,
-                    failureReason,
-                    sessions
-            );
-
-            eventPublisher.publishEvent(event);
-
-            // ✅ 스케줄 예약 실패 신호를 OrderReservationAwaiter에 전송
-            UUID orderId = UUID.fromString(orderIdStr);
-            orderReservationAwaiter.completeFailure(orderId, failureReason != null ? failureReason : "스케줄 예약 실패");
-            log.info("📅❌ [ORDER] 스케줄 예약 실패 신호 전송 - orderId: {}, orderNo: {}, reason: {}", orderId, orderNo, failureReason);
         } catch (Exception e) {
             log.error("🚨 [ORDER] 스케줄 예약 실패 이벤트 처리 실패 - values: {}, error: {}",
                     values, e.getMessage(), e);
-
-            // ✅ 실패 이벤트 처리 실패 시에도 실패 신호를 전송하여 타임아웃 방지
-            try {
-                String orderIdStr = normalizeQuotedString((String) values.get("orderId"));
-                if (orderIdStr != null && !orderIdStr.isEmpty()) {
-                    UUID orderId = UUID.fromString(orderIdStr);
-                    orderReservationAwaiter.completeFailure(orderId, "스케줄 예약 실패 이벤트 처리 실패: " + e.getMessage());
-                    log.info("📅❌ [ORDER] 스케줄 예약 실패 이벤트 처리 실패로 인한 실패 신호 전송 - orderId: {}", orderId);
-                }
-            } catch (Exception failureEx) {
-                log.error("스케줄 예약 실패 신호 전송 중 오류 발생: {}", failureEx.getMessage(), failureEx);
-            }
         }
-    }
-
-    private String normalizeQuotedString(String value) {
-        if (value == null) {
-            return null;
-        }
-        String trimmed = value.trim();
-        if (trimmed.length() >= 2) {
-            char first = trimmed.charAt(0);
-            char last = trimmed.charAt(trimmed.length() - 1);
-            if ((first == '"' && last == '"') || (first == '\'' && last == '\'')) {
-                return trimmed.substring(1, trimmed.length() - 1).trim();
-            }
-        }
-        return trimmed;
-    }
-
-    private String normalizeJsonString(String value) {
-        String trimmed = normalizeQuotedString(value);
-        if (trimmed == null) {
-            return null;
-        }
-        // Handle escaped JSON payloads like "\"[{\\\"a\\\":1}]\""
-        if ((trimmed.startsWith("\"") && trimmed.endsWith("\"")) || trimmed.contains("\\\"")) {
-            try {
-                return objectMapper.readValue(trimmed, String.class).trim();
-            } catch (Exception ignored) {
-                return trimmed.replace("\\\"", "\"");
-            }
-        }
-        return trimmed;
-    }
-
-    private int parseInt(String value) {
-        if (value == null) {
-            return 0;
-        }
-        try {
-            return Integer.parseInt(value.trim().replaceAll("^\"|\"$", ""));
-        } catch (NumberFormatException e) {
-            return 0;
-        }
-    }
-
-    // 가격 조회 응답 처리 메서드 제거됨 (HTTP 동기 방식으로 변경)
-
-    // 사용자 주소 조회 응답 처리 메서드 제거됨 (HTTP 동기 방식으로 변경)
-
-    // 팝업 정보 조회 응답 처리 메서드 제거됨 (HTTP 동기 방식으로 변경)
-
-    private java.util.UUID parseUuidValue(Object value) {
-        if (value == null) {
-            return null;
-        }
-        String raw = value.toString().trim().replaceAll("^\"|\"$", "");
-        if (raw.isEmpty()) {
-            return null;
-        }
-        return java.util.UUID.fromString(raw);
-    }
-
-    private java.time.LocalDateTime parseDateValue(Object value) {
-        if (value == null) {
-            return null;
-        }
-        String raw = value.toString().trim().replaceAll("^\"|\"$", "");
-        if (raw.isEmpty()) {
-            return null;
-        }
-        return java.time.LocalDateTime.parse(raw);
     }
 
     /**
@@ -1062,6 +973,4 @@ public class OrderRedisStreamListener implements StreamListener<String, MapRecor
 
         return eventType;
     }
-
-    // HTTP 동기 모드 체크 메서드 제거됨 (해당 이벤트 처리가 완전히 제거됨)
 }

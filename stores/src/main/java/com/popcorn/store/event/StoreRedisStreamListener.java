@@ -820,10 +820,17 @@ public class StoreRedisStreamListener implements StreamListener<String, MapRecor
             String orderIdStr = normalizeUuidString((String) values.get("orderId"));
             String orderNo = normalizeQuotedString((String) values.get("orderNo"));
             String popupIdStr = normalizeUuidString((String) values.get("popupId"));
-            String reservationItemsJson = normalizeQuotedString((String) values.get("reservationItems"));
+            String reservationItemsJson = normalizeQuotedString((String) values.get("reservedSessions"));
 
             UUID orderId = UUID.fromString(orderIdStr);
             UUID popupId = UUID.fromString(popupIdStr);
+
+            if (reservationItemsJson == null || reservationItemsJson.trim().isEmpty()) {
+                log.warn("🚨 [STORES] 예약 항목 JSON이 비어있음 - orderId: {}, popupId: {}", orderId, popupId);
+                storeRedisEventPublisher.publishScheduleReservationFailedEvent(
+                        orderId, orderNo, popupId, "[]", "예약 항목 JSON이 비어있음");
+                return;
+            }
 
             List<ScheduleReservationItem> items = objectMapper.readValue(
                     reservationItemsJson, new TypeReference<List<ScheduleReservationItem>>() {}

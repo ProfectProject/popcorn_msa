@@ -2,10 +2,6 @@ package com.popcorn.order.event.publisher;
 
 import com.fasterxml.jackson.databind.ObjectMapper;
 import com.popcorn.order.event.order.OrderPaidEvent;
-import com.popcorn.order.event.store.StoreRequestEvent;
-import com.popcorn.order.event.stock.StockDeductionRequestedEvent;
-import com.popcorn.order.event.schedule.ScheduleReservationRequestedEvent;
-import com.popcorn.order.event.schedule.ScheduleReservationCancelRequestedEvent;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.data.redis.core.RedisTemplate;
@@ -77,36 +73,6 @@ public class RedisEventPublisher {
     }
 
 
-    /**
-     * 재고 차감 요청 이벤트 발행 (Store 서비스에서 수신)
-     */
-    public void publishStockDeductionRequestedEvent(StockDeductionRequestedEvent event) {
-        try {
-            log.info("재고 차감 요청 이벤트 Stream 발행 시작 - orderId: {}, eventId: {}",
-                    event.getOrderId(), event.getEventId());
-
-            Map<String, String> eventData = Map.of(
-                "eventType", "stock-deduction-requested",
-                "eventId", event.getEventId().toString(),
-                "orderId", event.getOrderId().toString(),
-                "orderNo", event.getOrderNo() != null ? event.getOrderNo() : "",
-                "items", objectMapper.writeValueAsString(event.getDeductionItems() != null ? event.getDeductionItems() : "[]"),
-                "requestedAt", event.getRequestedAt().toString(),
-                "eventTime", LocalDateTime.now().toString()
-            );
-
-            StringRecord record = StreamRecords.string(eventData).withStreamKey(STOCK_EVENTS_STREAM);
-            redisTemplate.opsForStream().add(record);
-
-            log.info("재고 차감 요청 이벤트 Stream 발행 완료 - orderId: {}, eventId: {}",
-                    event.getOrderId(), event.getEventId());
-
-        } catch (Exception e) {
-            log.error("재고 차감 요청 이벤트 Stream 발행 실패 - orderId: {}, eventId: {}, error: {}",
-                    event.getOrderId(), event.getEventId(), e.getMessage(), e);
-            throw new RuntimeException("재고 차감 요청 이벤트 Stream 발행 실패", e);
-        }
-    }
 
     /**
      * 굿즈 예약 취소 요청 이벤트 발행 (Store 서비스에서 수신)
@@ -230,77 +196,6 @@ public class RedisEventPublisher {
 
     // ================ 📅 스케줄 예약 관련 이벤트 발행 메소드들 ================
 
-    /**
-     * 스케줄 예약 요청 이벤트 발행 (Store 서비스에서 수신)
-     */
-    public void publishScheduleReservationRequestedEvent(ScheduleReservationRequestedEvent event) {
-        try {
-            log.info("📅 [ORDER→STORE] 스케줄 예약 요청 이벤트 Stream 발행 시작 - orderId: {}, eventId: {}",
-                    event.getOrderId(), event.getEventId());
-
-            // 예약 항목들을 JSON으로 직렬화
-            String reservationItemsJson = objectMapper.writeValueAsString(event.getReservationItems());
-
-            Map<String, String> eventData = Map.of(
-                "eventType", "schedule-reservation-requested",
-                "eventId", event.getEventId().toString(),
-                "orderId", event.getOrderId().toString(),
-                "orderNo", event.getOrderNo(),
-                "popupId", event.getPopupId().toString(),
-                "reservationItems", reservationItemsJson,
-                "requestedAt", event.getRequestedAt().toString(),
-                "eventTime", LocalDateTime.now().toString()
-            );
-
-            StringRecord record = StreamRecords.string(eventData).withStreamKey(SCHEDULE_EVENTS_STREAM);
-            redisTemplate.opsForStream().add(record);
-
-            log.info("📅✅ [ORDER→STORE] 스케줄 예약 요청 이벤트 Stream 발행 완료 - orderId: {}, eventId: {}",
-                    event.getOrderId(), event.getEventId());
-
-        } catch (Exception e) {
-            log.error("📅❌ [ORDER→STORE] 스케줄 예약 요청 이벤트 Stream 발행 실패 - orderId: {}, eventId: {}, error: {}",
-                    event.getOrderId(), event.getEventId(), e.getMessage(), e);
-            throw new RuntimeException("스케줄 예약 요청 이벤트 Stream 발행 실패", e);
-        }
-    }
-
-    /**
-     * 스케줄 예약 취소 요청 이벤트 발행 (Store 서비스에서 수신)
-     */
-    public void publishScheduleReservationCancelRequestedEvent(ScheduleReservationCancelRequestedEvent event) {
-        try {
-            log.info("📅 [ORDER→STORE] 스케줄 예약 취소 요청 이벤트 Stream 발행 시작 - orderId: {}, eventId: {}",
-                    event.getOrderId(), event.getEventId());
-
-            // 취소 항목들을 JSON으로 직렬화
-            String cancelItemsJson = objectMapper.writeValueAsString(event.getCancelItems());
-
-            Map<String, String> eventData = Map.of(
-                "eventType", "schedule-reservation-cancel-requested",
-                "eventId", event.getEventId().toString(),
-                "orderId", event.getOrderId().toString(),
-                "orderNo", event.getOrderNo(),
-                "popupId", event.getPopupId().toString(),
-                "reservationToken", event.getReservationToken() != null ? event.getReservationToken() : "",
-                "cancelItems", cancelItemsJson,
-                "cancelReason", event.getCancelReason(),
-                "cancelRequestedAt", event.getCancelRequestedAt().toString(),
-                "eventTime", LocalDateTime.now().toString()
-            );
-
-            StringRecord record = StreamRecords.string(eventData).withStreamKey(SCHEDULE_EVENTS_STREAM);
-            redisTemplate.opsForStream().add(record);
-
-            log.info("📅✅ [ORDER→STORE] 스케줄 예약 취소 요청 이벤트 Stream 발행 완료 - orderId: {}, eventId: {}",
-                    event.getOrderId(), event.getEventId());
-
-        } catch (Exception e) {
-            log.error("📅❌ [ORDER→STORE] 스케줄 예약 취소 요청 이벤트 Stream 발행 실패 - orderId: {}, eventId: {}, error: {}",
-                    event.getOrderId(), event.getEventId(), e.getMessage(), e);
-            throw new RuntimeException("스케줄 예약 취소 요청 이벤트 Stream 발행 실패", e);
-        }
-    }
 
 
     /**
@@ -429,38 +324,92 @@ public class RedisEventPublisher {
         }
     }
 
+    // ================ 📦 개별 이벤트 발행 메소드들 ================
+
     /**
-     * 🏪 통합 Store 요청 이벤트 Redis Stream 발행
-     *
-     * @param event Store 요청 이벤트
+     * 재고 차감 요청 이벤트 발행 (Store 서비스에서 수신)
      */
-    public void publishStoreRequestEvent(StoreRequestEvent event) {
+    public void publishStockDeductionRequestedEvent(com.popcorn.order.event.stock.StockDeductionRequestedEvent event) {
         try {
-            log.info("🏪 [UNIFIED-STORE] Store 요청 이벤트 Stream 발행 시작 - orderId: {}, requestType: {}",
-                    event.getOrderId(), event.getRequestType());
+            log.info("재고 차감 요청 이벤트 Stream 발행 시작 - orderId: {}, eventId: {}",
+                    event.getOrderId(), event.getEventId());
 
-            Map<String, String> eventData = Map.of(
-                    "eventType", event.getEventType(),
-                    "eventId", event.getEventId().toString(),
-                    "orderId", event.getOrderId().toString(),
-                    "orderNo", event.getOrderNo() != null ? event.getOrderNo() : "",
-                    "popupId", event.getPopupId() != null ? event.getPopupId().toString() : "",
-                    "requestType", event.getRequestType().name(),
-                    "itemCount", String.valueOf(event.getRequestItems().size()),
-                    "requestedAt", event.getRequestedAt().toString(),
-                    "eventTime", LocalDateTime.now().toString()
-            );
+            java.util.Map<String, String> eventData = new java.util.HashMap<>();
+            eventData.put("eventType", "stock-deduction-requested");
+            eventData.put("orderId", event.getOrderId().toString());
+            eventData.put("eventId", event.getEventId().toString());
+            eventData.put("orderNo", event.getOrderNo() != null ? event.getOrderNo() : "");
+            eventData.put("popupId", event.getPopupId() != null ? event.getPopupId().toString() : "");
+            eventData.put("deductionItems", objectMapper.writeValueAsString(
+                    event.getDeductionItems() != null ? event.getDeductionItems() : java.util.List.of()
+            ));
+            eventData.put("requestedAt", event.getRequestedAt().toString());
+            eventData.put("eventTime", LocalDateTime.now().toString());
 
-            StringRecord record = StreamRecords.string(eventData).withStreamKey("order-store-requests");
-            redisTemplate.opsForStream().add(record);
-
-            log.info("✅ [UNIFIED-STORE] Store 요청 이벤트 Stream 발행 완료 - orderId: {}, requestType: {}",
-                    event.getOrderId(), event.getRequestType());
+            validateAndPublish(eventData, STOCK_EVENTS_STREAM, "publishStockDeductionRequestedEvent");
 
         } catch (Exception e) {
-            log.error("❌ [UNIFIED-STORE] Store 요청 이벤트 Stream 발행 실패 - orderId: {}, requestType: {}, error: {}",
-                    event.getOrderId(), event.getRequestType(), e.getMessage(), e);
-            throw new RuntimeException("통합 Store 요청 이벤트 Stream 발행 실패", e);
+            log.error("재고 차감 요청 이벤트 Stream 발행 실패 - orderId: {}, eventId: {}, error: {}",
+                    event.getOrderId(), event.getEventId(), e.getMessage(), e);
+            throw new RuntimeException("재고 차감 요청 이벤트 Stream 발행 실패", e);
         }
     }
+
+    /**
+     * 굿즈 예약 요청 이벤트 발행 (Store 서비스에서 수신)
+     */
+    public void publishGoodsReservationRequestedEvent(com.popcorn.order.event.goods.GoodsReservationRequestedEvent event) {
+        try {
+            log.info("굿즈 예약 요청 이벤트 Stream 발행 시작 - orderId: {}, eventId: {}",
+                    event.getOrderId(), event.getEventId());
+
+            java.util.Map<String, String> eventData = new java.util.HashMap<>();
+            eventData.put("eventType", "goods-reservation-requested");
+            eventData.put("orderId", event.getOrderId().toString());
+            eventData.put("eventId", event.getEventId().toString());
+            eventData.put("orderNo", event.getOrderNo() != null ? event.getOrderNo() : "");
+            eventData.put("popupId", event.getPopupId() != null ? event.getPopupId().toString() : "");
+            eventData.put("goodsId", event.getGoodsId() != null ? event.getGoodsId().toString() : "");
+            eventData.put("quantity", event.getQuantity() != null ? event.getQuantity().toString() : "");
+            eventData.put("requestedAt", event.getRequestedAt().toString());
+            eventData.put("eventTime", LocalDateTime.now().toString());
+
+            validateAndPublish(eventData, GOODS_EVENTS_STREAM, "publishGoodsReservationRequestedEvent");
+
+        } catch (Exception e) {
+            log.error("굿즈 예약 요청 이벤트 Stream 발행 실패 - orderId: {}, eventId: {}, error: {}",
+                    event.getOrderId(), event.getEventId(), e.getMessage(), e);
+            throw new RuntimeException("굿즈 예약 요청 이벤트 Stream 발행 실패", e);
+        }
+    }
+
+    /**
+     * 스케줄 예약 요청 이벤트 발행 (Store 서비스에서 수신)
+     */
+    public void publishScheduleReservationRequestedEvent(com.popcorn.order.event.schedule.ScheduleReservationRequestedEvent event) {
+        try {
+            log.info("스케줄 예약 요청 이벤트 Stream 발행 시작 - orderId: {}, eventId: {}",
+                    event.getOrderId(), event.getEventId());
+
+            java.util.Map<String, String> eventData = new java.util.HashMap<>();
+            eventData.put("eventType", "schedule-reservation-requested");
+            eventData.put("orderId", event.getOrderId().toString());
+            eventData.put("eventId", event.getEventId().toString());
+            eventData.put("orderNo", event.getOrderNo() != null ? event.getOrderNo() : "");
+            eventData.put("popupId", event.getPopupId() != null ? event.getPopupId().toString() : "");
+            eventData.put("reservedSessions", objectMapper.writeValueAsString(
+                    event.getReservedSessions() != null ? event.getReservedSessions() : java.util.List.of()
+            ));
+            eventData.put("requestedAt", event.getRequestedAt().toString());
+            eventData.put("eventTime", LocalDateTime.now().toString());
+
+            validateAndPublish(eventData, SCHEDULE_EVENTS_STREAM, "publishScheduleReservationRequestedEvent");
+
+        } catch (Exception e) {
+            log.error("스케줄 예약 요청 이벤트 Stream 발행 실패 - orderId: {}, eventId: {}, error: {}",
+                    event.getOrderId(), event.getEventId(), e.getMessage(), e);
+            throw new RuntimeException("스케줄 예약 요청 이벤트 Stream 발행 실패", e);
+        }
+    }
+
 }

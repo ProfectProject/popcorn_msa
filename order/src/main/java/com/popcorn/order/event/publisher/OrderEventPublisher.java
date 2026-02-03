@@ -6,11 +6,6 @@ import com.popcorn.order.entity.Order;
 import com.popcorn.order.event.order.OrderPaidEvent;
 import com.popcorn.order.event.order.OrderCancelledEvent;
 import com.popcorn.order.event.order.OrderCompletedEvent;
-import com.popcorn.order.event.store.StoreRequestEvent;
-import com.popcorn.order.event.stock.StockDeductionResultEvent;
-import com.popcorn.order.event.stock.StockDeductionRequestedEvent;
-import com.popcorn.order.event.schedule.ScheduleReservationRequestedEvent;
-import com.popcorn.order.event.schedule.ScheduleReservationCancelRequestedEvent;
 import com.popcorn.order.repository.OrderRepository;
 
 import java.util.List;
@@ -187,21 +182,10 @@ public class OrderEventPublisher {
             com.popcorn.order.entity.Order order = orderRepository.findById(orderId)
                     .orElseThrow(() -> new IllegalArgumentException("주문을 찾을 수 없습니다: " + orderId));
 
-            // 통합된 재고 차감 실패 이벤트 발행
-            StockDeductionResultEvent event = StockDeductionResultEvent.failure(
-                    orderId,
-                    order.getCustomerId(),
-                    Optional.of(order.getOrderNo()),
-                    order.getPopupId(),
-                    reason,
-                    List.of() // failedItems는 빈 리스트
-            );
-
-            log.warn("💥 [UNIFIED] 재고 차감 실패 이벤트 발행 - orderId: {}, orderNo: {}, reason: {}",
-                    orderId, order.getOrderNo(), reason);
-
-            // 내부 이벤트 발행
-            applicationEventPublisher.publishEvent(event);
+            // 통합 이벤트 제거: 개별 StockDeductionFailedEvent 발행으로 변경 예정
+            // TODO: StockDeductionFailedEvent 발행 로직 추가
+            log.warn("💥 재고 차감 실패 이벤트가 개별 이벤트로 변경되어야 합니다 - orderId: {}, reason: {}",
+                    orderId, reason);
 
         } catch (Exception e) {
             log.error("❌ [UNIFIED] 재고 차감 실패 이벤트 발행 실패 - orderId: {}, error: {}", orderId, e.getMessage(), e);
@@ -241,106 +225,7 @@ public class OrderEventPublisher {
 
 
 
-    /**
-     * 재고 차감 요청 이벤트 발행
-     *
-     * @param orderId 주문 ID
-     * @param orderNo 주문 번호
-     * @param popupId 팝업 ID
-     * @param deductionItems 차감 항목들
-     */
-    public void publishStockDeductionRequestedEvent(java.util.UUID orderId, String orderNo,
-                                                   java.util.UUID popupId,
-                                                   java.util.List<StockDeductionRequestedEvent.StockDeductionItem> deductionItems) {
-        try {
-            log.info("📦 [ORDER] 재고 차감 요청 이벤트 발행 시작 - orderId: {}, 항목 수: {}", orderId, deductionItems.size());
-
-            StockDeductionRequestedEvent event = StockDeductionRequestedEvent.create(
-                    orderId, orderNo, popupId, deductionItems
-            );
-
-            // 1. 내부 이벤트 발행 (Spring Events)
-            applicationEventPublisher.publishEvent(event);
-
-            // 2. Redis Stream 이벤트 발행 (Store 서비스로 전송)
-            redisEventPublisher.publishStockDeductionRequestedEvent(event);
-
-            log.info("📦✅ [ORDER] 재고 차감 요청 이벤트 발행 완료 - orderId: {}, eventId: {}",
-                    orderId, event.getEventId());
-
-        } catch (Exception e) {
-            log.error("📦❌ [ORDER] 재고 차감 요청 이벤트 발행 실패 - orderId: {}, error: {}", orderId, e.getMessage(), e);
-        }
-    }
-
     // ================ 📅 스케줄 예약 관련 이벤트 발행 메소드들 ================
-
-    /**
-     * 스케줄 예약 요청 이벤트 발행
-     *
-     * @param order 주문 정보
-     * @param reservationItems 예약 요청 항목들
-     */
-    public void publishScheduleReservationRequestedEvent(Order order,
-                                                        java.util.List<ScheduleReservationRequestedEvent.ReservationItem> reservationItems) {
-        try {
-            ScheduleReservationRequestedEvent event = ScheduleReservationRequestedEvent.create(
-                    order.getId(),
-                    order.getOrderNo(),
-                    order.getPopupId(),
-                    reservationItems
-            );
-
-            log.info("📅 [ORDER] 스케줄 예약 요청 이벤트 발행 - orderId: {}, 세션수: {}",
-                    event.getOrderId(), event.getReservationItemCount());
-
-            // 내부 이벤트 발행
-            applicationEventPublisher.publishEvent(event);
-
-            // Redis 이벤트 발행 (Store 서비스로 전송)
-            redisEventPublisher.publishScheduleReservationRequestedEvent(event);
-
-            log.info("📅✅ [ORDER] 스케줄 예약 요청 이벤트 발행 완료 - orderId: {}, eventId: {}",
-                    event.getOrderId(), event.getEventId());
-
-        } catch (Exception e) {
-            log.error("📅❌ [ORDER] 스케줄 예약 요청 이벤트 발행 실패 - orderId: {}", order.getId(), e);
-        }
-    }
-
-    /**
-     * 스케줄 예약 취소 요청 이벤트 발행
-     */
-    public void publishScheduleReservationCancelRequestedEvent(Order order,
-                                                              String reservationToken,
-                                                              java.util.List<ScheduleReservationCancelRequestedEvent.CancelItem> cancelItems,
-                                                              String cancelReason) {
-        try {
-            ScheduleReservationCancelRequestedEvent event = ScheduleReservationCancelRequestedEvent.create(
-                    order.getId(),
-                    order.getOrderNo(),
-                    order.getPopupId(),
-                    reservationToken,
-                    cancelItems,
-                    cancelReason
-            );
-
-            log.info("📅 [ORDER] 스케줄 예약 취소 요청 이벤트 발행 - orderId: {}, 세션수: {}, 사유: {}",
-                    event.getOrderId(), event.getCancelItemCount(), event.getCancelReason());
-
-            // 내부 이벤트 발행
-            applicationEventPublisher.publishEvent(event);
-
-            // Redis 이벤트 발행 (Store 서비스로 전송)
-            redisEventPublisher.publishScheduleReservationCancelRequestedEvent(event);
-
-            log.info("📅✅ [ORDER] 스케줄 예약 취소 요청 이벤트 발행 완료 - orderId: {}, eventId: {}",
-                    event.getOrderId(), event.getEventId());
-
-        } catch (Exception e) {
-            log.error("📅❌ [ORDER] 스케줄 예약 취소 요청 이벤트 발행 실패 - orderId: {}", order.getId(), e);
-        }
-    }
 
 
     /**
@@ -378,28 +263,140 @@ public class OrderEventPublisher {
     }
 
     /**
-     * 🏪 통합 Store 요청 이벤트 발행
+     * 스케줄 예약 취소 요청 이벤트 발행
      *
-     * @param storeRequestEvent Store 서비스 요청 이벤트
+     * @param orderId 주문 ID
+     * @param orderNo 주문 번호
+     * @param popupId 팝업 ID
+     * @param sessionOptionId 세션 옵션 ID
+     * @param quantity 취소할 수량
+     * @param reason 취소 사유
      */
-    public void publishStoreRequestEvent(StoreRequestEvent storeRequestEvent) {
+    public void publishScheduleReservationCancelRequestedEvent(java.util.UUID orderId, String orderNo,
+                                                              java.util.UUID popupId, java.util.UUID sessionOptionId,
+                                                              Integer quantity, String reason) {
         try {
-            log.info("🏪 [UNIFIED-STORE] Store 요청 이벤트 발행 시작 - orderId: {}, requestType: {}, items: {}",
-                    storeRequestEvent.getOrderId(), storeRequestEvent.getRequestType(),
-                    storeRequestEvent.getRequestItems().size());
+            String eventId = java.util.UUID.randomUUID().toString();
 
-            // 내부 이벤트 발행 (Spring Events)
-            applicationEventPublisher.publishEvent(storeRequestEvent);
+            log.info("📅❌ [ORDER] 스케줄 예약 취소 요청 이벤트 발행 - orderId: {}, sessionOptionId: {}, reason: {}",
+                    orderId, sessionOptionId, reason);
 
-            // Redis 이벤트 발행 (Store 서비스로 전송)
-            redisEventPublisher.publishStoreRequestEvent(storeRequestEvent);
+            // ScheduleReservationCancelRequestedEvent 생성 및 발행
+            com.popcorn.order.event.schedule.ScheduleReservationCancelRequestedEvent event =
+                    com.popcorn.order.event.schedule.ScheduleReservationCancelRequestedEvent.create(
+                            orderId,
+                            orderNo,
+                            popupId,
+                            sessionOptionId,
+                            quantity,
+                            reason
+                    );
 
-            log.info("✅ [UNIFIED-STORE] Store 요청 이벤트 발행 완료 - orderId: {}, requestType: {}, eventId: {}",
-                    storeRequestEvent.getOrderId(), storeRequestEvent.getRequestType(), storeRequestEvent.getEventId());
+            // 내부 이벤트 발행
+            applicationEventPublisher.publishEvent(event);
+
+            log.info("✅ [ORDER] 스케줄 예약 취소 요청 이벤트 발행 완료 - orderId: {}, eventId: {}, sessionOptionId: {}",
+                    orderId, eventId, sessionOptionId);
 
         } catch (Exception e) {
-            log.error("❌ [UNIFIED-STORE] Store 요청 이벤트 발행 실패 - orderId: {}, requestType: {}, error: {}",
-                    storeRequestEvent.getOrderId(), storeRequestEvent.getRequestType(), e.getMessage(), e);
+            log.error("❌ [ORDER] 스케줄 예약 취소 요청 이벤트 발행 실패 - orderId: {}, sessionOptionId: {}, error: {}",
+                    orderId, sessionOptionId, e.getMessage(), e);
+            // 예약 취소 요청 실패해도 주문 상태에는 영향 없음 (로그만 남김)
         }
     }
+
+    // ================ 📦 개별 이벤트 발행 메소드들 ================
+
+    /**
+     * 재고 차감 요청 이벤트 발행
+     *
+     * @param orderId 주문 ID
+     * @param orderNo 주문 번호
+     * @param popupId 팝업 ID
+     * @param deductionItems 차감할 항목들
+     */
+    public void publishStockDeductionRequestedEvent(java.util.UUID orderId, String orderNo,
+                                                   java.util.UUID popupId,
+                                                   java.util.List<com.popcorn.order.event.stock.StockDeductionRequestedEvent.DeductionItem> deductionItems) {
+        try {
+            log.info("📦 [ORDER] 재고 차감 요청 이벤트 발행 - orderId: {}, 항목수: {}", orderId, deductionItems.size());
+
+            // StockDeductionRequestedEvent 생성 및 발행
+            com.popcorn.order.event.stock.StockDeductionRequestedEvent event =
+                    com.popcorn.order.event.stock.StockDeductionRequestedEvent.create(orderId, orderNo, popupId, deductionItems);
+
+            // Redis Stream 발행
+            redisEventPublisher.publishStockDeductionRequestedEvent(event);
+
+            log.info("✅ [ORDER] 재고 차감 요청 이벤트 발행 완료 - orderId: {}, eventId: {}",
+                    orderId, event.getEventId());
+
+        } catch (Exception e) {
+            log.error("❌ [ORDER] 재고 차감 요청 이벤트 발행 실패 - orderId: {}, error: {}",
+                    orderId, e.getMessage(), e);
+        }
+    }
+
+    /**
+     * 굿즈 예약 요청 이벤트 발행
+     *
+     * @param orderId 주문 ID
+     * @param orderNo 주문 번호
+     * @param popupId 팝업 ID
+     * @param goodsId 굿즈 ID
+     * @param quantity 수량
+     */
+    public void publishGoodsReservationRequestedEvent(java.util.UUID orderId, String orderNo,
+                                                     java.util.UUID popupId, java.util.UUID goodsId, Integer quantity) {
+        try {
+            log.info("🛍️ [ORDER] 굿즈 예약 요청 이벤트 발행 - orderId: {}, goodsId: {}, quantity: {}",
+                    orderId, goodsId, quantity);
+
+            // GoodsReservationRequestedEvent 생성 및 발행
+            com.popcorn.order.event.goods.GoodsReservationRequestedEvent event =
+                    com.popcorn.order.event.goods.GoodsReservationRequestedEvent.create(orderId, orderNo, popupId, goodsId, quantity);
+
+            // Redis Stream 발행
+            redisEventPublisher.publishGoodsReservationRequestedEvent(event);
+
+            log.info("✅ [ORDER] 굿즈 예약 요청 이벤트 발행 완료 - orderId: {}, eventId: {}",
+                    orderId, event.getEventId());
+
+        } catch (Exception e) {
+            log.error("❌ [ORDER] 굿즈 예약 요청 이벤트 발행 실패 - orderId: {}, error: {}",
+                    orderId, e.getMessage(), e);
+        }
+    }
+
+    /**
+     * 스케줄 예약 요청 이벤트 발행
+     *
+     * @param orderId 주문 ID
+     * @param orderNo 주문 번호
+     * @param popupId 팝업 ID
+     * @param reservedSessions 예약할 세션들
+     */
+    public void publishScheduleReservationRequestedEvent(java.util.UUID orderId, String orderNo,
+                                                        java.util.UUID popupId,
+                                                        java.util.List<com.popcorn.order.event.schedule.ScheduleReservationRequestedEvent.ReservedSession> reservedSessions) {
+        try {
+            log.info("📅 [ORDER] 스케줄 예약 요청 이벤트 발행 - orderId: {}, 세션수: {}",
+                    orderId, reservedSessions.size());
+
+            // ScheduleReservationRequestedEvent 생성 및 발행
+            com.popcorn.order.event.schedule.ScheduleReservationRequestedEvent event =
+                    com.popcorn.order.event.schedule.ScheduleReservationRequestedEvent.create(orderId, orderNo, popupId, reservedSessions);
+
+            // Redis Stream 발행
+            redisEventPublisher.publishScheduleReservationRequestedEvent(event);
+
+            log.info("✅ [ORDER] 스케줄 예약 요청 이벤트 발행 완료 - orderId: {}, eventId: {}",
+                    orderId, event.getEventId());
+
+        } catch (Exception e) {
+            log.error("❌ [ORDER] 스케줄 예약 요청 이벤트 발행 실패 - orderId: {}, error: {}",
+                    orderId, e.getMessage(), e);
+        }
+    }
+
 }

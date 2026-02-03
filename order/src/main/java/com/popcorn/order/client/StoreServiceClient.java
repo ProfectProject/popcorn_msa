@@ -18,6 +18,7 @@ import com.popcorn.order.client.dto.StoreApiResponse;
 import com.popcorn.order.client.dto.PriceResponse;
 import com.popcorn.order.client.dto.PriceResult;
 import com.popcorn.order.dto.store.PopupInfoResponse;
+import org.springframework.core.ParameterizedTypeReference;
 
 /**
  * Store 서비스와의 동기 HTTP 통신 클라이언트
@@ -35,6 +36,13 @@ public class StoreServiceClient {
 
     @Value("${order.price-lookup.timeout-ms:2500}")
     private long timeoutMs;
+
+    // TypeReference를 정적 필드로 정의하여 익명 클래스 문제 해결
+    private static final ParameterizedTypeReference<StoreApiResponse<PriceResponse>> PRICE_RESPONSE_TYPE =
+            new ParameterizedTypeReference<StoreApiResponse<PriceResponse>>() {};
+
+    private static final ParameterizedTypeReference<StoreApiResponse<PopupInfoResponse>> POPUP_RESPONSE_TYPE =
+            new ParameterizedTypeReference<StoreApiResponse<PopupInfoResponse>>() {};
 
     /**
      * 세션 가격 조회 (동기식)
@@ -62,7 +70,7 @@ public class StoreServiceClient {
                         log.warn("💰 [HTTP] 세션 가격 정보 없음 - sessionId: {}", sessionId);
                         return clientResponse.createException();
                     })
-                    .bodyToMono(new org.springframework.core.ParameterizedTypeReference<StoreApiResponse<PriceResponse>>() {})
+                    .bodyToMono(PRICE_RESPONSE_TYPE)
                     .timeout(Duration.ofMillis(timeoutMs))
                     .block();
 
@@ -115,7 +123,7 @@ public class StoreServiceClient {
                         log.warn("🎁 [HTTP] 굿즈 가격 정보 없음 - goodsId: {}", goodsId);
                         return clientResponse.createException();
                     })
-                    .bodyToMono(new org.springframework.core.ParameterizedTypeReference<StoreApiResponse<PriceResponse>>() {})
+                    .bodyToMono(PRICE_RESPONSE_TYPE)
                     .timeout(Duration.ofMillis(timeoutMs))
                     .block();
 
@@ -168,7 +176,7 @@ public class StoreServiceClient {
                         log.warn("🏪 [HTTP] 팝업 정보 없음 - popupId: {}", popupId);
                         return clientResponse.createException();
                     })
-                    .bodyToMono(new org.springframework.core.ParameterizedTypeReference<StoreApiResponse<PopupInfoResponse>>() {})
+                    .bodyToMono(POPUP_RESPONSE_TYPE)
                     .timeout(Duration.ofMillis(timeoutMs))
                     .block();
 

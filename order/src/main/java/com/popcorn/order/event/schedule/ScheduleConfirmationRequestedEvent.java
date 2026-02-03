@@ -13,25 +13,18 @@ import lombok.Getter;
 import lombok.ToString;
 
 /**
- * 스케줄 예약 요청 이벤트
+ * 스케줄 확정 요청 이벤트
  *
  * [이벤트 발행 시점]
- * - Order 서비스에서 스케줄 세션 예약을 요청할 때
- * - Redis Stream을 통해 Store 서비스로 전송
+ * - Order 서비스에서 결제 완료 후 예약 상태를 확정 상태로 변경할 때
+ * - Store 서비스로 스케줄 확정 요청
  *
  * [이벤트 수신자]
- * - Store 모듈: 스케줄 세션 예약 처리
- *
- * [Payload 정보]
- * - eventId: 이벤트 고유 ID
- * - orderId: 주문 ID
- * - orderNo: 주문 번호
- * - popupId: 팝업 ID
- * - reservedSessions[]: 예약할 세션들
+ * - Store 모듈: 예약 → 확정 상태 변경 처리
  */
 @Getter
 @ToString(callSuper = true)
-public class ScheduleReservationRequestedEvent extends BaseOrderEvent {
+public class ScheduleConfirmationRequestedEvent extends BaseOrderEvent {
 
     /** 주문 번호 */
     private final String orderNo;
@@ -39,16 +32,16 @@ public class ScheduleReservationRequestedEvent extends BaseOrderEvent {
     /** 팝업 ID */
     private final UUID popupId;
 
-    /** 예약할 세션들 */
+    /** 확정 요청할 예약된 세션들 */
     private final List<ReservedSession> reservedSessions;
 
     /** 요청 시간 */
     private final LocalDateTime requestedAt;
 
-    private ScheduleReservationRequestedEvent(UUID orderId, String orderNo, UUID popupId,
-                                            List<ReservedSession> reservedSessions,
-                                            LocalDateTime requestedAt, Long userId) {
-        super(orderId, "schedule-reservation-requested", userId);
+    private ScheduleConfirmationRequestedEvent(UUID orderId, String orderNo, UUID popupId,
+                                             List<ReservedSession> reservedSessions,
+                                             LocalDateTime requestedAt, Long userId) {
+        super(orderId, "schedule-confirmation-requested", userId);
         this.orderNo = orderNo;
         this.popupId = popupId;
         this.reservedSessions = reservedSessions;
@@ -71,19 +64,19 @@ public class ScheduleReservationRequestedEvent extends BaseOrderEvent {
     /**
      * 팩토리 메서드
      */
-    public static ScheduleReservationRequestedEvent create(UUID orderId, String orderNo, UUID popupId,
-                                                         List<ReservedSession> reservedSessions) {
+    public static ScheduleConfirmationRequestedEvent create(UUID orderId, String orderNo, UUID popupId,
+                                                          List<ReservedSession> reservedSessions) {
         return create(orderId, orderNo, popupId, reservedSessions, null);
     }
 
-    public static ScheduleReservationRequestedEvent create(UUID orderId, String orderNo, UUID popupId,
-                                                         List<ReservedSession> reservedSessions, Long userId) {
-        return new ScheduleReservationRequestedEvent(orderId, orderNo, popupId, reservedSessions,
+    public static ScheduleConfirmationRequestedEvent create(UUID orderId, String orderNo, UUID popupId,
+                                                          List<ReservedSession> reservedSessions, Long userId) {
+        return new ScheduleConfirmationRequestedEvent(orderId, orderNo, popupId, reservedSessions,
                                                     LocalDateTime.now(), userId);
     }
 
     /**
-     * 예약할 세션 정보
+     * 예약된 세션 정보
      */
     @Getter
     @AllArgsConstructor
@@ -93,22 +86,27 @@ public class ScheduleReservationRequestedEvent extends BaseOrderEvent {
         /** 세션 옵션 ID */
         private UUID sessionOptionId;
 
-        /** 예약할 수량 */
-        private Integer quantity;
+        /** 예약된 수량 */
+        private Integer reservedQuantity;
 
-        /** 세션명 */
+        /** 세션명 (로그용) */
         private String sessionName;
 
         /** 세션 시간 */
         private LocalDateTime sessionTime;
 
-        public static ReservedSession create(UUID sessionOptionId, Integer quantity,
-                                           String sessionName, LocalDateTime sessionTime) {
+        /** 예약 토큰 */
+        private String reservationToken;
+
+        public static ReservedSession create(UUID sessionOptionId, Integer reservedQuantity,
+                                           String sessionName, LocalDateTime sessionTime,
+                                           String reservationToken) {
             return ReservedSession.builder()
                     .sessionOptionId(sessionOptionId)
-                    .quantity(quantity)
+                    .reservedQuantity(reservedQuantity)
                     .sessionName(sessionName)
                     .sessionTime(sessionTime)
+                    .reservationToken(reservationToken)
                     .build();
         }
     }

@@ -161,7 +161,7 @@ order:
     max-quantity: ${ORDER_MAX_QUANTITY:100}  # 최대 주문 수량
     min-quantity: ${ORDER_MIN_QUANTITY:1}    # 최소 주문 수량
   reservation:
-    wait-timeout-ms: ${ORDER_RESERVATION_WAIT_TIMEOUT_MS:15000}  # 예약 응답 대기 시간 (5초 → 15초)
+    wait-timeout-ms: ${ORDER_RESERVATION_WAIT_TIMEOUT_MS:60000}  # 예약 응답 대기 시간 (60초로 증가)
   notification:
     enabled: ${ORDER_NOTIFICATION_ENABLED:true}  # 알림 활성화
     retry-count: ${ORDER_NOTIFICATION_RETRY:2}   # ⚡ 알림 재시도 횟수: 3 → 2 (빠른 실패)
@@ -176,7 +176,12 @@ logging:
     org.hibernate.SQL: INFO  # DEBUG → INFO (SQL 로깅 최소화로 큰 성능 향상)
     org.springframework.security: WARN
 
-# 이벤트 기반 아키텍처 - HTTP 통신 제거 (극한 성능 최적화)
+# 외부 서비스 설정
 external:
+  services:
+    users:
+      base-url: ${USERS_SERVICE_BASE_URL:http://localhost:8080}
+    store:
+      base-url: ${STORE_SERVICE_BASE_URL:http://localhost:8080}
   http:
-    enabled: false  # HTTP 기반 외부 서비스 호출 비활성화
+    enabled: true  # HTTP 기반 외부 서비스 호출 활성화 (개발환경)
