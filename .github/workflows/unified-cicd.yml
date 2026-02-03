@@ -3,17 +3,6 @@ name: Unified CI/CD Pipeline
 on:
   push:
     branches: [develop, main]
-    paths:
-      - 'users/**'
-      - 'stores/**'
-      - 'order/**'
-      - 'orderQuery/**'
-      - 'payment/**'
-      - 'gateway/**'
-      - 'checkIns/**'
-      - 'common-lib/**'
-      - '.aws/task-definitions/**'
-      - '.github/workflows/unified-cicd.yml'
   workflow_dispatch:
     inputs:
       services:
