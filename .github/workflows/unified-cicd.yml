@@ -46,7 +46,7 @@ env:
 jobs:
   detect-changes:
     runs-on: ubuntu-latest
-    if: github.event_name == 'workflow_dispatch' || startsWith(github.ref, 'refs/heads/feature/') || contains(github.event.head_commit.message, '[unified]') || contains(github.event.head_commit.message, '[all]')
+    if: github.event_name == 'workflow_dispatch' || github.event_name == 'push'
     outputs:
       services: ${{ steps.changes.outputs.services }}
       matrix: ${{ steps.changes.outputs.matrix }}
