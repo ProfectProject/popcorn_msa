@@ -87,7 +87,11 @@ jobs:
           json=$(printf '%s\n' "${services[@]}" | jq -R . | jq -s .)
 
           echo "has_changes=true" >> "$GITHUB_OUTPUT"
-          echo "services_json=$json" >> "$GITHUB_OUTPUT"
+          {
+            echo "services_json<<EOF"
+            echo "$json"
+            echo "EOF"
+          } >> "$GITHUB_OUTPUT"
 
       - name: Debug outputs
         run: |
