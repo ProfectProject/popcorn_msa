@@ -1,13 +1,13 @@
 package com.popcorn.order.event.payment;
 
-import lombok.AllArgsConstructor;
-import lombok.Builder;
 import lombok.Getter;
-import lombok.NoArgsConstructor;
-import lombok.ToString;
 
 import java.time.LocalDateTime;
+import java.util.HashMap;
+import java.util.Map;
 import java.util.UUID;
+
+import com.popcorn.order.event.order.BaseOrderEvent;
 
 /**
  * 결제 완료 이벤트
@@ -26,38 +26,54 @@ import java.util.UUID;
  * 결제 요청이나 결제 대기 상태에서는 발행하지 않습니다.
  */
 @Getter
-@NoArgsConstructor
-@AllArgsConstructor
-@Builder(toBuilder = true)
-@ToString
-public class PaymentCompletedEvent {
-
-    /** 이벤트 ID (추적용) */
-    private String eventId;
-
-    /** 주문 ID */
-    private UUID orderId;
+public class PaymentCompletedEvent extends BaseOrderEvent {
 
     /** 결제 ID */
-    private UUID paymentId;
+    private final UUID paymentId;
 
     /** 결제 키 (PG사 결제 키) */
-    private String paymentKey;
+    private final String paymentKey;
 
     /** 결제 금액 */
-    private Integer amount;
+    private final Integer amount;
 
     /** 결제 수단 */
-    private String paymentMethod;
+    private final String paymentMethod;
 
     /** 결제 완료 시간 */
-    private LocalDateTime completedAt;
+    private final LocalDateTime completedAt;
 
     /** 이벤트 발생 시간 */
-    private LocalDateTime eventTime;
+    private final LocalDateTime eventTime;
 
     /** PG사 응답 정보 (원본 응답) */
-    private String pgResponse;
+    private final String pgResponse;
+
+    private PaymentCompletedEvent(UUID orderId, UUID paymentId, String paymentKey,
+                                Integer amount, String paymentMethod, LocalDateTime completedAt,
+                                LocalDateTime eventTime, String pgResponse, Long userId) {
+        super(orderId, "payment-completed", userId);
+        this.paymentId = paymentId;
+        this.paymentKey = paymentKey;
+        this.amount = amount;
+        this.paymentMethod = paymentMethod;
+        this.completedAt = completedAt;
+        this.eventTime = eventTime;
+        this.pgResponse = pgResponse;
+    }
+
+    @Override
+    public Map<String, Object> getEventPayload() {
+        Map<String, Object> payload = new HashMap<>();
+        payload.put("paymentId", paymentId != null ? paymentId.toString() : null);
+        payload.put("paymentKey", paymentKey);
+        payload.put("amount", amount);
+        payload.put("paymentMethod", paymentMethod);
+        payload.put("completedAt", completedAt != null ? completedAt.toString() : null);
+        payload.put("eventTime", eventTime != null ? eventTime.toString() : null);
+        payload.put("pgResponse", pgResponse);
+        return payload;
+    }
 
     /**
      * Payment 모듈에서 발행할 이벤트 생성 팩토리 메서드
@@ -72,16 +88,8 @@ public class PaymentCompletedEvent {
     public static PaymentCompletedEvent create(UUID orderId, UUID paymentId,
                                               String paymentKey, Integer amount,
                                               String paymentMethod) {
-        return PaymentCompletedEvent.builder()
-                .eventId(UUID.randomUUID().toString())
-                .orderId(orderId)
-                .paymentId(paymentId)
-                .paymentKey(paymentKey)
-                .amount(amount)
-                .paymentMethod(paymentMethod)
-                .completedAt(LocalDateTime.now())
-                .eventTime(LocalDateTime.now())
-                .build();
+        return new PaymentCompletedEvent(orderId, paymentId, paymentKey, amount,
+                paymentMethod, LocalDateTime.now(), LocalDateTime.now(), null, null);
     }
 
     /**
@@ -98,9 +106,7 @@ public class PaymentCompletedEvent {
     public static PaymentCompletedEvent createWithPgResponse(UUID orderId, UUID paymentId,
                                                            String paymentKey, Integer amount,
                                                            String paymentMethod, String pgResponse) {
-        return create(orderId, paymentId, paymentKey, amount, paymentMethod)
-                .toBuilder()
-                .pgResponse(pgResponse)
-                .build();
+        return new PaymentCompletedEvent(orderId, paymentId, paymentKey, amount,
+                paymentMethod, LocalDateTime.now(), LocalDateTime.now(), pgResponse, null);
     }
 }

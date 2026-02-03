@@ -512,15 +512,13 @@ public class OrderRedisStreamListener implements StreamListener<String, MapRecor
 
                 // 2. 내부 PaymentCompletedEvent 발행하여 재고 차감 프로세스 시작
                 try {
-                    PaymentCompletedEvent paymentEvent = PaymentCompletedEvent.builder()
-                            .eventId(java.util.UUID.randomUUID().toString())
-                            .orderId(orderUuid)
-                            .paymentKey(paymentId) // 결제키로 사용
-                            .amount(amount != null ? Integer.valueOf(amount) : null)
-                            .paymentMethod("TOSS_PAYMENT")
-                            .completedAt(java.time.LocalDateTime.now())
-                            .eventTime(java.time.LocalDateTime.now())
-                            .build();
+                    PaymentCompletedEvent paymentEvent = PaymentCompletedEvent.create(
+                            orderUuid,
+                            null, // paymentId - 없으면 null
+                            paymentId, // paymentKey
+                            amount != null ? Integer.valueOf(amount) : null,
+                            "TOSS_PAYMENT"
+                    );
 
                     eventPublisher.publishEvent(paymentEvent);
                     log.info("✅ [ORDER] PaymentCompletedEvent 발행 완료 - 재고 차감 프로세스 시작 - orderId: {}", orderId);
@@ -616,15 +614,13 @@ public class OrderRedisStreamListener implements StreamListener<String, MapRecor
 
                 // 4. 내부 결제 완료 이벤트 발행 (다른 서비스 알림용)
                 try {
-                    PaymentCompletedEvent paymentEvent = PaymentCompletedEvent.builder()
-                            .eventId(java.util.UUID.randomUUID().toString())
-                            .orderId(orderUuid)
-                            .paymentKey(paymentId)
-                            .amount(totalAmount != null ? Integer.valueOf(totalAmount) : null)
-                            .paymentMethod("TOSS_PAYMENT")
-                            .completedAt(java.time.LocalDateTime.now())
-                            .eventTime(java.time.LocalDateTime.now())
-                            .build();
+                    PaymentCompletedEvent paymentEvent = PaymentCompletedEvent.create(
+                            orderUuid,
+                            null, // paymentId - 없으면 null
+                            paymentId, // paymentKey
+                            totalAmount != null ? Integer.valueOf(totalAmount) : null,
+                            "TOSS_PAYMENT"
+                    );
 
                     eventPublisher.publishEvent(paymentEvent);
                     log.info("📨 [ORDER] 내부 결제 완료 이벤트 발행 완료 - orderId: {}", orderId);

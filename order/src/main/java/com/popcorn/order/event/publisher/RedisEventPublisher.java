@@ -2,7 +2,7 @@ package com.popcorn.order.event.publisher;
 
 import com.fasterxml.jackson.databind.ObjectMapper;
 import com.popcorn.order.event.order.OrderPaidEvent;
-import com.popcorn.order.event.stock.GoodsReservationRequestedEvent;
+import com.popcorn.order.event.store.StoreRequestEvent;
 import com.popcorn.order.event.stock.StockDeductionRequestedEvent;
 import com.popcorn.order.event.schedule.ScheduleReservationRequestedEvent;
 import com.popcorn.order.event.schedule.ScheduleReservationCancelRequestedEvent;
@@ -76,37 +76,6 @@ public class RedisEventPublisher {
         }
     }
 
-    /**
-     * 굿즈 재고 예약 요청 이벤트 발행 (Store 서비스에서 수신)
-     */
-    public void publishGoodsReservationRequestedEvent(GoodsReservationRequestedEvent event) {
-        try {
-            log.info("굿즈 재고 예약 요청 이벤트 Stream 발행 시작 - orderId: {}, eventId: {}",
-                    event.getOrderId(), event.getEventId());
-
-            Map<String, String> eventData = Map.of(
-                "eventType", "goods-reservation-requested",
-                "eventId", event.getEventId().toString(),
-                "orderId", event.getOrderId().toString(),
-                "orderNo", event.getOrderNo(),
-                "popupId", event.getPopupId() != null ? event.getPopupId().toString() : "",
-                "reservationItems", objectMapper.writeValueAsString(event.getReservationItems()),
-                "requestedAt", event.getRequestedAt().toString(),
-                "eventTime", LocalDateTime.now().toString()
-            );
-
-            StringRecord record = StreamRecords.string(eventData).withStreamKey(GOODS_EVENTS_STREAM);
-            redisTemplate.opsForStream().add(record);
-
-            log.info("굿즈 재고 예약 요청 이벤트 Stream 발행 완료 - orderId: {}, eventId: {}",
-                    event.getOrderId(), event.getEventId());
-
-        } catch (Exception e) {
-            log.error("굿즈 재고 예약 요청 이벤트 Stream 발행 실패 - orderId: {}, eventId: {}, error: {}",
-                    event.getOrderId(), event.getEventId(), e.getMessage(), e);
-            throw new RuntimeException("굿즈 재고 예약 요청 이벤트 Stream 발행 실패", e);
-        }
-    }
 
     /**
      * 재고 차감 요청 이벤트 발행 (Store 서비스에서 수신)
@@ -333,46 +302,6 @@ public class RedisEventPublisher {
         }
     }
 
-    /**
-     * 복합형 예약 요청 이벤트 발행 (스케줄 + 굿즈) - Store 서비스에서 hold_both.lua 사용
-     */
-    public void publishMixedReservationRequestedEvent(
-            ScheduleReservationRequestedEvent scheduleEvent,
-            GoodsReservationRequestedEvent goodsEvent) {
-        try {
-            log.info("🔗 [ORDER→STORE] 복합형 예약 요청 이벤트 Stream 발행 시작 - orderId: {}",
-                    scheduleEvent.getOrderId());
-
-            // 스케줄 예약 항목들을 JSON으로 직렬화
-            String scheduleItemsJson = objectMapper.writeValueAsString(scheduleEvent.getReservationItems());
-
-            // 굿즈 예약 항목들을 JSON으로 직렬화
-            String goodsItemsJson = objectMapper.writeValueAsString(goodsEvent.getReservationItems());
-
-            Map<String, String> eventData = Map.of(
-                "eventType", "mixed-reservation-requested",
-                "eventId", java.util.UUID.randomUUID().toString(),
-                "orderId", scheduleEvent.getOrderId().toString(),
-                "orderNo", scheduleEvent.getOrderNo(),
-                "popupId", scheduleEvent.getPopupId() != null ? scheduleEvent.getPopupId().toString() : "",
-                "scheduleItems", scheduleItemsJson,
-                "goodsItems", goodsItemsJson,
-                "requestedAt", scheduleEvent.getRequestedAt().toString(),
-                "eventTime", LocalDateTime.now().toString()
-            );
-
-            StringRecord record = StreamRecords.string(eventData).withStreamKey(MIXED_EVENTS_STREAM);
-            redisTemplate.opsForStream().add(record);
-
-            log.info("🔗✅ [ORDER→STORE] 복합형 예약 요청 이벤트 Stream 발행 완료 - orderId: {}",
-                    scheduleEvent.getOrderId());
-
-        } catch (Exception e) {
-            log.error("🔗❌ [ORDER→STORE] 복합형 예약 요청 이벤트 Stream 발행 실패 - orderId: {}, error: {}",
-                    scheduleEvent.getOrderId(), e.getMessage(), e);
-            throw new RuntimeException("복합형 예약 요청 이벤트 Stream 발행 실패", e);
-        }
-    }
 
     /**
      * 스케줄 확정 요청 이벤트 Stream 발행 (결제 완료 후)
@@ -497,6 +426,41 @@ public class RedisEventPublisher {
             log.error("❌ [{}] 이벤트 Stream 발행 실패: eventType={}, stream={}, error={}",
                     methodName, eventData.get("eventType"), streamName, e.getMessage());
             throw new RuntimeException("Redis Stream 발행 실패: " + methodName, e);
+        }
+    }
+
+    /**
+     * 🏪 통합 Store 요청 이벤트 Redis Stream 발행
+     *
+     * @param event Store 요청 이벤트
+     */
+    public void publishStoreRequestEvent(StoreRequestEvent event) {
+        try {
+            log.info("🏪 [UNIFIED-STORE] Store 요청 이벤트 Stream 발행 시작 - orderId: {}, requestType: {}",
+                    event.getOrderId(), event.getRequestType());
+
+            Map<String, String> eventData = Map.of(
+                    "eventType", event.getEventType(),
+                    "eventId", event.getEventId().toString(),
+                    "orderId", event.getOrderId().toString(),
+                    "orderNo", event.getOrderNo() != null ? event.getOrderNo() : "",
+                    "popupId", event.getPopupId() != null ? event.getPopupId().toString() : "",
+                    "requestType", event.getRequestType().name(),
+                    "itemCount", String.valueOf(event.getRequestItems().size()),
+                    "requestedAt", event.getRequestedAt().toString(),
+                    "eventTime", LocalDateTime.now().toString()
+            );
+
+            StringRecord record = StreamRecords.string(eventData).withStreamKey("order-store-requests");
+            redisTemplate.opsForStream().add(record);
+
+            log.info("✅ [UNIFIED-STORE] Store 요청 이벤트 Stream 발행 완료 - orderId: {}, requestType: {}",
+                    event.getOrderId(), event.getRequestType());
+
+        } catch (Exception e) {
+            log.error("❌ [UNIFIED-STORE] Store 요청 이벤트 Stream 발행 실패 - orderId: {}, requestType: {}, error: {}",
+                    event.getOrderId(), event.getRequestType(), e.getMessage(), e);
+            throw new RuntimeException("통합 Store 요청 이벤트 Stream 발행 실패", e);
         }
     }
 }

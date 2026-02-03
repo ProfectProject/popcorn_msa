@@ -21,19 +21,7 @@ public class StandardOrderEventPublisher {
     // 새로운 표준 Stream 이름
     private static final String STANDARD_ORDER_EVENTS_STREAM = "standard-order-events";
 
-    /**
-     * 표준 주문 생성 이벤트 발행
-     */
-    public void publishOrderCreatedEvent(StandardOrderCreatedEvent event) {
-        publishStandardEvent(event, event.toStreamMap());
-    }
 
-    /**
-     * 표준 주문 상태 변경 이벤트 발행
-     */
-    public void publishOrderStatusUpdatedEvent(StandardOrderStatusUpdatedEvent event) {
-        publishStandardEvent(event, event.toStreamMap());
-    }
 
     /**
      * 표준 이벤트 Redis Stream 발행

@@ -20,7 +20,6 @@ import com.popcorn.order.repository.OrderStatusHistoryRepository;
 import com.popcorn.order.event.payment.PaymentCompletedEvent;
 import com.popcorn.order.event.order.OrderPaidEvent;
 import com.popcorn.order.event.order.OrderCancelledEvent;
-import com.popcorn.order.event.stock.StockDeductionFailedEvent;
 import com.popcorn.order.event.stock.StockDeductionRequestedEvent;
 import com.popcorn.order.event.stock.GoodsReservationRequestedEvent;
 import com.popcorn.order.event.schedule.ScheduleReservationResultEvent;
@@ -169,9 +168,9 @@ public class OrderEventListener {
     /**
      * 재고 차감 실패로 인한 주문 취소 처리 (보상 트랜잭션)
      *
-     * @param event 재고 차감 실패 이벤트
+     * @param event 재고 차감 결과 이벤트 (실패)
      */
-    private void handleOrderCancellationForStockFailure(StockDeductionFailedEvent event) {
+    private void handleOrderCancellationForStockFailure(StockDeductionResultEvent event) {
         try {
             UUID orderId = event.getOrderId();
 
@@ -185,8 +184,8 @@ public class OrderEventListener {
             }
 
             // 주문 취소 처리
-            String cancellationReason = String.format("재고 차감 실패 - %s: %s",
-                    event.getReason(), event.getDetails());
+            String cancellationReason = String.format("재고 차감 실패 - %s",
+                    event.getFailureReason());
 
             order.updateStatus(OrderStatus.CANCELLED);
             order.setCancellationReason(cancellationReason);
@@ -231,23 +230,23 @@ public class OrderEventListener {
     }
 
     /**
-     * 내부 재고 차감 실패 이벤트 수신 (동일 서비스 내)
+     * 내부 재고 차감 실패 이벤트 수신 (동일 서비스 내, 통합 이벤트 사용)
      *
-     * @param event 재고 차감 실패 이벤트
+     * @param event 재고 차감 결과 이벤트 (실패)
      */
     @EventListener
     @Transactional
-    public void handleInternalStockDeductionFailed(StockDeductionFailedEvent event) {
+    public void handleInternalStockDeductionFailed(StockDeductionResultEvent event) {
         try {
-            log.info("내부 재고 차감 실패 이벤트 수신 - orderId: {}, reason: {}",
-                    event.getOrderId(), event.getReason());
+            log.info("💥 [UNIFIED] 내부 재고 차감 실패 이벤트 수신 - orderId: {}, reason: {}",
+                    event.getOrderId(), event.getFailureReason());
 
             // 외부 이벤트 핸들러와 동일한 처리
             handleOrderCancellationForStockFailure(event);
 
         } catch (Exception e) {
             log.error("🚨 내부 재고 차감 실패 이벤트 처리 중 오류 - orderId: {}, reason: {}",
-                    event.getOrderId(), event.getReason(), e);
+                    event.getOrderId(), event.getFailureReason(), e);
 
             // 🔥 이벤트 처리 실패 시 반드시 예외 throw + 보상 트랜잭션
             handleEventProcessingFailure(event.getOrderId(), "내부 재고 차감 실패 이벤트 처리", e);
@@ -670,20 +669,30 @@ public class OrderEventListener {
                 return;
             }
 
-            // 굿즈 재고 예약 요청 이벤트 발행
-            List<com.popcorn.order.event.stock.GoodsReservationRequestedEvent.ReservationItem> reservationItems =
+            // 🏪 [UNIFIED-STORE] 굿즈 재고 예약 요청 이벤트 발행
+            List<com.popcorn.order.event.store.StoreRequestEvent.RequestItem> requestItems =
                     goodsItems.stream()
                             .filter(item -> item.getGoodsId() != null)
-                            .map(item -> com.popcorn.order.event.stock.GoodsReservationRequestedEvent.ReservationItem.create(
+                            .map(item -> com.popcorn.order.event.store.StoreRequestEvent.RequestItem.createGoods(
                                     item.getGoodsId(),
-                                    item.getQty()
+                                    item.getQty(),
+                                    getProductName(item),
+                                    item.getUnitPrice()
                             ))
                             .toList();
 
-            if (!reservationItems.isEmpty()) {
-                orderEventPublisher.publishGoodsReservationRequestedEvent(order, reservationItems);
-                log.info("📅→🛍️✅ 스케줄 예약 후 굿즈 재고 예약 요청 완료 - orderId: {}, 굿즈수: {}",
-                        order.getId(), reservationItems.size());
+            if (!requestItems.isEmpty()) {
+                orderEventPublisher.publishStoreRequestEvent(
+                    com.popcorn.order.event.store.StoreRequestEvent.goodsReservation(
+                        order.getId(),
+                        order.getCustomerId(),
+                        java.util.Optional.of(order.getOrderNo()),
+                        order.getPopupId(),
+                        requestItems
+                    )
+                );
+                log.info("📅→🛍️✅ [UNIFIED-STORE] 스케줄 예약 후 굿즈 재고 예약 요청 완료 - orderId: {}, 굿즈수: {}",
+                        order.getId(), requestItems.size());
             }
 
         } catch (Exception e) {
@@ -1079,6 +1088,24 @@ public class OrderEventListener {
             log.error("📅❌ [UNIFIED] 스케줄 예약 실패로 인한 주문 취소 처리 중 오류 - orderId: {}",
                     event.getOrderId(), e);
             throw new RuntimeException("주문 취소 처리 실패", e);
+        }
+    }
+
+    /**
+     * OrderItem에서 제품명 생성 (헬퍼 메서드)
+     */
+    private String getProductName(OrderItem item) {
+        if (item == null || item.getOrderItemType() == null) {
+            return "알 수 없는 상품";
+        }
+
+        switch (item.getOrderItemType()) {
+            case RESERVATION:
+                return "팝업 예약";
+            case GOODS:
+                return "굿즈 상품";
+            default:
+                return "상품";
         }
     }
 }

@@ -3,6 +3,7 @@ package com.popcorn.order.service.core;
 import java.time.Duration;
 import java.time.LocalDateTime;
 import java.util.List;
+import java.util.Optional;
 import java.util.UUID;
 import java.util.concurrent.CompletableFuture;
 import java.util.concurrent.TimeoutException;
@@ -31,11 +32,7 @@ import com.popcorn.order.event.order.OrderCreatedEvent;
 import com.popcorn.order.event.order.OrderStatusChangedEvent;
 import com.popcorn.order.event.order.OrderCancelledEvent;
 import com.popcorn.order.event.publisher.OrderEventPublisher;
-import com.popcorn.order.event.standard.StandardOrderEventPublisher;
-import com.popcorn.order.event.standard.StandardOrderCreatedEvent;
-import com.popcorn.order.event.standard.StandardOrderStatusUpdatedEvent;
-import com.popcorn.order.event.stock.StockReservedEvent;
-import com.popcorn.order.event.stock.StockReservationFailedEvent;
+import com.popcorn.order.event.stock.StockReservationResultEvent;
 import com.popcorn.order.event.stock.StockDeductionRequestedEvent;
 import com.popcorn.order.repository.OrderRepository;
 import com.popcorn.order.repository.OrderItemRepository;
@@ -76,7 +73,6 @@ public class OrderCommandService {
     private final OrderStatusHistoryRepository orderStatusHistoryRepository;
     private final ApplicationEventPublisher eventPublisher;
     private final OrderEventPublisher orderEventPublisher;
-    private final StandardOrderEventPublisher standardOrderEventPublisher;
     private final PaymentTokenUtil paymentTokenUtil;
     private final OrderCacheService orderCacheService;
     private final OrderPriceLookupService orderPriceLookupService;
@@ -193,9 +189,6 @@ public class OrderCommandService {
             throw new IllegalStateException("예약 또는 굿즈 중 최소 하나는 필요합니다.");
         }
 
-        // 주문 생성 이벤트 발행
-        eventPublisher.publishEvent(new OrderCreatedEvent(savedOrder, null));
-
         // 예약/재고 응답 대기 (Redis Stream 타임아웃 해결)
         tracker.markEventStart();
         OrderReservationAwaiter.ReservationOutcome outcome;
@@ -250,7 +243,8 @@ public class OrderCommandService {
                 performanceEmoji, response.getOrderNo(), response.getStatus(), totalElapsed,
                 isUltraFast ? "✅ ULTRA-FAST 달성!" : totalElapsed < 2000 ? "⚠️ 목표 미달성" : "❌ 성능 문제");
 
-        publishStandardOrderCreatedEvent(latestOrder);
+        // 주문 생성 이벤트 발행 (중복 제거 완료)
+        eventPublisher.publishEvent(new OrderCreatedEvent(latestOrder, null));
         orderCacheService.evictMyOrdersCache(latestOrder.getCustomerId());
 
         // 성능 모니터링 완료
@@ -875,24 +869,34 @@ public class OrderCommandService {
             return;
         }
 
-        List<com.popcorn.order.event.stock.GoodsReservationRequestedEvent.ReservationItem> reservationItems =
+        List<com.popcorn.order.event.store.StoreRequestEvent.RequestItem> requestItems =
                 goodsItems.stream()
                         .filter(item -> item.getGoodsId() != null)
-                        .map(item -> com.popcorn.order.event.stock.GoodsReservationRequestedEvent.ReservationItem.create(
+                        .map(item -> com.popcorn.order.event.store.StoreRequestEvent.RequestItem.createGoods(
                                 item.getGoodsId(),
-                                item.getQty()
+                                item.getQty(),
+                                generateProductName(item),
+                                item.getUnitPrice()
                         ))
                         .toList();
 
-        if (reservationItems.isEmpty()) {
+        if (requestItems.isEmpty()) {
             log.warn("굿즈 변형 ID가 없어 재고 예약 요청을 건너뜁니다 - 주문번호: {}", order.getOrderNo());
             return;
         }
 
-        publishAfterCommit(() -> orderEventPublisher.publishGoodsReservationRequestedEvent(order, reservationItems));
+        publishAfterCommit(() -> orderEventPublisher.publishStoreRequestEvent(
+            com.popcorn.order.event.store.StoreRequestEvent.goodsReservation(
+                order.getId(),
+                order.getCustomerId(),
+                java.util.Optional.of(order.getOrderNo()),
+                order.getPopupId(),
+                requestItems
+            )
+        ));
 
-        log.info("주문 재고 예약 요청 이벤트 발행 완료 - 주문번호: {}, items: {}",
-                order.getOrderNo(), reservationItems.size());
+        log.info("🏪 [UNIFIED-STORE] 주문 재고 예약 요청 이벤트 발행 완료 - 주문번호: {}, items: {}",
+                order.getOrderNo(), requestItems.size());
     }
 
     /**
@@ -1038,28 +1042,41 @@ public class OrderCommandService {
      */
     private void publishStockReservedEvent(Order order, List<OrderItem> goodsItems) {
         try {
-            List<StockReservedEvent.ReservedStockItem> reservedItems = goodsItems.stream()
+            List<StockReservationResultEvent.ReservedItem> reservedItems = goodsItems.stream()
                     .filter(item -> item.getGoodsId() != null)
-                    .map(item -> StockReservedEvent.ReservedStockItem.create(
+                    .map(item -> StockReservationResultEvent.ReservedItem.create(
+                            "GOODS",
                             item.getGoodsId(),
                             item.getQty(),
-                            item.getUnitPrice(),
+                            null, // remainingStock - 조회 필요
                             generateProductName(item)
                     ))
                     .collect(java.util.stream.Collectors.toList());
 
-            // 재고 예약 성공 - 이벤트는 Redis Stream으로 처리됨
-            log.info("재고 예약 완료 - 주문번호: {}, 예약 항목: {}개", order.getOrderNo(), reservedItems.size());
+            // 통합 재고 예약 성공 이벤트 발행
+            StockReservationResultEvent event = StockReservationResultEvent.success(
+                    order.getId(),
+                    order.getCustomerId(),
+                    Optional.of(order.getOrderNo()),
+                    order.getPopupId(),
+                    reservedItems,
+                    "RESERVATION_" + java.util.UUID.randomUUID().toString(), // reservationToken
+                    LocalDateTime.now().plusMinutes(30) // 30분 후 만료
+            );
+
+            eventPublisher.publishEvent(event);
+            log.info("✅ [UNIFIED] 재고 예약 성공 이벤트 발행 - 주문번호: {}, 예약 항목: {}개",
+                    order.getOrderNo(), reservedItems.size());
 
         } catch (Exception e) {
-            log.error("재고 예약 성공 이벤트 발행 실패 - 주문번호: {}, 에러: {}",
+            log.error("❌ [UNIFIED] 재고 예약 성공 이벤트 발행 실패 - 주문번호: {}, 에러: {}",
                     order.getOrderNo(), e.getMessage(), e);
             // 이벤트 발행 실패는 주문 처리에 영향을 주지 않음
         }
     }
 
     /**
-     * 재고 예약 실패 이벤트 발행
+     * 재고 예약 실패 이벤트 발행 (통합 이벤트 사용)
      *
      * @param order 주문 정보
      * @param failedItem 실패한 항목
@@ -1067,8 +1084,9 @@ public class OrderCommandService {
      */
     private void publishStockReservationFailedEvent(Order order, OrderItem failedItem, String failureReason) {
         try {
-            List<StockReservationFailedEvent.FailedStockItem> failedItems = List.of(
-                    StockReservationFailedEvent.FailedStockItem.create(
+            List<StockReservationResultEvent.FailedItem> failedItems = List.of(
+                    StockReservationResultEvent.FailedItem.create(
+                            "GOODS",
                             failedItem.getGoodsId(),
                             failedItem.getQty(),
                             0, // 사용 가능한 수량은 Store에서만 알 수 있음
@@ -1077,94 +1095,27 @@ public class OrderCommandService {
                     )
             );
 
-            orderEventPublisher.publishStockReservationFailedEvent(order, failedItems, failureReason);
+            // 통합 재고 예약 실패 이벤트 발행
+            StockReservationResultEvent event = StockReservationResultEvent.failure(
+                    order.getId(),
+                    order.getCustomerId(),
+                    Optional.of(order.getOrderNo()),
+                    order.getPopupId(),
+                    failureReason,
+                    failedItems
+            );
+
+            eventPublisher.publishEvent(event);
+            log.info("❌ [UNIFIED] 재고 예약 실패 이벤트 발행 - 주문번호: {}, 실패 항목: {}개, 이유: {}",
+                    order.getOrderNo(), failedItems.size(), failureReason);
 
         } catch (Exception e) {
-            log.error("재고 예약 실패 이벤트 발행 실패 - 주문번호: {}, 에러: {}",
+            log.error("❌ [UNIFIED] 재고 예약 실패 이벤트 발행 실패 - 주문번호: {}, 에러: {}",
                     order.getOrderNo(), e.getMessage(), e);
             // 이벤트 발행 실패는 주문 처리에 영향을 주지 않음
         }
     }
 
-    /**
-     * 🚀 표준 ORDER_CREATED 이벤트 발행
-     */
-    private void publishStandardOrderCreatedEvent(Order order) {
-        try {
-            log.info("🚀 [STANDARD-ORDER] 표준 ORDER_CREATED 이벤트 발행 시작 - 주문번호: {}", order.getOrderNo());
-
-            // Order 엔티티 → 표준 이벤트 변환
-            StandardOrderCreatedEvent event = convertToStandardOrderCreatedEvent(order);
-
-            // 표준 이벤트 발행
-            standardOrderEventPublisher.publishOrderCreatedEvent(event);
-
-            log.info("✅ [STANDARD-ORDER] 표준 ORDER_CREATED 이벤트 발행 완료 - 주문번호: {}, eventId: {}",
-                    order.getOrderNo(), event.getEventId());
-
-        } catch (Exception e) {
-            log.error("❌ [STANDARD-ORDER] 표준 ORDER_CREATED 이벤트 발행 실패 - 주문번호: {}, 에러: {}",
-                    order.getOrderNo(), e.getMessage(), e);
-            // 이벤트 발행 실패는 주문 처리에 영향을 주지 않음
-        }
-    }
-
-    /**
-     * Order 엔티티를 표준 ORDER_CREATED 이벤트로 변환
-     */
-    private StandardOrderCreatedEvent convertToStandardOrderCreatedEvent(Order order) {
-        // lines 배열 생성
-        List<com.popcorn.order.event.standard.EventLineItem> lines = order.getOrderItems().stream()
-                .map(this::convertToEventLineItem)
-                .collect(java.util.stream.Collectors.toList());
-
-        return StandardOrderCreatedEvent.builder()
-                .eventType(com.popcorn.order.event.standard.StandardEventType.ORDER_CREATED)
-                .producer("order-service")
-                .orderId(order.getId())
-                .orderNo(order.getOrderNo())
-                .userId(order.getCustomerId())
-                .storeId(null) // 추후 추가
-                .popupId(order.getPopupId())
-                .orderedAt(order.getCreatedAt())
-                .orderStatus(order.getStatus().toString())
-                .totalAmount(order.getTotalAmount())
-                .hasReservation(hasReservation(order))
-                .hasGoods(hasGoods(order))
-                .lines(lines)
-                .build();
-    }
-
-    /**
-     * OrderItem을 EventLineItem으로 변환
-     */
-    private com.popcorn.order.event.standard.EventLineItem convertToEventLineItem(OrderItem orderItem) {
-        return com.popcorn.order.event.standard.EventLineItem.builder()
-                .orderGoodsId(orderItem.getId())
-                .itemType(orderItem.getOrderItemType().toString())
-                .scheduleId(orderItem.getSessionOptionId())
-                .goodsId(orderItem.getGoodsId())
-                .qty(orderItem.getQty())
-                .unitPrice(orderItem.getUnitPrice())
-                .linePrice(orderItem.getLineAmount())
-                .build();
-    }
-
-    /**
-     * 주문에 예약이 포함되어 있는지 확인
-     */
-    private Boolean hasReservation(Order order) {
-        return order.getOrderItems().stream()
-                .anyMatch(item -> ItemType.RESERVATION.equals(item.getOrderItemType()));
-    }
-
-    /**
-     * 주문에 굿즈가 포함되어 있는지 확인
-     */
-    private Boolean hasGoods(Order order) {
-        return order.getOrderItems().stream()
-                .anyMatch(item -> ItemType.GOODS.equals(item.getOrderItemType()));
-    }
 
     /**
      * 주문 완료 이벤트 발행 (결제 완료 시 호출)

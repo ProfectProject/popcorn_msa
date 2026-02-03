@@ -6,12 +6,15 @@ import com.popcorn.order.entity.Order;
 import com.popcorn.order.event.order.OrderPaidEvent;
 import com.popcorn.order.event.order.OrderCancelledEvent;
 import com.popcorn.order.event.order.OrderCompletedEvent;
-import com.popcorn.order.event.stock.GoodsReservationRequestedEvent;
-import com.popcorn.order.event.stock.StockDeductionFailedEvent;
-import com.popcorn.order.event.stock.StockReservationFailedEvent;
+import com.popcorn.order.event.store.StoreRequestEvent;
+import com.popcorn.order.event.stock.StockDeductionResultEvent;
 import com.popcorn.order.event.stock.StockDeductionRequestedEvent;
 import com.popcorn.order.event.schedule.ScheduleReservationRequestedEvent;
 import com.popcorn.order.event.schedule.ScheduleReservationCancelRequestedEvent;
+import com.popcorn.order.repository.OrderRepository;
+
+import java.util.List;
+import java.util.Optional;
 
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
@@ -36,6 +39,7 @@ public class OrderEventPublisher {
 
     private final ApplicationEventPublisher applicationEventPublisher;
     private final RedisEventPublisher redisEventPublisher;
+    private final OrderRepository orderRepository;
 
     /**
      * 주문 결제 완료 이벤트 발행
@@ -63,32 +67,6 @@ public class OrderEventPublisher {
         }
     }
 
-    /**
-     * 굿즈 재고 예약 요청 이벤트 발행
-     *
-     * @param order 주문 정보
-     * @param reservationItems 예약 요청 항목들
-     */
-    public void publishGoodsReservationRequestedEvent(Order order,
-                                                      java.util.List<GoodsReservationRequestedEvent.ReservationItem> reservationItems) {
-        try {
-            GoodsReservationRequestedEvent event = GoodsReservationRequestedEvent.create(
-                    order.getId(),
-                    order.getOrderNo(),
-                    order.getPopupId(),
-                    reservationItems
-            );
-
-            log.info("굿즈 재고 예약 요청 이벤트 발행 - orderId: {}, items: {}",
-                    event.getOrderId(), event.getReservationItems().size());
-
-            redisEventPublisher.publishGoodsReservationRequestedEvent(event);
-
-        } catch (Exception e) {
-            log.error("굿즈 재고 예약 요청 이벤트 발행 실패 - orderId: {}", order.getId(), e);
-            // 이벤트 발행 실패는 주문 프로세스를 중단시키지 않음
-        }
-    }
 
     /**
      * 굿즈 예약 취소 요청 이벤트 발행
@@ -198,27 +176,35 @@ public class OrderEventPublisher {
     }
 
     /**
-     * 재고 차감 실패 이벤트 발행
+     * 재고 차감 실패 이벤트 발행 (통합 이벤트 사용)
      *
      * @param orderId 주문 ID
      * @param reason 실패 사유
      */
     public void publishStockDeductionFailedEvent(java.util.UUID orderId, String reason) {
         try {
-            StockDeductionFailedEvent event = StockDeductionFailedEvent.create(
+            // 주문 정보 조회
+            com.popcorn.order.entity.Order order = orderRepository.findById(orderId)
+                    .orElseThrow(() -> new IllegalArgumentException("주문을 찾을 수 없습니다: " + orderId));
+
+            // 통합된 재고 차감 실패 이벤트 발행
+            StockDeductionResultEvent event = StockDeductionResultEvent.failure(
                     orderId,
+                    order.getCustomerId(),
+                    Optional.of(order.getOrderNo()),
+                    order.getPopupId(),
                     reason,
-                    "STOCK_DEDUCTION_FAILED"
+                    List.of() // failedItems는 빈 리스트
             );
 
-            log.warn("재고 차감 실패 이벤트 발행 - orderId: {}, reason: {}",
-                    orderId, reason);
+            log.warn("💥 [UNIFIED] 재고 차감 실패 이벤트 발행 - orderId: {}, orderNo: {}, reason: {}",
+                    orderId, order.getOrderNo(), reason);
 
             // 내부 이벤트 발행
             applicationEventPublisher.publishEvent(event);
 
         } catch (Exception e) {
-            log.error("재고 차감 실패 이벤트 발행 실패 - orderId: {}", orderId, e);
+            log.error("❌ [UNIFIED] 재고 차감 실패 이벤트 발행 실패 - orderId: {}, error: {}", orderId, e.getMessage(), e);
         }
     }
 
@@ -254,36 +240,6 @@ public class OrderEventPublisher {
     }
 
 
-    /**
-     * 재고 예약 실패 이벤트 발행
-     *
-     * @param order 주문 정보
-     * @param failedItems 실패한 재고 항목들
-     * @param failureReason 실패 이유
-     */
-    public void publishStockReservationFailedEvent(Order order,
-                                                  java.util.List<StockReservationFailedEvent.FailedStockItem> failedItems,
-                                                  String failureReason) {
-        try {
-            StockReservationFailedEvent event = StockReservationFailedEvent.create(
-                    order.getId(),
-                    order.getOrderNo(),
-                    order.getPopupId(),
-                    order.getCustomerId(),
-                    failedItems,
-                    failureReason
-            );
-
-            log.info("재고 예약 실패 이벤트 발행 - orderId: {}, reason: {}",
-                    event.getOrderId(), event.getFailureReason());
-
-            // 내부 이벤트 발행 (Spring Events)
-            applicationEventPublisher.publishEvent(event);
-
-        } catch (Exception e) {
-            log.error("재고 예약 실패 이벤트 발행 실패 - orderId: {}", order.getId(), e);
-        }
-    }
 
     /**
      * 재고 차감 요청 이벤트 발행
@@ -418,6 +374,32 @@ public class OrderEventPublisher {
         } catch (Exception e) {
             log.error("❌ [ORDER] 스케줄 확정 요청 이벤트 발행 실패 - orderId: {}", orderId, e);
             // 스케줄 확정 요청 실패해도 주문 상태에는 영향 없음 (로그만 남김)
+        }
+    }
+
+    /**
+     * 🏪 통합 Store 요청 이벤트 발행
+     *
+     * @param storeRequestEvent Store 서비스 요청 이벤트
+     */
+    public void publishStoreRequestEvent(StoreRequestEvent storeRequestEvent) {
+        try {
+            log.info("🏪 [UNIFIED-STORE] Store 요청 이벤트 발행 시작 - orderId: {}, requestType: {}, items: {}",
+                    storeRequestEvent.getOrderId(), storeRequestEvent.getRequestType(),
+                    storeRequestEvent.getRequestItems().size());
+
+            // 내부 이벤트 발행 (Spring Events)
+            applicationEventPublisher.publishEvent(storeRequestEvent);
+
+            // Redis 이벤트 발행 (Store 서비스로 전송)
+            redisEventPublisher.publishStoreRequestEvent(storeRequestEvent);
+
+            log.info("✅ [UNIFIED-STORE] Store 요청 이벤트 발행 완료 - orderId: {}, requestType: {}, eventId: {}",
+                    storeRequestEvent.getOrderId(), storeRequestEvent.getRequestType(), storeRequestEvent.getEventId());
+
+        } catch (Exception e) {
+            log.error("❌ [UNIFIED-STORE] Store 요청 이벤트 발행 실패 - orderId: {}, requestType: {}, error: {}",
+                    storeRequestEvent.getOrderId(), storeRequestEvent.getRequestType(), e.getMessage(), e);
         }
     }
 }
