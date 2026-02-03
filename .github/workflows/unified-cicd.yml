@@ -2,7 +2,7 @@ name: Unified CI/CD Pipeline
 
 on:
   push:
-    branches: ['**']
+    branches: [main, develop]
   pull_request:
     branches: ['**']
 
@@ -130,6 +130,8 @@ jobs:
           else
             echo "Directory not found for service: ${{ matrix.service }} (skipping)"
           fi
+        env:
+          GRADLE_OPTS: "-Dorg.gradle.daemon=false -Dorg.gradle.parallel=true -Dorg.gradle.caching=true"
 
   # [2] 서비스 빌드
   build-service:
@@ -158,10 +160,11 @@ jobs:
 
       - name: Build Module
         # ✅ 하드코딩된 :users 대신 matrix 변수 사용
-        run: ./gradlew :${{ matrix.service }}:build -x test -x javadoc
+        run: ./gradlew :${{ matrix.service }}:bootJar -x test -x javadoc --build-cache --configuration-cache --parallel
         env:
           DB_HOST: localhost
           SPRING_PROFILES_ACTIVE: test
+          GRADLE_OPTS: "-Dorg.gradle.daemon=false -Dorg.gradle.parallel=true -Dorg.gradle.caching=true"
 
       - name: Upload Build Artifacts
         uses: actions/upload-artifact@v4
@@ -273,6 +276,11 @@ jobs:
             echo "ecs_service=goorm-popcorn-dev-${{ matrix.service }}-service" >> $GITHUB_OUTPUT
           fi
 
+      - name: Download build artifact
+        uses: actions/download-artifact@v4
+        with:
+          name: ${{ matrix.service }}-build
+          path: ${{ matrix.service }}/build/libs
 
       - name: Configure AWS credentials (OIDC)
         uses: aws-actions/configure-aws-credentials@v4
