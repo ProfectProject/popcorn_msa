@@ -79,8 +79,17 @@ jobs:
             services+=("checkIns")
           fi
 
-          if [[ ${#services[@]} -eq 0 ]] || [[ "${{ steps.filter.outputs.common-lib }}" == "true" ]] || [[ "${{ steps.filter.outputs.build-config }}" == "true" ]]; then
+          if [[ "${{ steps.filter.outputs.common-lib }}" == "true" ]] || [[ "${{ steps.filter.outputs.build-config }}" == "true" ]]; then
             services=("users" "stores" "order" "orderQuery" "payment" "gateway" "checkIns")
+          fi
+          if [[ ${#services[@]} -eq 0 ]]; then
+            echo 'has_changes=false' >> "$GITHUB_OUTPUT"
+            {
+              echo "services_json<<EOF"
+              echo "[]"
+              echo "EOF"
+            } >> "$GITHUB_OUTPUT"
+            exit 0
           fi
 
           # JSON 배열 만들기
@@ -101,7 +110,7 @@ jobs:
   test:
     name: Test (matrix)
     needs: detect-changes
-    if: always()
+    if: needs.detect-changes.outputs.has_changes == 'true'
     runs-on: ubuntu-latest
 
     strategy:
@@ -125,7 +134,7 @@ jobs:
   # [2] 서비스 빌드
   build-service:
     needs: detect-changes
-    if: always()
+    if: needs.detect-changes.outputs.has_changes == 'true'
     runs-on: ubuntu-latest
     strategy:
       fail-fast: false
@@ -164,7 +173,7 @@ jobs:
   # [3] Docker 빌드 및 푸시
   docker-build-push-ecr:
     needs: [detect-changes, build-service] # ✅ detect-changes가 필요함
-    if: github.event_name == 'push'
+    if: github.event_name == 'push' && needs.detect-changes.outputs.has_changes == 'true'
     runs-on: ubuntu-latest
     strategy:
       fail-fast: false
@@ -242,6 +251,26 @@ jobs:
             echo "task_def_file=orderQuery/goorm-popcorn-dev-order-query.json" >> $GITHUB_OUTPUT
             echo "container_name=order-query" >> $GITHUB_OUTPUT
             echo "ecs_service=goorm-popcorn-dev-order-query" >> $GITHUB_OUTPUT
+          elif [ "${{ matrix.service }}" == "payment" ]; then
+            echo "ecr_repo=goorm-popcorn-payment" >> $GITHUB_OUTPUT
+            echo "task_def_file=payment/goorm-popcorn-dev-payment-service.json" >> $GITHUB_OUTPUT
+            echo "container_name=payment-service" >> $GITHUB_OUTPUT
+            echo "ecs_service=goorm-popcorn-dev-payment-service" >> $GITHUB_OUTPUT
+          elif [ "${{ matrix.service }}" == "stores" ]; then
+            echo "ecr_repo=goorm-popcorn-store" >> $GITHUB_OUTPUT
+            echo "task_def_file=stores/goorm-popcorn-dev-store-service.json" >> $GITHUB_OUTPUT
+            echo "container_name=store-service" >> $GITHUB_OUTPUT
+            echo "ecs_service=goorm-popcorn-dev-store-service" >> $GITHUB_OUTPUT
+          elif [ "${{ matrix.service }}" == "checkIns" ]; then
+            echo "ecr_repo=goorm-popcorn-checkin" >> $GITHUB_OUTPUT
+            echo "task_def_file=checkIns/goorm-popcorn-dev-checkin-service.json" >> $GITHUB_OUTPUT
+            echo "container_name=checkin-service" >> $GITHUB_OUTPUT
+            echo "ecs_service=goorm-popcorn-dev-checkin-service" >> $GITHUB_OUTPUT
+          else
+            echo "ecr_repo=goorm-popcorn-${{ matrix.service }}" >> $GITHUB_OUTPUT
+            echo "task_def_file=${{ matrix.service }}/goorm-popcorn-dev-${{ matrix.service }}.json" >> $GITHUB_OUTPUT
+            echo "container_name=${{ matrix.service }}-service" >> $GITHUB_OUTPUT
+            echo "ecs_service=goorm-popcorn-dev-${{ matrix.service }}-service" >> $GITHUB_OUTPUT
           fi
 
 
