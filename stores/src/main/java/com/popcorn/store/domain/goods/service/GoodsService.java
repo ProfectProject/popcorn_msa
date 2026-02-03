@@ -3,6 +3,7 @@ package com.popcorn.store.domain.goods.service;
 import com.popcorn.store.domain.goods.dto.GoodsItemResponse;
 import com.popcorn.store.domain.goods.dto.GoodsListResponse;
 import com.popcorn.store.domain.goods.dto.GoodsStockResponse;
+import com.popcorn.store.domain.goods.dto.query.response.GoodsPriceResponse;
 import com.popcorn.store.domain.goods.entity.GoodsVariant;
 import com.popcorn.store.domain.goods.exception.GoodsException;
 import com.popcorn.store.domain.goods.repository.GoodsReservationRepository;
@@ -110,4 +111,50 @@ public class GoodsService {
         );
         return response;
     }
+
+    /**
+     * 굿즈 가격 조회
+     * Order 서비스의 굿즈 가격 조회 요청을 처리합니다.
+     */
+    @Transactional(readOnly = true)
+    public GoodsPriceResponse getGoodsPrice(UUID goodsId) {
+        // 굿즈 정보 조회
+        GoodsVariant goods = goodsVariantRepository.findById(goodsId)
+                .filter(variant -> variant.getDeletedAt() == null)
+                .orElseThrow(GoodsException::goodsNotFound);
+
+        // 활성 상태 확인
+        if (!goods.isActive()) {
+            throw GoodsException.goodsNotFound();
+        }
+
+        // 사용 가능한 재고 계산
+        Integer availableStock = goods.getStock();
+
+        // 응답 생성
+        return GoodsPriceResponse.builder()
+                .goodsId(goodsId)
+                .productName(goods.getGoodsName())
+                .price(goods.getGoodsPrice())
+                .originalPrice(goods.getGoodsPrice()) // 할인 기능이 없으므로 동일
+                .discountRate(0) // 기본 할인율 0%
+                .stockQuantity(availableStock)
+                .status(calculateGoodsStatus(availableStock, goods.isActive()))
+                .currency("KRW")
+                .build();
+    }
+
+    /**
+     * 굿즈 상태 계산 헬퍼 메서드
+     */
+    private String calculateGoodsStatus(Integer availableStock, boolean isActive) {
+        if (!isActive) {
+            return "INACTIVE";
+        }
+        if (availableStock == null || availableStock <= 0) {
+            return "OUT_OF_STOCK";
+        }
+        return "AVAILABLE";
+    }
+
 }

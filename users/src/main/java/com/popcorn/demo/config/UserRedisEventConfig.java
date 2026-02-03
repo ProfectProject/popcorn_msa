@@ -32,10 +32,7 @@ public class UserRedisEventConfig {
     private final UserRedisStreamListener userRedisStreamListener;
     private final RedisTemplate<String, Object> redisTemplate;
 
-    // Stream 이름 상수
-    private static final String ORDER_EVENTS_STREAM = "order-events";
-    private static final String PAYMENT_EVENTS_STREAM = "payment-events";
-    private static final String USER_EVENTS_STREAM = "user-events";
+    // Stream 이름 상수 - 주소 조회만 실제 사용됨
     private static final String USER_ADDRESS_EVENTS_STREAM = "user-address-events";
 
     // Consumer Group 이름
@@ -45,13 +42,10 @@ public class UserRedisEventConfig {
     @PostConstruct
     public void initializeStreamsAndConsumerGroups() {
         try {
-            // Consumer Group 생성 (이미 존재하면 무시)
-            createConsumerGroupIfNotExists(ORDER_EVENTS_STREAM);
-            createConsumerGroupIfNotExists(PAYMENT_EVENTS_STREAM);
-            createConsumerGroupIfNotExists(USER_EVENTS_STREAM);
+            // 주소 조회 Stream만 Consumer Group 생성
             createConsumerGroupIfNotExists(USER_ADDRESS_EVENTS_STREAM);
 
-            log.info("✅ Users Service Redis Stream Consumer Groups 초기화 완료");
+            log.info("✅ Users Service Redis Stream Consumer Group 초기화 완료 (주소 조회만)");
         } catch (Exception e) {
             log.warn("⚠️ Redis Stream 초기화 중 오류 (정상 동작 가능): {}", e.getMessage());
         }
@@ -82,28 +76,7 @@ public class UserRedisEventConfig {
 
         var container = StreamMessageListenerContainer.create(connectionFactory, options);
 
-        // 주문 이벤트 Stream 구독 (사용자 통계, 알림 등)
-        container.receive(
-                Consumer.from(USER_CONSUMER_GROUP, USER_CONSUMER_NAME),
-                StreamOffset.create(ORDER_EVENTS_STREAM, ReadOffset.lastConsumed()),
-                (org.springframework.data.redis.stream.StreamListener) userRedisStreamListener
-        );
-
-        // 결제 이벤트 Stream 구독 (사용자 결제 내역, 포인트 적립 등)
-        container.receive(
-                Consumer.from(USER_CONSUMER_GROUP, USER_CONSUMER_NAME),
-                StreamOffset.create(PAYMENT_EVENTS_STREAM, ReadOffset.lastConsumed()),
-                (org.springframework.data.redis.stream.StreamListener) userRedisStreamListener
-        );
-
-        // 사용자 이벤트 Stream 구독
-        container.receive(
-                Consumer.from(USER_CONSUMER_GROUP, USER_CONSUMER_NAME),
-                StreamOffset.create(USER_EVENTS_STREAM, ReadOffset.lastConsumed()),
-                (org.springframework.data.redis.stream.StreamListener) userRedisStreamListener
-        );
-
-        // 사용자 주소 이벤트 Stream 구독 (Order 서비스의 주소 조회 요청 처리)
+        // 사용자 주소 이벤트 Stream만 구독 (Order 서비스의 주소 조회 요청 처리)
         container.receive(
                 Consumer.from(USER_CONSUMER_GROUP, USER_CONSUMER_NAME),
                 StreamOffset.create(USER_ADDRESS_EVENTS_STREAM, ReadOffset.lastConsumed()),
@@ -111,7 +84,7 @@ public class UserRedisEventConfig {
         );
 
         container.start();
-        log.info("🚀 Users Redis Stream Listener Container 시작됨");
+        log.info("🚀 Users Redis Stream Listener Container 시작됨 (주소 조회 전용)");
 
         return container;
     }

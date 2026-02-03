@@ -1,111 +1,66 @@
 package com.popcorn.order.service;
 
 import com.popcorn.order.dto.user.UserAddressResponse;
-import com.popcorn.order.event.UserAddressLookupRequestedEvent;
-import com.popcorn.order.event.UserAddressLookupResponseEvent;
-import com.popcorn.order.event.RedisEventPublisher;
+import com.popcorn.order.client.UserServiceClient;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
+import org.springframework.boot.autoconfigure.condition.ConditionalOnProperty;
 import org.springframework.stereotype.Service;
 
-import java.time.LocalDateTime;
-import java.util.List;
 import java.util.Optional;
-import java.util.UUID;
-import java.util.concurrent.CompletableFuture;
-import java.util.concurrent.ConcurrentHashMap;
-import java.util.concurrent.TimeUnit;
 
 /**
- * Order 서비스의 User 주소 조회 서비스 (이벤트 기반)
+ * Order 서비스의 User 주소 조회 서비스 (HTTP 동기식)
+ * Redis Stream 기반 비동기 방식에서 HTTP 동기 방식으로 변경
  */
 @Service
 @RequiredArgsConstructor
 @Slf4j
+// @ConditionalOnProperty(name = "external.http.enabled", havingValue = "true")  // 임시 비활성화
 public class OrderUserLookupService {
 
-    private final RedisEventPublisher redisEventPublisher;
-
-    // 비동기 응답 대기를 위한 맵
-    private final ConcurrentHashMap<String, CompletableFuture<UserAddressLookupResponseEvent>> pendingRequests = new ConcurrentHashMap<>();
-
-    @org.springframework.beans.factory.annotation.Value("${order.user-lookup.timeout-ms:1200}")
-    private long timeoutMs;
+    private final UserServiceClient userServiceClient;
 
     /**
-     * 사용자 기본 주소 조회 (이벤트 기반)
+     * 사용자 기본 주소 조회 (HTTP 동기식)
+     * 이전 Redis Stream 기반 비동기 방식에서 HTTP 동기 방식으로 변경
      */
     public Optional<UserAddressResponse> getDefaultAddress(Long userId) {
         try {
-            String correlationId = UUID.randomUUID().toString();
+            log.info("🏠 [동기] 사용자 기본 주소 조회 시작 - userId: {}", userId);
 
-            // 비동기 응답 대기를 위한 CompletableFuture 생성
-            CompletableFuture<UserAddressLookupResponseEvent> future = new CompletableFuture<>();
-            pendingRequests.put(correlationId, future);
+            Optional<com.popcorn.order.client.dto.UserAddressResponse> clientResponse = userServiceClient.getDefaultAddress(userId);
 
-            // User 주소 조회 요청 이벤트 발행
-            UserAddressLookupRequestedEvent requestEvent = UserAddressLookupRequestedEvent.builder()
-                    .eventId(UUID.randomUUID().toString())
-                    .correlationId(correlationId)
-                    .requestType("DEFAULT_ADDRESS")
-                    .userId(userId)
-                    .requestedAt(LocalDateTime.now())
-                    .build();
+            if (clientResponse.isPresent()) {
+                // 클라이언트 응답을 기존 DTO로 변환
+                com.popcorn.order.client.dto.UserAddressResponse response = clientResponse.get();
+                UserAddressResponse userAddress = convertToUserAddressResponse(response);
 
-            redisEventPublisher.publishUserAddressLookupRequest(requestEvent);
-            log.info("사용자 주소 조회 요청 이벤트 발행 - userId: {}, correlationId: {}", userId, correlationId);
-
-            // 응답 대기 (짧은 타임아웃)
-            UserAddressLookupResponseEvent response = future.get(timeoutMs, TimeUnit.MILLISECONDS);
-
-            if (response.isSuccess() && response.getAddresses() != null && !response.getAddresses().isEmpty()) {
-                return response.getAddresses().stream()
-                        .filter(address -> Boolean.TRUE.equals(address.getIsDefault()))
-                        .findFirst();
+                log.info("✅ [동기] 사용자 기본 주소 조회 성공 - userId: {}, addressName: {}",
+                        userId, userAddress.getAddrName());
+                return Optional.of(userAddress);
+            } else {
+                log.warn("⚠️ [동기] 사용자 기본 주소 없음 - userId: {}", userId);
+                return Optional.empty();
             }
 
-            return Optional.empty();
-
         } catch (Exception e) {
-            log.warn("사용자 주소 조회 응답 대기 실패 - userId: {}, error: {}", userId, e.getMessage());
+            log.error("❌ [동기] 사용자 주소 조회 실패 - userId: {}, error: {}", userId, e.getMessage(), e);
             return Optional.empty();
         }
     }
 
     /**
-     * 사용자 기본 주소 조회 요청만 발행 (비동기 보강용)
+     * 클라이언트 응답을 기존 DTO로 변환
      */
-    public void requestDefaultAddressAsync(Long userId) {
-        try {
-            String correlationId = UUID.randomUUID().toString();
-            UserAddressLookupRequestedEvent requestEvent = UserAddressLookupRequestedEvent.builder()
-                    .eventId(UUID.randomUUID().toString())
-                    .correlationId(correlationId)
-                    .requestType("DEFAULT_ADDRESS")
-                    .userId(userId)
-                    .requestedAt(LocalDateTime.now())
-                    .build();
-
-            redisEventPublisher.publishUserAddressLookupRequest(requestEvent);
-            log.info("사용자 주소 조회 요청 이벤트 발행(비동기) - userId: {}, correlationId: {}", userId, correlationId);
-        } catch (Exception e) {
-            log.warn("사용자 주소 조회 요청 이벤트 발행 실패 - userId: {}, error: {}", userId, e.getMessage());
-        }
-    }
-
-    /**
-     * User 서비스로부터 주소 조회 응답 처리
-     */
-    public void handleUserAddressLookupResponse(UserAddressLookupResponseEvent response) {
-        String correlationId = response.getCorrelationId();
-        CompletableFuture<UserAddressLookupResponseEvent> future = pendingRequests.remove(correlationId);
-
-        if (future != null) {
-            log.info("사용자 주소 조회 응답 처리 완료 - correlationId: {}, success: {}",
-                    correlationId, response.isSuccess());
-            future.complete(response);
-        } else {
-            log.warn("해당하는 주소 조회 요청을 찾을 수 없음 - correlationId: {}", correlationId);
-        }
+    private UserAddressResponse convertToUserAddressResponse(com.popcorn.order.client.dto.UserAddressResponse clientResponse) {
+        return UserAddressResponse.builder()
+                .addrId(clientResponse.getAddressId() != null ? java.util.UUID.fromString(clientResponse.getAddressId()) : null)
+                .addrName(clientResponse.getAddrName())
+                .address1(clientResponse.getAddress1())
+                .address2(clientResponse.getAddress2())
+                .postalCode(clientResponse.getPostalCode())
+                .isDefault(clientResponse.isDefault())
+                .build();
     }
 }

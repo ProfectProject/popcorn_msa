@@ -305,7 +305,13 @@ public class UserService {
                 throw new RuntimeException("인증되지 않은 사용자입니다.");
             }
 
-            // JWT에서 사용자 ID 추출 (실제 구현에 따라 수정 필요)
+            // PassportPrincipal에서 직접 사용자 ID 추출
+            Object principal = authentication.getPrincipal();
+            if (principal instanceof com.popcorn.common.filter.PassportPrincipal passportPrincipal) {
+                return passportPrincipal.userId();
+            }
+
+            // Fallback: 문자열로 ID가 전달된 경우
             String userIdStr = authentication.getName();
             return Long.parseLong(userIdStr);
 
@@ -320,6 +326,15 @@ public class UserService {
      * 현재 인증된 사용자가 요청한 사용자와 동일한지 확인
      */
     private void validateUserAccess(Long requestedUserId) {
+        Authentication authentication = SecurityContextHolder.getContext().getAuthentication();
+
+        // 내부 서비스 호출인 경우 권한 검증 우회
+        if (authentication != null && authentication.getAuthorities().stream()
+                .anyMatch(authority -> authority.getAuthority().equals("ROLE_SYSTEM"))) {
+            log.debug("내부 서비스 호출 - 권한 검증 우회: requestedUserId={}", requestedUserId);
+            return;
+        }
+
         Long currentUserId = getCurrentAuthenticatedUserId();
 
         if (!currentUserId.equals(requestedUserId)) {

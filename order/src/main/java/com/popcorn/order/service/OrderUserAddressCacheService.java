@@ -19,6 +19,7 @@ import java.util.Optional;
 @Service
 @RequiredArgsConstructor
 @Slf4j
+// @ConditionalOnProperty(name = "external.http.enabled", havingValue = "true")  // 임시 비활성화
 public class OrderUserAddressCacheService {
 
     private final RedisTemplate<String, Object> redisTemplate;
@@ -28,9 +29,9 @@ public class OrderUserAddressCacheService {
     private static final Duration USER_ADDRESS_TTL = Duration.ofHours(24);  // 24시간 캐시
 
     /**
-     * 사용자 기본 주소 조회 (캐시 우선)
+     * 사용자 기본 주소 조회 (캐시 우선) - 동기식
      * Cache Hit 시: ~10ms
-     * Cache Miss 시: ~1000ms + 캐시 저장
+     * Cache Miss 시: ~1500ms + 캐시 저장
      */
     public Optional<UserAddressResponse> getDefaultAddress(Long userId) {
         String cacheKey = "order:address:user:" + userId + ":default";
@@ -43,12 +44,23 @@ public class OrderUserAddressCacheService {
             return Optional.of(cachedAddress);
         }
 
-        // 2. 캐시 미스 - 원본 서비스 호출
-        log.debug("🔍 [CACHE-MISS] 사용자 주소 원본 조회 요청(비동기) - userId: {}", userId);
-        originalUserLookupService.requestDefaultAddressAsync(userId);
+        // 2. 캐시 미스 - 원본 서비스 동기 호출
+        log.debug("🔍 [CACHE-MISS] 사용자 주소 원본 조회 시작(동기) - userId: {}", userId);
+        Optional<UserAddressResponse> addressResult = originalUserLookupService.getDefaultAddress(userId);
 
-        // 캐시 미스 시 즉시 반환 (비동기 보강)
-        return Optional.empty();
+        // 3. 결과를 캐시에 저장
+        if (addressResult.isPresent()) {
+            setCachedAddress(cacheKey, addressResult.get(), USER_ADDRESS_TTL);
+            log.info("💾 [CACHE-SET] 사용자 주소 캐시 저장 성공 - userId: {}, addressId: {}",
+                    userId, addressResult.get().getAddressId());
+        } else {
+            // 주소가 없는 경우도 캐시하여 반복 조회 방지 (짧은 TTL)
+            UserAddressResponse emptyAddress = UserAddressResponse.empty();
+            setCachedAddress(cacheKey, emptyAddress, Duration.ofMinutes(5));
+            log.info("💾 [CACHE-SET] 사용자 주소 없음 상태 캐시 저장 - userId: {}", userId);
+        }
+
+        return addressResult;
     }
 
     /**
@@ -100,7 +112,8 @@ public class OrderUserAddressCacheService {
             }
             return null;
         } catch (Exception e) {
-            log.warn("⚠️ [CACHE-ERROR] 주소 캐시 조회 실패 - key: {}, error: {}", cacheKey, e.getMessage());
+            log.warn("⚠️ [CACHE-ERROR] 주소 캐시 조회 실패 (Redis 연결 문제 가능성) - key: {}, error: {}",
+                    cacheKey, e.getMessage());
             return null;  // 캐시 실패 시 원본 조회로 fallback
         }
     }

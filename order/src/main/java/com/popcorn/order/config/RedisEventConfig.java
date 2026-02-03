@@ -17,8 +17,8 @@ import org.springframework.data.redis.connection.stream.StreamRecords;
 import org.springframework.data.redis.stream.StreamMessageListenerContainer;
 
 import jakarta.annotation.PostConstruct;
+import jakarta.annotation.PreDestroy;
 import java.time.Duration;
-import java.util.Map;
 import java.util.Map;
 
 /**
@@ -35,6 +35,8 @@ public class RedisEventConfig {
 
     private final OrderRedisStreamListener orderRedisStreamListener;
     private final RedisTemplate<String, Object> redisTemplate;
+
+    private StreamMessageListenerContainer orderContainer;
 
     // Stream 이름 상수
     private static final String RESPONSE_EVENTS_STREAM = "response-events";
@@ -121,16 +123,19 @@ public class RedisEventConfig {
                             if (t.getCause() instanceof org.springframework.dao.QueryTimeoutException) {
                                 log.warn("🔄 Redis Stream 타임아웃 발생, 재시도 예정: {}", t.getMessage());
                                 // 타임아웃은 정상적인 상황으로 간주 (스택트레이스 출력 안함)
+                            } else if (isConnectionClosedException(t)) {
+                                log.debug("🔌 Redis 연결 종료됨 (정상 종료 과정): {}", t.getMessage());
+                                // 연결 종료는 서비스 shutdown 시 정상적인 상황
                             } else {
                                 log.error("❌ Redis Stream 처리 중 예상치 못한 오류: {}", t.getMessage(), t);
                             }
                         })
                         .build();
 
-        var container = StreamMessageListenerContainer.create(connectionFactory, options);
+        orderContainer = StreamMessageListenerContainer.create(connectionFactory, options);
 
         // 응답 이벤트 Stream 구독 (가격 조회 응답)
-        container.receive(
+        orderContainer.receive(
                 Consumer.from(ORDER_CONSUMER_GROUP, RESPONSE_CONSUMER_NAME),
                 StreamOffset.create(RESPONSE_EVENTS_STREAM, ReadOffset.lastConsumed()),  // 새로운 메시지만 읽기
                 (org.springframework.data.redis.stream.StreamListener) orderRedisStreamListener
@@ -138,7 +143,7 @@ public class RedisEventConfig {
         log.info("📝 Redis Stream Consumer 등록: {} - {}", RESPONSE_EVENTS_STREAM, RESPONSE_CONSUMER_NAME);
 
         // 재고 이벤트 Stream 구독 (재고 차감 결과)
-        container.receive(
+        orderContainer.receive(
                 Consumer.from(ORDER_CONSUMER_GROUP, STOCK_CONSUMER_NAME),
                 StreamOffset.create(STOCK_EVENTS_STREAM, ReadOffset.lastConsumed()),
                 (org.springframework.data.redis.stream.StreamListener) orderRedisStreamListener
@@ -146,7 +151,7 @@ public class RedisEventConfig {
         log.info("📝 Redis Stream Consumer 등록: {} - {}", STOCK_EVENTS_STREAM, STOCK_CONSUMER_NAME);
 
         // 굿즈 예약 이벤트 Stream 구독 (재고 예약 성공/실패)
-        container.receive(
+        orderContainer.receive(
                 Consumer.from(ORDER_CONSUMER_GROUP, "goods-consumer-1"),
                 StreamOffset.create(GOODS_EVENTS_STREAM, ReadOffset.lastConsumed()),
                 (org.springframework.data.redis.stream.StreamListener) orderRedisStreamListener
@@ -154,7 +159,7 @@ public class RedisEventConfig {
         log.info("📝 Redis Stream Consumer 등록: {} - {}", GOODS_EVENTS_STREAM, "goods-consumer-1");
 
         // Order 정보 요청 Stream 구독 (Payment 서비스 등에서 Order 정보 요청)
-        container.receive(
+        orderContainer.receive(
                 Consumer.from(ORDER_CONSUMER_GROUP, ORDER_INFO_CONSUMER_NAME),
                 StreamOffset.create("order-info-requests", ReadOffset.lastConsumed()),
                 (org.springframework.data.redis.stream.StreamListener) orderRedisStreamListener
@@ -162,7 +167,7 @@ public class RedisEventConfig {
         log.info("📝 Redis Stream Consumer 등록: {} - {}", "order-info-requests", ORDER_INFO_CONSUMER_NAME);
 
         // 사용자 주소 응답 Stream 구독 (User 서비스에서 주소 조회 응답)
-        container.receive(
+        orderContainer.receive(
                 Consumer.from(ORDER_CONSUMER_GROUP, ADDRESS_CONSUMER_NAME),
                 StreamOffset.create(ADDRESS_RESPONSE_STREAM, ReadOffset.lastConsumed()),
                 (org.springframework.data.redis.stream.StreamListener) orderRedisStreamListener
@@ -170,7 +175,7 @@ public class RedisEventConfig {
         log.info("📝 Redis Stream Consumer 등록: {} - {}", ADDRESS_RESPONSE_STREAM, ADDRESS_CONSUMER_NAME);
 
         // 결제 이벤트 Stream 구독 (Payment 서비스에서 결제 완료 알림)
-        container.receive(
+        orderContainer.receive(
                 Consumer.from(ORDER_CONSUMER_GROUP, PAYMENT_CONSUMER_NAME),
                 StreamOffset.create(PAYMENT_EVENTS_STREAM, ReadOffset.lastConsumed()),
                 (org.springframework.data.redis.stream.StreamListener) orderRedisStreamListener
@@ -178,7 +183,7 @@ public class RedisEventConfig {
         log.info("📝 Redis Stream Consumer 등록: {} - {}", PAYMENT_EVENTS_STREAM, PAYMENT_CONSUMER_NAME);
 
         // Store 조회 응답 Stream 구독
-        container.receive(
+        orderContainer.receive(
                 Consumer.from(ORDER_CONSUMER_GROUP, "store-lookup-consumer-1"),
                 StreamOffset.create(STORE_LOOKUP_RESPONSES_STREAM, ReadOffset.lastConsumed()),
                 (org.springframework.data.redis.stream.StreamListener) orderRedisStreamListener
@@ -186,7 +191,7 @@ public class RedisEventConfig {
         log.info("📝 Redis Stream Consumer 등록: {} - {}", STORE_LOOKUP_RESPONSES_STREAM, "store-lookup-consumer-1");
 
         // 스케줄 예약 결과 Stream 구독
-        container.receive(
+        orderContainer.receive(
                 Consumer.from(ORDER_CONSUMER_GROUP, "schedule-consumer-1"),
                 StreamOffset.create(SCHEDULE_EVENTS_STREAM, ReadOffset.lastConsumed()),
                 (org.springframework.data.redis.stream.StreamListener) orderRedisStreamListener
@@ -194,7 +199,7 @@ public class RedisEventConfig {
         log.info("📝 Redis Stream Consumer 등록: {} - {}", SCHEDULE_EVENTS_STREAM, "schedule-consumer-1");
 
         // 주문 조회 요청 Stream 구독 (Payment 서비스 등)
-        container.receive(
+        orderContainer.receive(
                 Consumer.from(ORDER_CONSUMER_GROUP, "order-query-consumer-1"),
                 StreamOffset.create(ORDER_QUERY_STREAM, ReadOffset.lastConsumed()),
                 (org.springframework.data.redis.stream.StreamListener) orderRedisStreamListener
@@ -202,7 +207,7 @@ public class RedisEventConfig {
         log.info("📝 Redis Stream Consumer 등록: {} - {}", ORDER_QUERY_STREAM, "order-query-consumer-1");
 
         // 주문 상태 업데이트 요청 Stream 구독 (Payment 서비스 등)
-        container.receive(
+        orderContainer.receive(
                 Consumer.from(ORDER_CONSUMER_GROUP, "order-update-consumer-1"),
                 StreamOffset.create(ORDER_UPDATE_STREAM, ReadOffset.lastConsumed()),
                 (org.springframework.data.redis.stream.StreamListener) orderRedisStreamListener
@@ -210,11 +215,11 @@ public class RedisEventConfig {
         log.info("📝 Redis Stream Consumer 등록: {} - {}", ORDER_UPDATE_STREAM, "order-update-consumer-1");
 
         try {
-            container.start();
+            orderContainer.start();
             log.info("🚀 Order Redis Stream Listener Container 시작됨");
 
             // Container 상태 확인
-            if (container.isRunning()) {
+            if (orderContainer.isRunning()) {
                 log.info("✅ StreamMessageListenerContainer 실행 중 확인됨");
             } else {
                 log.warn("⚠️ StreamMessageListenerContainer가 실행되지 않음");
@@ -224,6 +229,37 @@ public class RedisEventConfig {
             throw e;
         }
 
-        return container;
+        return orderContainer;
+    }
+
+    /**
+     * 연결 종료 관련 예외인지 확인
+     */
+    private boolean isConnectionClosedException(Throwable t) {
+        if (t == null) return false;
+
+        String message = t.getMessage();
+        if (message != null && message.toLowerCase().contains("connection closed")) {
+            return true;
+        }
+
+        // Cause 체크
+        return isConnectionClosedException(t.getCause());
+    }
+
+    /**
+     * 서비스 종료 시 Redis Stream 리스너 정리
+     */
+    @PreDestroy
+    public void cleanupRedisStreams() {
+        if (orderContainer != null && orderContainer.isRunning()) {
+            try {
+                log.info("🔌 Order Redis Stream Listener Container 종료 중...");
+                orderContainer.stop();
+                log.info("✅ Order Redis Stream Listener Container 정상 종료됨");
+            } catch (Exception e) {
+                log.warn("⚠️ Redis Stream Container 종료 중 오류: {}", e.getMessage());
+            }
+        }
     }
 }

@@ -43,4 +43,23 @@ public interface PopupScheduleQueryRepository extends Repository<PopupSchedule, 
 			""", nativeQuery = true)
 	Integer findRemainingCapacity(@Param("popupId") UUID popupId,
 								  @Param("scheduleId") UUID scheduleId);
+
+	/**
+	 * 세션 ID로 스케줄 정보 조회 (가격 조회용)
+	 */
+	@Query(value = """
+			SELECT CAST(ps.schedule_id AS VARCHAR) AS scheduleId,
+			       ps.popup_id AS popupId,
+			       ps.start_at AS startAt,
+			       ps.end_at AS endAt,
+			       ps.price AS price,
+			       ps.capacity AS capacity,
+			       ps.remaining_capacity AS remainingCapacity,
+			       ps.reservation_capacity AS reservationCapacity,
+			       ps.is_active AS isActive
+			  FROM popup_schedules ps
+			 WHERE ps.deleted_at IS NULL
+			   AND ps.schedule_id = :scheduleId
+			""", nativeQuery = true)
+	PopupScheduleView findByScheduleId(@Param("scheduleId") UUID scheduleId);
 }

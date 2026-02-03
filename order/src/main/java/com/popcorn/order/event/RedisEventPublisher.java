@@ -280,83 +280,9 @@ public class RedisEventPublisher {
         }
     }
 
-    /**
-     * 가격 조회 요청 이벤트 발행 (Store 서비스에서 수신)
-     */
-    public void publishPriceLookupRequestedEvent(PriceLookupRequestedEvent event) {
-        try {
-            log.warn("🔥 [DEBUG] 가격 조회 요청 이벤트 Stream 발행 시작 - correlationId: {}, type: {}, goodsId: {}",
-                    event.getCorrelationId(), event.getRequestType(), event.getGoodsId());
+    // 가격 조회 요청 이벤트 발행 메서드 제거됨 (HTTP 동기 방식으로 변경)
 
-            // Redis Template 연결 상태 확인
-            log.warn("🔥 [DEBUG] RedisTemplate 상태: {}", redisTemplate != null ? "NOT NULL" : "NULL");
-
-            Map<String, String> eventData = Map.of(
-                "eventType", "price-lookup-requested",
-                "eventId", event.getEventId(),
-                "correlationId", event.getCorrelationId(),
-                "requestType", event.getRequestType(),
-                "sessionId", event.getSessionId() != null ? event.getSessionId().toString() : "",
-                "goodsId", event.getGoodsId() != null ? event.getGoodsId().toString() : "",
-                "requestedAt", event.getRequestedAt().toString(),
-                "eventTime", LocalDateTime.now().toString()
-            );
-
-            log.warn("🔥 [DEBUG] 이벤트 데이터: {}", eventData);
-            log.warn("🔥 [DEBUG] Stream 이름: {}", PRICE_EVENTS_STREAM);
-
-            StringRecord record = StreamRecords.string(eventData).withStreamKey(PRICE_EVENTS_STREAM);
-            log.warn("🔥 [DEBUG] StringRecord 생성 완료");
-
-            String recordId = redisTemplate.opsForStream().add(record).getValue();
-            log.warn("🔥 [DEBUG] Redis Stream 발행 완료 - recordId: {}", recordId);
-
-            log.info("✅ 가격 조회 요청 이벤트 Stream 발행 완료 - correlationId: {}, type: {}, recordId: {}",
-                    event.getCorrelationId(), event.getRequestType(), recordId);
-
-        } catch (Exception e) {
-            log.error("❌ 가격 조회 요청 이벤트 Stream 발행 실패 - correlationId: {}, error: {}",
-                    event.getCorrelationId(), e.getMessage(), e);
-            e.printStackTrace(); // 스택 트레이스도 출력
-            throw new RuntimeException("가격 조회 요청 이벤트 Stream 발행 실패", e);
-        }
-    }
-
-    /**
-     * User 주소 조회 요청 이벤트 발행
-     */
-    public void publishUserAddressLookupRequest(UserAddressLookupRequestedEvent event) {
-        try {
-            log.info("사용자 주소 조회 요청 이벤트 Stream 발행 시작 - userId: {}, correlationId: {}",
-                    event.getUserId(), event.getCorrelationId());
-
-            // 이벤트 데이터 맵 생성
-            Map<String, String> eventData = Map.of(
-                    "eventId", event.getEventId(),
-                    "correlationId", event.getCorrelationId(),
-                    "requestType", event.getRequestType(),
-                    "userId", String.valueOf(event.getUserId()),
-                    "requestedAt", event.getRequestedAt().toString(),
-                    "eventType", "user-address-lookup-requested",
-                    "eventTime", LocalDateTime.now().toString()
-            );
-
-            // StringRecord 생성
-            StringRecord record = StreamRecords.string(eventData)
-                    .withStreamKey("user-address-events");
-
-            // Redis Stream에 발행
-            String recordId = redisTemplate.opsForStream().add(record).getValue();
-
-            log.info("✅ 사용자 주소 조회 요청 이벤트 Stream 발행 완료 - userId: {}, correlationId: {}, recordId: {}",
-                    event.getUserId(), event.getCorrelationId(), recordId);
-
-        } catch (Exception e) {
-            log.error("❌ 사용자 주소 조회 요청 이벤트 Stream 발행 실패 - userId: {}, correlationId: {}, error: {}",
-                    event.getUserId(), event.getCorrelationId(), e.getMessage(), e);
-            throw new RuntimeException("사용자 주소 조회 요청 이벤트 Stream 발행 실패", e);
-        }
-    }
+    // 사용자 주소 조회 요청 이벤트 발행 메서드 제거됨 (HTTP 동기 방식으로 변경)
 
     // ================ 📅 스케줄 예약 관련 이벤트 발행 메소드들 ================
 

@@ -209,10 +209,17 @@ resilience4j:
         limit-refresh-period: 1s
         timeout-duration: 1s
 
-# 이벤트 기반 아키텍처 - HTTP 통신 제거
+# HTTP 기반 동기 통신 설정
 external:
   http:
-    enabled: false  # HTTP 기반 외부 서비스 호출 비활성화
+    enabled: true  # HTTP 기반 외부 서비스 호출 활성화
+  services:
+    users:
+      base-url: ${USERS_SERVICE_URL:http://localhost:8080}
+      timeout: 5000ms
+    store:
+      base-url: ${STORE_SERVICE_URL:http://localhost:8080}
+      timeout: 5000ms
 
 # 프론트엔드 주소 설정
 frontend:
@@ -229,7 +236,11 @@ order:
     max-quantity: ${ORDER_MAX_QUANTITY:100}  # 최대 주문 수량
     min-quantity: ${ORDER_MIN_QUANTITY:1}    # 최소 주문 수량
   reservation:
-    wait-timeout-ms: ${ORDER_RESERVATION_WAIT_TIMEOUT_MS:5000}  # 예약 응답 대기 시간
+    wait-timeout-ms: ${ORDER_RESERVATION_WAIT_TIMEOUT_MS:3000}   # 예약 응답 대기 시간 (3초로 단축)
+  price-lookup:
+    timeout-ms: ${ORDER_PRICE_LOOKUP_TIMEOUT_MS:3000}   # 가격 조회 타임아웃 (3초로 증가)
+  user-lookup:
+    timeout-ms: ${ORDER_USER_LOOKUP_TIMEOUT_MS:3000}    # 사용자 조회 타임아웃 (3초로 증가)
   notification:
     enabled: ${ORDER_NOTIFICATION_ENABLED:true}  # 알림 활성화
     retry-count: ${ORDER_NOTIFICATION_RETRY:3}   # 알림 재시도 횟수

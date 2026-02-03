@@ -39,6 +39,7 @@ public class SecurityConfig {
             .authorizeHttpRequests(auth -> auth
                 .requestMatchers(HttpMethod.OPTIONS, "/**").permitAll()
                 .requestMatchers("/swagger-ui/**", "/swagger-ui.html", "/v3/api-docs/**", "/actuator/**").permitAll()
+                .requestMatchers("/api/stores/v1/goods/*/price", "/api/stores/v1/sessions/*/price").authenticated() // 🔐 가격 조회 API 인증 필요
                 .requestMatchers("/api/stores/v1/owner/**").authenticated()
                 .anyRequest().permitAll()
             )

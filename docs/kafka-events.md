@@ -1,0 +1,158 @@
+# 📘 Kafka 이벤트/토픽 설계 정리본 (v1)
+
+## ✅ 공통 이벤트 Envelope (모든 토픽 공통)
+```json
+{
+  "eventId": "uuid",
+  "eventType": "order.created",
+  "version": "v1",
+  "occurredAt": "2026-01-30T12:34:56Z",
+  "producer": "order-service",
+  "traceId": "optional",
+  "orderId": "uuid",
+  "orderNo": "O20260130-XXXXXXX",
+  "payload": { ... }
+}
+```
+
+- **eventId**: 전역 유니크
+- **eventType**: dot-case 통일
+- **version**: v1 고정
+- **orderId / orderNo**: 핵심 이벤트는 반드시 포함
+- **partition key**: orderId (없으면 eventId)
+
+---
+
+# 📦 Order 도메인
+
+## 🔹 `order-events`
+| eventType | 발행자 | 수신자 (Consumer Group) | 주요 Payload |
+| --- | --- | --- | --- |
+| `order.created` | Order | Store(store-cg), User(user-cg), Payment(payment-cg), CheckIn(checkin-cg) | orderId, orderNo, userId, orderType, totalAmount |
+| `order.paid` | Order | Store, User, CheckIn | orderId, orderNo, paymentId, totalAmount |
+| `order.status.updated` | Order | Store, Payment | orderId, orderNo, fromStatus, toStatus |
+
+---
+
+## 🔹 `order-requests`
+| eventType | 발행자 | 수신자 | 주요 Payload |
+| --- | --- | --- | --- |
+| `order.info.requested` | Payment | Order(order-cg) | orderId, correlationId |
+| `order.query.requested` | Payment | Order | orderId, correlationId |
+| `order.status.update.requested` | Payment | Order | orderId, newStatus, reason |
+
+---
+
+## 🔹 `order-responses`
+> 필요 시 추가 (현재 없음)
+
+---
+
+# 💳 Payment 도메인
+
+## 🔹 `payment-events`
+| eventType | 발행자 | 수신자 | 주요 Payload |
+| --- | --- | --- | --- |
+| `payment.created` | Payment | Order(order-cg) | paymentId, orderId, orderNo, amount, status |
+| `payment.approved` | Payment | Order, Store, CheckIn | paymentId, orderId, orderNo, amount, approvedAt |
+| `payment.failed` | Payment | Order | paymentId, orderId, orderNo, reason |
+| `payment.cancelled` | Payment | Order, Store | paymentId, orderId, orderNo, cancelReason |
+| `payment.completed` | Payment | Order | paymentId, orderId, orderNo |
+
+---
+
+## 🔹 `payment-requests`
+| eventType | 발행자 | 수신자 | 주요 Payload |
+| --- | --- | --- | --- |
+| `payment.cancel.requested` | Order | Payment(payment-cg) | paymentId, orderId, orderNo |
+
+---
+
+## 🔹 `payment-responses`
+> 없음
+
+---
+
+# 🏪 Store / Inventory 도메인
+
+## 🔹 `store-requests`
+| eventType | 발행자 | 수신자 | 주요 Payload |
+| --- | --- | --- | --- |
+| `goods.reservation.requested` | Order | Store(store-cg) | orderId, orderNo, goodsId, quantity |
+| `stock.deduction.requested` | Order | Store | orderId, orderNo, deductionItems[] |
+| `schedule.reservation.requested` | Order | Store | orderId, orderNo, sessionId, quantity |
+| `schedule.confirmation.requested` | Order | Store | orderId, orderNo |
+| `inventory.confirmation.requested` | Payment | Store | paymentId, orderId, orderNo, actionType |
+| `inventory.restore.requested` | Payment | Store | paymentId, orderId, orderNo |
+| `goods.reservation.cancel.requested` | Order | Store | orderId, orderNo, goodsId |
+| `schedule.reservation.cancel.requested` | Order | Store | orderId, orderNo, sessionId |
+| `price.lookup.requested` | Order | Store | correlationId, goodsId |
+| `popup.info.lookup.requested` | Order | Store | correlationId, popupId |
+
+---
+
+## 🔹 `store-events`
+| eventType | 발행자 | 수신자 | 주요 Payload |
+| --- | --- | --- | --- |
+| `goods.reserved` | Store | Order(order-cg) | orderId, orderNo, goodsId, quantity |
+| `goods.reservation.failed` | Store | Order | orderId, orderNo, goodsId, reason |
+| `stock.deduction.success` | Store | Order | orderId, orderNo, stockDetails |
+| `stock.deduction.failed` | Store | Order | orderId, orderNo, reason |
+| `schedule.reservation.success` | Store | Order | orderId, orderNo, reservedSessions[], token |
+| `schedule.reservation.failed` | Store | Order | orderId, orderNo, failedSessions[] |
+
+---
+
+## 🔹 `store-responses`
+| eventType | 발행자 | 수신자 | 주요 Payload |
+| --- | --- | --- | --- |
+| `price.lookup.response` | Store | Order | correlationId, price, stockQuantity |
+| `popup.info.lookup.response` | Store | Order | correlationId, popupId, title, address |
+
+---
+
+# 📱 CheckIn / QR 도메인
+
+## 🔹 `checkin-requests`
+| eventType | 발행자 | 수신자 | 주요 Payload |
+| --- | --- | --- | --- |
+| `qr.generation.requested` | Payment | CheckIn(checkin-cg) | orderId, orderNo |
+| `qr.checkin.requested` | Client | CheckIn | qrCode |
+| `qr.invalidation.requested` | Order | CheckIn | qrCode |
+
+---
+
+## 🔹 `checkin-events`
+| eventType | 발행자 | 수신자 | 주요 Payload |
+| --- | --- | --- | --- |
+| `qr.generated` | CheckIn | Order, User | qrCode, orderId, orderNo |
+| `qr.checkin.completed` | CheckIn | Order, User | qrCode, orderId, orderNo, checkinTime |
+
+---
+
+# 👤 User 도메인
+
+## 🔹 `user-requests`
+| eventType | 발행자 | 수신자 | 주요 Payload |
+| --- | --- | --- | --- |
+| `user.address.lookup.requested` | Order | User(user-cg) | userId, correlationId |
+
+---
+
+## 🔹 `user-responses`
+| eventType | 발행자 | 수신자 | 주요 Payload |
+| --- | --- | --- | --- |
+| `user.address.lookup.response` | User | Order | userId, addressId, address1, success |
+
+---
+
+# 📊 Analytics 도메인 (분리)
+
+## 🔹 `analytics-events`
+| eventType | 발행자 | 수신자 | 주요 Payload |
+| --- | --- | --- | --- |
+| `order.created` | Order | Analytics | orderId, orderNo, popupId, totalAmount |
+| `order.status.updated` | Order | Analytics | orderId, orderNo, fromStatus, toStatus |
+| `payment.created` | Payment | Analytics | paymentId, orderId, orderNo, amount |
+| `payment.approved` | Payment | Analytics | paymentId, orderId, orderNo, amount |
+

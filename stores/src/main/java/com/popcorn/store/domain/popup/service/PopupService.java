@@ -17,6 +17,7 @@ import com.popcorn.store.domain.popup.dto.query.response.PopupDetailResponse;
 import com.popcorn.store.domain.popup.dto.query.response.PopupListResponse;
 import com.popcorn.store.domain.popup.dto.query.response.PopupScheduleCapacity;
 import com.popcorn.store.domain.popup.dto.query.response.PopupScheduleListResponse;
+import com.popcorn.store.domain.popup.dto.query.response.SessionPriceResponse;
 import com.popcorn.store.domain.popup.event.PopupScheduleReservationEvent;
 import com.popcorn.store.domain.popup.exception.PopupException;
 import com.popcorn.store.domain.popup.repository.PopupScheduleQueryRepository;
@@ -198,6 +199,56 @@ public class PopupService {
 			}
 		}
 		return remainingBySchedule;
+	}
+
+	/**
+	 * 세션 가격 조회
+	 * Order 서비스의 가격 조회 요청을 처리합니다.
+	 */
+	@Transactional(readOnly = true)
+	public SessionPriceResponse getSessionPrice(UUID sessionId) {
+		// 세션 정보 조회
+		PopupScheduleView schedule = popupScheduleQueryRepository.findByScheduleId(sessionId);
+		if (schedule == null) {
+			throw PopupException.popupNotFound();
+		}
+
+		// 팝업 상세 정보 조회 (제목 등 추가 정보)
+		PopupDetailQuery popupQuery = PopupDetailQuery.of(schedule.getPopupId());
+		PopupDetailResponse popupDetail = popupDetailCacheService.getPopupDetailCached(popupQuery);
+
+		// 사용 가능한 좌석 계산
+		Integer availableSeats = schedule.getRemainingCapacity();
+		Integer totalSeats = schedule.getCapacity();
+
+		// 응답 생성
+		return SessionPriceResponse.builder()
+				.sessionId(sessionId)
+				.popupId(schedule.getPopupId())
+				.sessionName(popupDetail.getTitle() + " - 세션")
+				.price(schedule.getPrice())
+				.originalPrice(schedule.getPrice()) // 할인 기능이 없으므로 동일
+				.discountRate(0) // 기본 할인율 0%
+				.availableSeats(availableSeats)
+				.totalSeats(totalSeats)
+				.status(calculateSessionStatus(availableSeats, schedule.getStartAt()))
+				.sessionStartTime(schedule.getStartAt())
+				.sessionEndTime(schedule.getEndAt())
+				.currency("KRW")
+				.build();
+	}
+
+	/**
+	 * 세션 상태 계산 헬퍼 메서드
+	 */
+	private String calculateSessionStatus(Integer availableSeats, java.time.LocalDateTime startAt) {
+		if (availableSeats == null || availableSeats <= 0) {
+			return "SOLD_OUT";
+		}
+		if (startAt != null && java.time.LocalDateTime.now().isAfter(startAt)) {
+			return "EXPIRED";
+		}
+		return "AVAILABLE";
 	}
 
 }

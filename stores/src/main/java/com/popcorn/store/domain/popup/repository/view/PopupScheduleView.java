@@ -1,10 +1,13 @@
 package com.popcorn.store.domain.popup.repository.view;
 
 import java.time.LocalDateTime;
+import java.util.UUID;
 
 public interface PopupScheduleView {
 
 	String getScheduleId();
+
+	UUID getPopupId();
 
 	LocalDateTime getStartAt();
 

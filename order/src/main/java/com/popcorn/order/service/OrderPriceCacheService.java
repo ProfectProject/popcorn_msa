@@ -20,6 +20,7 @@ import java.util.concurrent.CompletableFuture;
 @Service
 @RequiredArgsConstructor
 @Slf4j
+// @ConditionalOnProperty(name = "external.http.enabled", havingValue = "true")  // 임시 비활성화
 public class OrderPriceCacheService {
 
     private final RedisTemplate<String, Object> redisTemplate;
@@ -146,7 +147,8 @@ public class OrderPriceCacheService {
             Object cached = redisTemplate.opsForValue().get(cacheKey);
             return cached != null ? (Integer) cached : null;
         } catch (Exception e) {
-            log.warn("⚠️ [CACHE-ERROR] 캐시 조회 실패 - key: {}, error: {}", cacheKey, e.getMessage());
+            log.warn("⚠️ [CACHE-ERROR] 캐시 조회 실패 (Redis 연결 문제 가능성) - key: {}, error: {}",
+                    cacheKey, e.getMessage());
             return null;  // 캐시 실패 시 원본 조회로 fallback
         }
     }

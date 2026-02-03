@@ -28,6 +28,7 @@ import org.springframework.stereotype.Component;
 
 import java.time.Duration;
 import java.util.ArrayList;
+import java.util.Optional;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
@@ -47,8 +48,8 @@ public class OrderRedisStreamListener implements StreamListener<String, MapRecor
 
     private static final Logger log = LoggerFactory.getLogger(OrderRedisStreamListener.class);
 
-    private final OrderPriceLookupService orderPriceLookupService;
-    private final OrderUserLookupService orderUserLookupService;
+    private final Optional<OrderPriceLookupService> orderPriceLookupService;
+    private final Optional<OrderUserLookupService> orderUserLookupService;
     private final OrderUserAddressCacheService orderUserAddressCacheService;
     private final OrderCommandService orderCommandService;
     private final OrderRepository orderRepository;
@@ -200,14 +201,7 @@ public class OrderRedisStreamListener implements StreamListener<String, MapRecor
     private void handleStreamEvent(String eventType, Map<String, Object> values) {
         try {
             switch (eventType) {
-                case "price-lookup-response":
-                    log.info("💰 [ORDER] 가격 조회 응답 이벤트 수신");
-                    handlePriceLookupResponse(values);
-                    break;
-                case "user-address-lookup-response":
-                    log.info("🏠 [ORDER] 사용자 주소 조회 응답 이벤트 수신");
-                    handleUserAddressLookupResponse(values);
-                    break;
+                // 가격 조회, 사용자 주소 조회 응답 이벤트 처리 제거됨 (HTTP 동기 방식으로 변경)
                 case "popup-info-lookup-response":
                     log.info("🏬 [ORDER] 팝업 정보 조회 응답 이벤트 수신");
                     handlePopupInfoLookupResponse(values);
@@ -486,234 +480,9 @@ public class OrderRedisStreamListener implements StreamListener<String, MapRecor
         }
     }
 
-    /**
-     * 가격 조회 응답 처리
-     */
-    private void handlePriceLookupResponse(Map<String, Object> values) {
-        try {
-            String correlationId = (String) values.get("correlationId");
-            String requestType = (String) values.get("requestType");
-            String successStr = (String) values.get("success");
-            String message = (String) values.get("message");
+    // 가격 조회 응답 처리 메서드 제거됨 (HTTP 동기 방식으로 변경)
 
-            // 따옴표 제거
-            if (correlationId != null) {
-                correlationId = correlationId.trim().replaceAll("^\"|\"$", "");
-            }
-            if (requestType != null) {
-                requestType = requestType.trim().replaceAll("^\"|\"$", "");
-            }
-            if (message != null) {
-                message = message.trim().replaceAll("^\"|\"$", "");
-            }
-            if (successStr != null) {
-                successStr = successStr.trim().replaceAll("^\"|\"$", "");
-            }
-
-            boolean success = Boolean.parseBoolean(successStr);
-
-            if (correlationId == null || requestType == null) {
-                log.warn("💰 [ORDER] 가격 조회 응답 필수 데이터 누락 - correlationId: {}, requestType: {}",
-                        correlationId, requestType);
-                return;
-            }
-
-            log.info("💰 [ORDER] 가격 조회 응답 처리 - correlationId: {}, type: {}, success: {}",
-                    correlationId, requestType, success);
-
-            Integer price = null;
-            Integer stockQuantity = null;
-            UUID sessionId = null;
-            UUID goodsId = null;
-
-            if (success) {
-                try {
-                    String priceStr = (String) values.get("price");
-                    if (priceStr != null && !priceStr.isEmpty()) {
-                        priceStr = priceStr.trim().replaceAll("^\"|\"$", "");
-                        if (!priceStr.isEmpty() && !priceStr.equals("null")) {
-                            price = Integer.parseInt(priceStr);
-                        }
-                    }
-
-                    String stockStr = (String) values.get("stockQuantity");
-                    if (stockStr != null && !stockStr.isEmpty()) {
-                        stockStr = stockStr.trim().replaceAll("^\"|\"$", "");
-                        if (!stockStr.isEmpty() && !stockStr.equals("null")) {
-                            stockQuantity = Integer.parseInt(stockStr);
-                        }
-                    }
-
-                    String sessionIdStr = (String) values.get("sessionId");
-                    if (sessionIdStr != null && !sessionIdStr.isEmpty()) {
-                        sessionIdStr = sessionIdStr.trim().replaceAll("^\"|\"$", "");
-                        if (!sessionIdStr.isEmpty() && !sessionIdStr.equals("null")) {
-                            sessionId = UUID.fromString(sessionIdStr);
-                        }
-                    }
-
-                    String goodsIdStr = (String) values.get("goodsId");
-                    if (goodsIdStr != null && !goodsIdStr.isEmpty()) {
-                        goodsIdStr = goodsIdStr.trim().replaceAll("^\"|\"$", "");
-                        if (!goodsIdStr.isEmpty() && !goodsIdStr.equals("null")) {
-                            goodsId = UUID.fromString(goodsIdStr);
-                        }
-                    }
-
-                } catch (Exception e) {
-                    log.error("💰 [ORDER] 가격 조회 응답 데이터 파싱 실패 - correlationId: {}, error: {}",
-                            correlationId, e.getMessage());
-                    success = false;
-                    message = "데이터 파싱 실패";
-                }
-            }
-
-            // PriceLookupResponseEvent 생성 및 처리
-            PriceLookupResponseEvent response = PriceLookupResponseEvent.builder()
-                    .eventId((String) values.get("eventId"))
-                    .correlationId(correlationId)
-                    .requestType(requestType)
-                    .sessionId(sessionId)
-                    .goodsId(goodsId)
-                    .price(price)
-                    .stockQuantity(stockQuantity)
-                    .success(success)
-                    .message(message)
-                    .respondedAt(java.time.LocalDateTime.now())
-                    .build();
-
-            // OrderPriceLookupService에 응답 전달
-            orderPriceLookupService.handlePriceLookupResponse(response);
-
-            log.info("✅ [ORDER] 가격 조회 응답 처리 완료 - correlationId: {}, price: {}원",
-                    correlationId, price);
-
-        } catch (Exception e) {
-            log.error("🚨 [ORDER] 가격 조회 응답 처리 실패 - values: {}, error: {}",
-                    values, e.getMessage(), e);
-        }
-    }
-
-    /**
-     * 사용자 주소 조회 응답 처리
-     */
-    private void handleUserAddressLookupResponse(Map<String, Object> values) {
-        try {
-            String correlationId = (String) values.get("correlationId");
-            String requestType = (String) values.get("requestType");
-            String successStr = (String) values.get("success");
-            String message = (String) values.get("message");
-
-            // 따옴표 제거
-            if (correlationId != null) {
-                correlationId = correlationId.trim().replaceAll("^\"|\"$", "");
-            }
-            if (requestType != null) {
-                requestType = requestType.trim().replaceAll("^\"|\"$", "");
-            }
-            if (message != null) {
-                message = message.trim().replaceAll("^\"|\"$", "");
-            }
-            if (successStr != null) {
-                successStr = successStr.trim().replaceAll("^\"|\"$", "");
-            }
-
-            boolean success = Boolean.parseBoolean(successStr);
-
-            if (correlationId == null || requestType == null) {
-                log.warn("🏠 [ORDER] 사용자 주소 조회 응답 필수 데이터 누락 - correlationId: {}, requestType: {}",
-                        correlationId, requestType);
-                return;
-            }
-
-            log.info("🏠 [ORDER] 사용자 주소 조회 응답 처리 - correlationId: {}, type: {}, success: {}",
-                    correlationId, requestType, success);
-
-            Long userId = null;
-            List<UserAddressResponse> addresses = null;
-            try {
-                String userIdStr = (String) values.get("userId");
-                if (userIdStr != null && !userIdStr.isEmpty()) {
-                    // userId에서도 따옴표 제거
-                    userIdStr = userIdStr.trim().replaceAll("^\"|\"$", "");
-                    if (!userIdStr.isEmpty() && !userIdStr.equals("null")) {
-                        userId = Long.parseLong(userIdStr);
-                    }
-                }
-
-                // 개별 주소 필드 파싱
-                if (success) {
-                    String addressId = (String) values.get("addressId");
-                    String addrName = (String) values.get("addrName");
-                    String address1 = (String) values.get("address1");
-                    String address2 = (String) values.get("address2");
-                    String postalCode = (String) values.get("postalCode");
-                    String isDefaultStr = (String) values.get("isDefault");
-
-                    if (addressId != null && !addressId.trim().isEmpty()) {
-                        // 따옴표 제거
-                        addressId = addressId.trim().replaceAll("^\"|\"$", "");
-                        if (addrName != null) addrName = addrName.trim().replaceAll("^\"|\"$", "");
-                        if (address1 != null) address1 = address1.trim().replaceAll("^\"|\"$", "");
-                        if (address2 != null) address2 = address2.trim().replaceAll("^\"|\"$", "");
-                        if (postalCode != null) postalCode = postalCode.trim().replaceAll("^\"|\"$", "");
-                        if (isDefaultStr != null) isDefaultStr = isDefaultStr.trim().replaceAll("^\"|\"$", "");
-
-                        boolean isDefault = "true".equals(isDefaultStr);
-
-                        if (!addressId.isEmpty() && !addressId.equals("null")) {
-                            UserAddressResponse address = UserAddressResponse.builder()
-                                    .addrId(UUID.fromString(addressId))
-                                    .userId(userId)
-                                    .addrName(addrName)
-                                    .address1(address1)
-                                    .address2(address2)
-                                    .postalCode(postalCode)
-                                    .isDefault(isDefault)
-                                    .build();
-
-                            addresses = List.of(address);
-                            log.info("🏠 [ORDER] 주소 데이터 파싱 성공 - addrId: {}, addrName: {}",
-                                    address.getAddrId(), address.getAddrName());
-                        }
-                    }
-                }
-            } catch (Exception e) {
-                log.error("🏠 [ORDER] 사용자 주소 조회 응답 데이터 파싱 실패 - correlationId: {}, error: {}",
-                        correlationId, e.getMessage());
-                success = false;
-                message = "데이터 파싱 실패";
-                addresses = null;
-            }
-
-            // UserAddressLookupResponseEvent 생성 및 처리
-            UserAddressLookupResponseEvent response = UserAddressLookupResponseEvent.builder()
-                    .eventId((String) values.get("eventId"))
-                    .correlationId(correlationId)
-                    .requestType(requestType)
-                    .userId(userId)
-                    .addresses(addresses)
-                    .success(success)
-                    .message(message)
-                    .respondedAt(java.time.LocalDateTime.now())
-                    .build();
-
-            if (success && userId != null && addresses != null && !addresses.isEmpty()) {
-                UserAddressResponse address = addresses.get(0);
-                orderUserAddressCacheService.cacheDefaultAddress(userId, address);
-            }
-
-            // OrderUserLookupService에 응답 전달
-            orderUserLookupService.handleUserAddressLookupResponse(response);
-
-            log.info("✅ [ORDER] 사용자 주소 조회 응답 처리 완료 - correlationId: {}, userId: {}",
-                    correlationId, userId);
-
-        } catch (Exception e) {
-            log.error("🚨 [ORDER] 사용자 주소 조회 응답 처리 실패 - values: {}, error: {}",
-                    values, e.getMessage(), e);
-        }
-    }
+    // 사용자 주소 조회 응답 처리 메서드 제거됨 (HTTP 동기 방식으로 변경)
 
     private void handlePopupInfoLookupResponse(Map<String, Object> values) {
         try {
@@ -1389,4 +1158,6 @@ public class OrderRedisStreamListener implements StreamListener<String, MapRecor
 
         return eventType;
     }
+
+    // HTTP 동기 모드 체크 메서드 제거됨 (해당 이벤트 처리가 완전히 제거됨)
 }
