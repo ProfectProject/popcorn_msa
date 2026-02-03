@@ -149,7 +149,7 @@ jobs:
 
       - name: Build Module
         # ✅ 하드코딩된 :users 대신 matrix 변수 사용
-        run: ./gradlew :${{ matrix.service }}:build -x test
+        run: ./gradlew :${{ matrix.service }}:build -x test -x javadoc
         env:
           DB_HOST: localhost
           SPRING_PROFILES_ACTIVE: test
@@ -237,7 +237,6 @@ jobs:
             echo "task_def_file=users/goorm-popcorn-dev-user-service-revision2.json" >> $GITHUB_OUTPUT
             echo "container_name=user-service" >> $GITHUB_OUTPUT
             echo "ecs_service=goorm-popcorn-dev-user-service" >> $GITHUB_OUTPUT
-          fi
           elif [ "${{ matrix.service }}" == "orderQuery" ]; then
             echo "ecr_repo=goorm-popcorn-order-query" >> $GITHUB_OUTPUT
             echo "task_def_file=orderQuery/goorm-popcorn-dev-order-query.json" >> $GITHUB_OUTPUT
