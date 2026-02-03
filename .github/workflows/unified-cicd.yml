@@ -125,13 +125,14 @@ jobs:
         run: |
           echo "Testing service: ${{ matrix.service }}"
           if [ -d "${{ matrix.service }}" ]; then
-            cd "${{ matrix.service }}"
-            echo "(put your test command here)"
+            ./gradlew :${{ matrix.service }}:test -x javadoc --build-cache --configuration-cache --parallel
           else
             echo "Directory not found for service: ${{ matrix.service }} (skipping)"
           fi
         env:
           GRADLE_OPTS: "-Dorg.gradle.daemon=false -Dorg.gradle.parallel=true -Dorg.gradle.caching=true"
+          DB_HOST: localhost
+          SPRING_PROFILES_ACTIVE: test
 
   # [2] 서비스 빌드
   build-service:
