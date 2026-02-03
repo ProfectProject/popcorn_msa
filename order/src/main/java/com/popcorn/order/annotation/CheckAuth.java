@@ -15,7 +15,7 @@ import java.lang.annotation.Target;
 @Target(ElementType.METHOD)
 @Retention(RetentionPolicy.RUNTIME)
 public @interface CheckAuth {
- 
+
     /**
      * 허용할 역할들
      * MANAGER, OWNER, ADMIN 등

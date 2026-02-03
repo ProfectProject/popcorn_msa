@@ -1,19 +1,10 @@
-name: MSA CI
+name: Unified CI/CD Pipeline
 
 on:
   push:
-    branches: [test-ci]
-    paths:
-      - 'order/**'
-      - 'gateway/**'
-      - 'checkIns/**'
-      - 'orderQuery/**'
-      - 'common-lib/**'
-      - 'gradle/**'
-      - '*.gradle'
-      - 'gradle.properties'
+    branches: ['**']
   pull_request:
-    branches: [test-ci]
+    branches: ['**']
 
 permissions:
   contents: read
@@ -329,4 +320,3 @@ jobs:
             - Run: #${{ github.run_number }}
             - Commit: ${{ github.sha }}
             // - Logs: https://github.com/${{ github.repository }}/actions/runs/${{ github.run_id }}
-
