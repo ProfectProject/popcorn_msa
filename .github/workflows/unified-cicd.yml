@@ -1,131 +1,134 @@
-name: Unified CI/CD Pipeline
+name: MSA CI
 
 on:
   push:
-    branches: [develop, main]
-  workflow_dispatch:
-    inputs:
-      services:
-        description: 'Services to deploy (comma-separated or "all")'
-        required: true
-        default: 'all'
-        type: string
-      environment:
-        description: 'Target environment'
-        required: true
-        default: 'dev'
-        type: choice
-        options:
-          - dev
-          - prod
-      image_tag:
-        description: 'Image tag (default: latest)'
-        required: false
-        default: 'latest'
-        type: string
+    branches: [test-ci]
+#    paths:
+#      - 'order/**'
+#      - 'gateway/**'
+#      - 'checkIns/**'
+#      - 'orderQuery/**'
+#      - 'common-lib/**'
+#      - 'gradle/**'
+#      - '*.gradle'
+#      - 'gradle.properties'
+  pull_request:
+    branches: [test-ci]
 
 permissions:
-  id-token: write
   contents: read
-
-env:
-  AWS_REGION: ap-northeast-2
-  AWS_ACCOUNT_ID: 375896310755
+  id-token: write
 
 jobs:
+  # [1] 변화 감지
   detect-changes:
     runs-on: ubuntu-latest
-    if: github.event_name == 'workflow_dispatch' || github.event_name == 'push'
     outputs:
-      services: ${{ steps.changes.outputs.services }}
-      matrix: ${{ steps.changes.outputs.matrix }}
+      services_json: ${{ steps.set-matrix.outputs.services_json }}
+      has_changes: ${{ steps.set-matrix.outputs.has_changes }}
+
     steps:
-      - name: Checkout code
+      - name: Checkout
         uses: actions/checkout@v4
         with:
-          fetch-depth: 2
+          fetch-depth: 0
 
-      - name: Detect changed services
-        id: changes
+      - name: Filter paths (services)
+        uses: dorny/paths-filter@v3
+        id: filter
+        with:
+          filters: |
+            users: 
+              - 'services/users/**'
+            gateway:
+              - 'services/gateway/**'
+            payments:
+              - 'services/payment/**'
+            checkIns:
+              - 'services/checkIns/**'
+            orderQuery:
+              - 'services/orderQuery/**'
+            order:
+              - 'services/order/**'
+            store:
+              - 'services/store/**'
+
+      - name: Build matrix output
+        id: set-matrix
+        shell: bash
         run: |
-          if [ "${{ github.event_name }}" = "workflow_dispatch" ]; then
-            if [ "${{ github.event.inputs.services }}" = "all" ]; then
-              SERVICES="users,stores,order,orderQuery,payment,gateway,checkIns"
-            else
-              SERVICES="${{ github.event.inputs.services }}"
-            fi
-          else
-            SERVICES=""
+          services=()
 
-            if git diff --name-only HEAD~1 HEAD | grep -q "^users/"; then
-              SERVICES="${SERVICES},users"
-            fi
-            if git diff --name-only HEAD~1 HEAD | grep -q "^stores/"; then
-              SERVICES="${SERVICES},stores"
-            fi
-            if git diff --name-only HEAD~1 HEAD | grep -q "^order/"; then
-              SERVICES="${SERVICES},order"
-            fi
-            if git diff --name-only HEAD~1 HEAD | grep -q "^orderQuery/"; then
-              SERVICES="${SERVICES},orderQuery"
-            fi
-            if git diff --name-only HEAD~1 HEAD | grep -q "^payment/"; then
-              SERVICES="${SERVICES},payment"
-            fi
-            if git diff --name-only HEAD~1 HEAD | grep -q "^gateway/"; then
-              SERVICES="${SERVICES},gateway"
-            fi
-            if git diff --name-only HEAD~1 HEAD | grep -q "^checkIns/"; then
-              SERVICES="${SERVICES},checkIns"
-            fi
-
-            if git diff --name-only HEAD~1 HEAD | grep -q "^common-lib/"; then
-              SERVICES="users,stores,order,orderQuery,payment,gateway,checkIns"
-            fi
-
-            if git diff --name-only HEAD~1 HEAD | grep -q "^\\.aws/task-definitions/"; then
-              CHANGED_TASKS=$(git diff --name-only HEAD~1 HEAD | grep "^\\.aws/task-definitions/" | sed 's/.*\\/\\(.*\\)\\.json/\\1/' | tr '\n' ',')
-              SERVICES="${SERVICES},${CHANGED_TASKS}"
-            fi
-
-            SERVICES=$(echo $SERVICES | sed 's/^,//')
+          if [[ "${{ steps.filter.outputs.users }}" == "true" ]]; then
+            services+=("users")
+          fi
+          if [[ "${{ steps.filter.outputs.orders }}" == "true" ]]; then
+            services+=("orders")
+          fi
+          if [[ "${{ steps.filter.outputs.payments }}" == "true" ]]; then
+            services+=("payments")
+          fi
+          if [[ "${{ steps.filter.outputs.orderQuery }}" == "true" ]]; then
+            services+=("orderQuery")
+          fi
+          if [[ "${{ steps.filter.outputs.stores }}" == "true" ]]; then
+            services+=("stores")
+          fi
+          if [[ "${{ steps.filter.outputs.gateway }}" == "true" ]]; then
+            services+=("gateway")
+          fi
+          if [[ "${{ steps.filter.outputs.checkIns }}" == "true" ]]; then
+            services+=("checkIns")
           fi
 
-          if [ "${{ github.event_name }}" = "push" ] && [[ "${{ github.ref }}" == refs/heads/feature/* ]] && [ -z "$SERVICES" ]; then
-            SERVICES="users,stores,order,orderQuery,payment,gateway,checkIns"
+          if [[ ${#services[@]} -eq 0 ]]; then
+            echo 'has_changes=false' >> "$GITHUB_OUTPUT"
+            echo 'services_json=[]' >> "$GITHUB_OUTPUT"
+            exit 0
           fi
 
-          SERVICES=$(printf '%s' "$SERVICES" | tr -d '\r\n')
-          SERVICES=$(printf '%s' "$SERVICES" | tr ',' '\n' | grep -E '^(users|stores|order|orderQuery|payment|gateway|checkIns)$' | paste -sd, -)
-          echo "services=$SERVICES" >> $GITHUB_OUTPUT
+          # JSON 배열 만들기
+          json=$(printf '%s\n' "${services[@]}" | jq -R . | jq -s .)
 
-          if [ -n "$SERVICES" ]; then
-            MATRIX=$(printf '%s' "$SERVICES" | jq -R -s -c 'split(",") | map(gsub("^\\s+|\\s+$"; "")) | map(select(length > 0))')
-          else
-            MATRIX="[]"
-          fi
-          echo "matrix=$MATRIX" >> $GITHUB_OUTPUT
+          echo "has_changes=true" >> "$GITHUB_OUTPUT"
+          echo "services_json=$json" >> "$GITHUB_OUTPUT"
 
-          echo "Detected services: $SERVICES"
-          echo "Matrix: $MATRIX"
+      - name: Debug outputs
+        run: |
+          echo "has_changes=${{ steps.set-matrix.outputs.has_changes }}"
+          echo "services_json=${{ steps.set-matrix.outputs.services_json }}"
 
-  build-and-deploy:
+  test:
+    name: Test (matrix)
     needs: detect-changes
-    if: |
-      always() &&
-      needs.detect-changes.outputs.services != '' &&
-      (github.event_name == 'push' || github.event_name == 'workflow_dispatch')
+    if: needs.detect-changes.outputs.has_changes == 'true'
     runs-on: ubuntu-latest
 
-    permissions:
-      id-token: write
-      contents: read
-
     strategy:
-      matrix:
-        service: ${{ fromJson(needs.detect-changes.outputs.matrix) }}
       fail-fast: false
+      matrix:
+        service: ${{ fromJson(needs.detect-changes.outputs.services_json) }}
 
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Run tests
+        run: |
+          echo "Testing service: ${{ matrix.service }}"
+          cd services/${{ matrix.service }}
+          echo "(put your test command here)"
+
+  # [2] 서비스 빌드
+  build-service:
+    needs: detect-changes
+    if: needs.detect-changes.outputs.has_changes == 'true'
+    runs-on: ubuntu-latest
+    strategy:
+      fail-fast: false
+      matrix:
+        service: ${{ fromJson(needs.detect-changes.outputs.services_json) }}
+
+    name: Build ${{ matrix.service }} Module
     steps:
       - name: Checkout code
         uses: actions/checkout@v4
@@ -135,261 +138,195 @@ jobs:
         with:
           java-version: '17'
           distribution: 'temurin'
-          cache: gradle
+          cache: 'gradle'
 
-      - name: Configure AWS credentials
-        uses: aws-actions/configure-aws-credentials@v4
+      - name: Grant execute permission
+        run: chmod +x gradlew
+
+      - name: Build Module
+        # ✅ 하드코딩된 :users 대신 matrix 변수 사용
+        run: ./gradlew :${{ matrix.service }}:build -x test
+        env:
+          DB_HOST: localhost
+          SPRING_PROFILES_ACTIVE: test
+
+      - name: Upload Build Artifacts
+        uses: actions/upload-artifact@v4
         with:
-          role-to-assume: ${{ secrets.AWS_ROLE_ARN }}
-          aws-region: ${{ env.AWS_REGION }}
+          name: ${{ matrix.service }}-build
+          path: ${{ matrix.service }}/build/libs/
+          retention-days: 7
 
-      - name: Login to Amazon ECR
-        id: login-ecr
-        uses: aws-actions/amazon-ecr-login@v2
-
-      - name: Build application
-        run: |
-          chmod +x ./gradlew
-          ./gradlew :${{ matrix.service }}:bootJar -x test -x javadoc \
-            -Dspring.aot.enabled=false --no-daemon --configuration-cache
-
-      - name: Set ECR repository name
-        id: ecr-repo
-        run: |
-          case "${{ matrix.service }}" in
-            "users") echo "repository=goorm-popcorn-user" >> $GITHUB_OUTPUT ;;
-            "stores") echo "repository=goorm-popcorn-store" >> $GITHUB_OUTPUT ;;
-            "order") echo "repository=goorm-popcorn-order" >> $GITHUB_OUTPUT ;;
-            "orderQuery") echo "repository=goorm-popcorn-order-query" >> $GITHUB_OUTPUT ;;
-            "payment") echo "repository=goorm-popcorn-payment" >> $GITHUB_OUTPUT ;;
-            "gateway") echo "repository=goorm-popcorn-api-gateway" >> $GITHUB_OUTPUT ;;
-            "checkIns") echo "repository=goorm-popcorn-checkin" >> $GITHUB_OUTPUT ;;
-            *) echo "repository=goorm-popcorn-${{ matrix.service }}" >> $GITHUB_OUTPUT ;;
-          esac
-
-      - name: Build Docker image
-        env:
-          ECR_REGISTRY: ${{ steps.login-ecr.outputs.registry }}
-          IMAGE_TAG: ${{ github.event.inputs.image_tag || github.sha }}
-        run: |
-          docker build \
-            -f ${{ matrix.service }}/Dockerfile \
-            --build-arg JAR_FILE=build/libs/*.jar \
-            -t $ECR_REGISTRY/${{ steps.ecr-repo.outputs.repository }}:$IMAGE_TAG \
-            -t $ECR_REGISTRY/${{ steps.ecr-repo.outputs.repository }}:latest \
-            .
-
-      - name: Push to ECR
-        env:
-          ECR_REGISTRY: ${{ steps.login-ecr.outputs.registry }}
-          IMAGE_TAG: ${{ github.event.inputs.image_tag || github.sha }}
-        run: |
-          docker push $ECR_REGISTRY/${{ steps.ecr-repo.outputs.repository }}:$IMAGE_TAG
-          docker push $ECR_REGISTRY/${{ steps.ecr-repo.outputs.repository }}:latest
-
-  notify-ci-start:
-    needs: detect-changes
-    if: needs.detect-changes.outputs.services != ''
-    runs-on: ubuntu-latest
-    steps:
-      - name: Notify Discord (CI Start)
-        uses: Ilshidur/action-discord@master
-        with:
-          args: |
-            🔵 **CI 시작**
-            
-            **서비스**: ${{ needs.detect-changes.outputs.services }}
-            **브랜치**: ${{ github.ref_name }}
-            **작성자**: ${{ github.actor }}
-            **트리거**: ${{ github.event_name }}
-        env:
-          DISCORD_WEBHOOK: ${{ secrets.DISCORD_WEBHOOK }}
-
-  notify-ci-end:
-    needs: [detect-changes, build-and-deploy]
-    if: always() && needs.detect-changes.outputs.services != ''
-    runs-on: ubuntu-latest
-    steps:
-      - name: Notify Discord (CI End)
-        uses: Ilshidur/action-discord@master
-        with:
-          args: |
-            ${{ needs.build-and-deploy.result == 'success' && '✅' || '❌' }} **CI 종료** ${{ needs.build-and-deploy.result == 'success' && '성공' || '실패' }}
-            
-            **서비스**: ${{ needs.detect-changes.outputs.services }}
-            **브랜치**: ${{ github.ref_name }}
-            **작성자**: ${{ github.actor }}
-        env:
-          DISCORD_WEBHOOK: ${{ secrets.DISCORD_WEBHOOK }}
-
-  deploy:
-    needs: [detect-changes, build-and-deploy]
-    if: |
-      always() &&
-      needs.detect-changes.outputs.services != '' &&
-      needs.build-and-deploy.result == 'success'
+  # [3] Docker 빌드 및 푸시
+  docker-build-push-ecr:
+    needs: [detect-changes, build-service] # ✅ detect-changes가 필요함
+    # develop 브랜치 푸시 시에만 작동
+    if: github.event_name == 'push' && github.ref == 'refs/heads/test-ci'
     runs-on: ubuntu-latest
     strategy:
-      matrix:
-        service: ${{ fromJson(needs.detect-changes.outputs.matrix) }}
       fail-fast: false
+      matrix:
+        # ✅ 여기서도 matrix를 정의해야 ${{ matrix.service }}를 사용할 수 있습니다.
+        service: ${{ fromJson(needs.detect-changes.outputs.services) }}
 
-    permissions:
-      id-token: write
-      contents: read
+    name: Push ${{ matrix.service }} to ECR
 
     env:
-      DB_HOST_TASK: ${{ secrets.DB_HOST_TASK }}
-      DB_PORT_TASK: ${{ secrets.DB_PORT_TASK }}
-      DB_NAME_TASK: ${{ secrets.DB_NAME_TASK }}
-      DB_USER_TASK: ${{ secrets.DB_USER_TASK }}
-      DB_PASSWORD_TASK: ${{ secrets.DB_PASSWORD_TASK }}
-      REDIS_HOST_TASK: ${{ secrets.REDIS_HOST_TASK }}
-      REDIS_PORT_TASK: ${{ secrets.REDIS_PORT_TASK }}
-      KAFKA_BOOTSTRAP_SERVERS_TASK: ${{ secrets.KAFKA_BOOTSTRAP_SERVERS_TASK }}
-      JWT_SECRET_TASK: ${{ secrets.JWT_SECRET_TASK }}
-      PASSPORT_SECRET_TASK: ${{ secrets.PASSPORT_SECRET_TASK }}
-      GATEWAY_URL_TASK: ${{ secrets.GATEWAY_URL_TASK }}
-      GATEWAY_SERVICE_URL_TASK: ${{ secrets.GATEWAY_SERVICE_URL_TASK }}
-      APP_GATEWAY_URL_TASK: ${{ secrets.APP_GATEWAY_URL_TASK }}
-      USER_AUTH_DB_USERNAME_TASK: ${{ secrets.USER_AUTH_DB_USERNAME_TASK }}
-      USER_AUTH_DB_PASSWORD_TASK: ${{ secrets.USER_AUTH_DB_PASSWORD_TASK }}
-      USER_AUTH_FLYWAY_USERNAME_TASK: ${{ secrets.USER_AUTH_FLYWAY_USERNAME_TASK }}
-      USER_AUTH_FLYWAY_PASSWORD_TASK: ${{ secrets.USER_AUTH_FLYWAY_PASSWORD_TASK }}
-      STORE_DB_USERNAME_TASK: ${{ secrets.STORE_DB_USERNAME_TASK }}
-      STORE_DB_PASSWORD_TASK: ${{ secrets.STORE_DB_PASSWORD_TASK }}
-      STORE_FLYWAY_USERNAME_TASK: ${{ secrets.STORE_FLYWAY_USERNAME_TASK }}
-      STORE_FLYWAY_PASSWORD_TASK: ${{ secrets.STORE_FLYWAY_PASSWORD_TASK }}
-      ORDER_DB_USERNAME_TASK: ${{ secrets.ORDER_DB_USERNAME_TASK }}
-      ORDER_DB_PASSWORD_TASK: ${{ secrets.ORDER_DB_PASSWORD_TASK }}
-      ORDER_FLYWAY_USERNAME_TASK: ${{ secrets.ORDER_FLYWAY_USERNAME_TASK }}
-      ORDER_FLYWAY_PASSWORD_TASK: ${{ secrets.ORDER_FLYWAY_PASSWORD_TASK }}
-      ORDER_QUERY_DB_USERNAME_TASK: ${{ secrets.ORDER_QUERY_DB_USERNAME_TASK }}
-      ORDER_QUERY_DB_PASSWORD_TASK: ${{ secrets.ORDER_QUERY_DB_PASSWORD_TASK }}
-      ORDER_QUERY_FLYWAY_USERNAME_TASK: ${{ secrets.ORDER_QUERY_FLYWAY_USERNAME_TASK }}
-      ORDER_QUERY_FLYWAY_PASSWORD_TASK: ${{ secrets.ORDER_QUERY_FLYWAY_PASSWORD_TASK }}
-      PAYMENT_DB_USERNAME_TASK: ${{ secrets.PAYMENT_DB_USERNAME_TASK }}
-      PAYMENT_DB_PASSWORD_TASK: ${{ secrets.PAYMENT_DB_PASSWORD_TASK }}
-      PAYMENT_FLYWAY_USERNAME_TASK: ${{ secrets.PAYMENT_FLYWAY_USERNAME_TASK }}
-      PAYMENT_FLYWAY_PASSWORD_TASK: ${{ secrets.PAYMENT_FLYWAY_PASSWORD_TASK }}
-      TOSS_PAYMENTS_CLIENT_KEY_TASK: ${{ secrets.TOSS_PAYMENTS_CLIENT_KEY_TASK }}
-      QR_DB_USERNAME_TASK: ${{ secrets.QR_DB_USERNAME_TASK }}
-      QR_DB_PASSWORD_TASK: ${{ secrets.QR_DB_PASSWORD_TASK }}
-      QR_FLYWAY_USERNAME_TASK: ${{ secrets.QR_FLYWAY_USERNAME_TASK }}
-      QR_FLYWAY_PASSWORD_TASK: ${{ secrets.QR_FLYWAY_PASSWORD_TASK }}
-      PROD_APPROVERS: ${{ secrets.PROD_APPROVERS }}
+      AWS_REGION: ap-northeast-2
+      ECR_REPOSITORY: goorm-popcorn-user
+      ECR_ORDER_REPOSITORY: goorm-popcorn-order
+      ECR_GATEWAY_REPOSITORY: goorm-popcorn-api-gateway
+
+      ECS_TASK_DEFINITION: users/goorm-popcorn-dev-user-service-revision2.json
+      ECS_TASK_ORDER_DEFINITION: order/goorm-popcorn-dev-order-service.json
+      ECS_TASK_GATEWAY_DEFINITION: gateway/goorm-popcorn-dev-api-gateway.json
+
+      CONTAINER_NAME: user-service
+      CONTAINER_ORDER_NAME: order-service
+      CONTAINER_GATEWAY_NAME: api-gateway
+
+      ECS_SERVICE: goorm-popcorn-dev-user-service
+      ECS_ORDER_SERVICE: goorm-popcorn-dev-order-service
+      ECS_APIGATE_SERVICE: goorm-popcorn-dev-api-gateway
+
+      ECS_CLUSTER: goorm-popcorn-dev-cluster
+
+      DB_HOST: localhost
+      DB_PORT: 5430
+      DB_NAME: popcorn_db
+
+      ORDER_DB_USERNAME: order_app
+      ORDER_DB_PASSWORD: order321
+      ORDER_FLYWAY_USERNAME: order_migrator
+      ORDER_FLYWAY_PASSWORD: order321
+
+      ORDER_QUERY_DB_USERNAME: order_query_app
+      ORDER_QUERY_DB_PASSWORD: quary123
+
+      ORDER_QUERY_FLYWAY_USERNAME: order_query_migrator
+      ORDER_QUERY_FLYWAY_PASSWORD: quary321
+
+
+      REDIS_HOST: localhost
+      REDIS_PORT: 6379
+      JWT_SECRET: dGVzdC1qd3Qtc2VjcmV0LWtleS1mb3ItbG9jYWwtZGV2ZWxvcG1lbnQtb25seS1kb25vdC11c2UtaW4tcHJvZHVjdGlvbg==PASSPORT_SECRET=passport-shared-secret
 
     steps:
       - name: Checkout code
         uses: actions/checkout@v4
 
-      - name: Configure AWS credentials
-        uses: aws-actions/configure-aws-credentials@v4
-        with:
-          role-to-assume: ${{ secrets.AWS_ROLE_ARN }}
-          aws-region: ${{ env.AWS_REGION }}
-
-      - name: Resolve service name
-        id: svc
+      # 1️⃣ 서비스별 변수 동적 매핑 (여기에 order와 gateway 설정을 모두 넣습니다)
+      - name: Set service-specific variables
+        id: vars
         run: |
-          case "${{ matrix.service }}" in
-            users) echo "name=user-service" >> $GITHUB_OUTPUT ;;
-            stores) echo "name=store-service" >> $GITHUB_OUTPUT ;;
-            order) echo "name=order-service" >> $GITHUB_OUTPUT ;;
-            orderQuery) echo "name=order-query" >> $GITHUB_OUTPUT ;;
-            payment) echo "name=payment-service" >> $GITHUB_OUTPUT ;;
-            gateway) echo "name=api-gateway" >> $GITHUB_OUTPUT ;;
-            checkIns) echo "name=checkin-service" >> $GITHUB_OUTPUT ;;
-          esac
-
-      - name: Deploy to Staging
-        if: github.ref == 'refs/heads/develop' || startsWith(github.ref, 'refs/heads/feature/') || github.event.inputs.environment == 'dev'
-        working-directory: .aws
-        run: |
-          chmod +x deploy.sh
-          ./deploy.sh ${{ steps.svc.outputs.name }} dev ${{ github.event.inputs.image_tag || github.sha }}
-
-      - name: Wait for manual approval (Production - Payment)
-        if: (github.ref == 'refs/heads/main' || github.event.inputs.environment == 'prod') && matrix.service == 'payment' && env.PROD_APPROVERS != ''
-        uses: trstringer/manual-approval@v1
-        with:
-          secret: ${{ github.TOKEN }}
-          approvers: ${{ env.PROD_APPROVERS }}
-          minimum-approvals: 2
-          issue-title: "Deploy Payment Service to Production (Enhanced Security)"
-          issue-body: |
-            **Service**: Payment Service (Enhanced Security)
-            **Version**: ${{ github.event.inputs.image_tag || github.sha }}
-            **Branch**: ${{ github.ref_name }}
-            **Author**: ${{ github.actor }}
-            
-            ⚠️ **SECURITY CRITICAL**: This is a payment service deployment.
-            Please review security checklist and approve with 2 approvers.
-
-      - name: Wait for manual approval (Production)
-        if: (github.ref == 'refs/heads/main' || github.event.inputs.environment == 'prod') && matrix.service != 'payment' && env.PROD_APPROVERS != ''
-        uses: trstringer/manual-approval@v1
-        with:
-          secret: ${{ github.TOKEN }}
-          approvers: ${{ env.PROD_APPROVERS }}
-          minimum-approvals: 1
-          issue-title: "Deploy ${{ matrix.service }} to Production"
-
-      - name: Deploy to Production
-        if: github.ref == 'refs/heads/main' || github.event.inputs.environment == 'prod'
-        working-directory: .aws
-        run: |
-          chmod +x deploy.sh
-          ./deploy.sh ${{ steps.svc.outputs.name }} prod ${{ github.event.inputs.image_tag || github.sha }}
-
-  notify-cd-start:
-    needs: [detect-changes, build-and-deploy]
-    if: |
-      needs.detect-changes.outputs.services != '' &&
-      needs.build-and-deploy.result == 'success' &&
-      (github.event_name == 'push' || github.event_name == 'workflow_dispatch')
-    runs-on: ubuntu-latest
-
-    steps:
-      - name: Notify Discord (CD Start)
-        uses: Ilshidur/action-discord@master
-        with:
-          args: |
-            🟡 **CD 시작**
-            
-            **서비스**: ${{ needs.detect-changes.outputs.services }}
-            **환경**: ${{ (github.ref == 'refs/heads/main' || github.event.inputs.environment == 'prod') && 'Production' || 'Dev' }}
-            **버전**: `${{ github.event.inputs.image_tag || github.sha }}`
-            **작성자**: ${{ github.actor }}
-            **브랜치**: ${{ github.ref_name }}
-        env:
-          DISCORD_WEBHOOK: ${{ secrets.DISCORD_WEBHOOK }}
-
-  notify-cd-end:
-    needs: [detect-changes, deploy]
-    if: always() && needs.detect-changes.outputs.services != '' && (github.event_name == 'push' || github.event_name == 'workflow_dispatch')
-    runs-on: ubuntu-latest
-
-    steps:
-      - name: Set CD status
-        id: status
-        run: |
-          if [ "${{ needs.deploy.result }}" != "success" ]; then
-            echo "status=failure" >> $GITHUB_OUTPUT
-          else
-            echo "status=success" >> $GITHUB_OUTPUT
+          if [ "${{ matrix.service }}" == "order" ]; then
+            echo "ecr_repo=goorm-popcorn-order" >> $GITHUB_OUTPUT
+            echo "task_def_file=order/goorm-popcorn-dev-order-service.json" >> $GITHUB_OUTPUT
+            echo "container_name=order-service" >> $GITHUB_OUTPUT
+            echo "ecs_service=goorm-popcorn-dev-order-service" >> $GITHUB_OUTPUT
+          elif [ "${{ matrix.service }}" == "gateway" ]; then
+            echo "ecr_repo=goorm-popcorn-api-gateway" >> $GITHUB_OUTPUT
+            echo "task_def_file=gateway/goorm-popcorn-dev-api-gateway.json" >> $GITHUB_OUTPUT
+            echo "container_name=api-gateway" >> $GITHUB_OUTPUT
+            echo "ecs_service=goorm-popcorn-dev-api-gateway" >> $GITHUB_OUTPUT
+          elif [ "${{ matrix.service }}" == "users" ]; then
+            echo "ecr_repo=goorm-popcorn-user" >> $GITHUB_OUTPUT
+            echo "task_def_file=users/goorm-popcorn-dev-user-service-revision2.json" >> $GITHUB_OUTPUT
+            echo "container_name=user-service" >> $GITHUB_OUTPUT
+            echo "ecs_service=goorm-popcorn-dev-user-service" >> $GITHUB_OUTPUT
+          fi
+          elif [ "${{ matrix.service }}" == "orderQuery" ]; then
+            echo "ecr_repo=goorm-popcorn-order-query" >> $GITHUB_OUTPUT
+            echo "task_def_file=orderQuery/goorm-popcorn-dev-order-query.json" >> $GITHUB_OUTPUT
+            echo "container_name=order-query" >> $GITHUB_OUTPUT
+            echo "ecs_service=goorm-popcorn-dev-order-query" >> $GITHUB_OUTPUT
           fi
 
-      - name: Notify Discord (CD End)
-        uses: Ilshidur/action-discord@master
+
+      - name: Configure AWS credentials (OIDC)
+        uses: aws-actions/configure-aws-credentials@v4
         with:
-          args: |
-            ${{ steps.status.outputs.status == 'success' && '✅' || '❌' }} **CD 종료** ${{ steps.status.outputs.status == 'success' && '성공' || '실패' }}
-            
-            **서비스**: ${{ needs.detect-changes.outputs.services }}
-            **환경**: ${{ (github.ref == 'refs/heads/main' || github.event.inputs.environment == 'prod') && 'Production' || 'Dev' }}
-            **버전**: `${{ github.event.inputs.image_tag || github.sha }}`
-            **작성자**: ${{ github.actor }}
-            **브랜치**: ${{ github.ref_name }}
+          aws-access-key-id: ${{ secrets.AWS_ACCESS_KEY_ID }}
+          aws-secret-access-key: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
+          aws-region: ${{ env.AWS_REGION }}
+
+      - name: Login to Amazon ECR
+        id: ecr
+        uses: aws-actions/amazon-ecr-login@v2
+
+      - name: Set up Docker Buildx
+        uses: docker/setup-buildx-action@v3
+
+      - name: Build and push Docker image
+        uses: docker/build-push-action@v6
+        with:
+          context: .
+          # ✅ 하드코딩된 users 대신 matrix 변수 사용
+          file: ${{ matrix.service }}/Dockerfile
+          push: true
+          platforms: linux/amd64
+          provenance: false
+          sbom: false
+
+          # ✅ 요청하신 dev-latest 태그 적용
+          tags: |
+            ${{ steps.ecr.outputs.registry }}/${{ steps.vars.outputs.ecr_repo }}:dev-latest
+            ${{ steps.ecr.outputs.registry }}/${{ steps.vars.outputs.ecr_repo }}:test-${{ github.run_number }}
+
+          cache-from: type=gha
+          cache-to: type=gha,mode=max
+          outputs: type=image,oci-mediatypes=true
+
+      - name: Download Task Definition
+        run: |
+          aws ecs describe-task-definition \
+            --task-definition ${{ steps.vars.outputs.task_def_file }} \
+            --query taskDefinition \
+            | jq 'del(.taskDefinitionArn, .revision, .status, .registeredAt, .registeredBy)' > task-definition.json  
+
+      - name: Fill in the new image ID in the Amazon ECS task definition
+        id: task-def
+        uses: aws-actions/amazon-ecs-render-task-definition@c804dfbdd57f713b6c079302a4c01db7017a36fc
+        with:
+          task-definition: ${{ steps.vars.outputs.task_def_file }}
+          container-name: ${{ steps.vars.outputs.container_name }}
+          image: ${{ steps.vars.outputs.ecr_repo }}:dev-latest
+
+      - name: Deploy Amazon ECS task definition
+        uses: aws-actions/amazon-ecs-deploy-task-definition@df9643053eda01f169e64a0e60233aacca83799a
+        with:
+          task-definition: ${{ steps.vars.outputs.task_def_file }}
+          service: ${{ steps.vars.outputs.ecs_service }}
+          cluster: ${{ env.ECS_CLUSTER }}
+          wait-for-service-stability: true
+
+      - name: Notify Discord (success)
+        if: success()
+        uses: Ilshidur/action-discord@master
         env:
           DISCORD_WEBHOOK: ${{ secrets.DISCORD_WEBHOOK }}
+        with:
+          args: |
+            ✅ Deploy SUCCESS by.yeon
+            - 👤 Author: `${{ github.actor }}`
+            - Service: ${{ matrix.service }}
+            - Repo: ${{ steps.vars.outputs.ecr_repo }}
+            - Image: ${{ steps.ecr.outputs.registry }}/${{ steps.vars.outputs.ecr_repo }}:dev-latest
+            - Run: #${{ github.run_number }}
+            - Commit: ${{ github.sha }}
+
+      - name: Notify Discord (failure)
+        if: failure()
+        uses: Ilshidur/action-discord@master
+        env:
+          DISCORD_WEBHOOK: ${{ secrets.DISCORD_WEBHOOK }}
+        with:
+          args: |
+            ❌ Deploy FAILED by.yeon
+            - 👤 Author: `${{ github.actor }}`
+            - Service: ${{ matrix.service }}
+            - Repo: ${{ steps.vars.outputs.ecr_repo }}
+            - Run: #${{ github.run_number }}
+            - Commit: ${{ github.sha }}
+            // - Logs: https://github.com/${{ github.repository }}/actions/runs/${{ github.run_id }}
+
