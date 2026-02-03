@@ -1,5 +1,5 @@
 server:
-  port: ${SERVER_PORT:8086}
+  port: ${SERVER_PORT:8080}
   shutdown: immediate
   tomcat:
     uri-encoding: UTF-8
@@ -13,6 +13,9 @@ spring:
     username: ${QR_DB_USERNAME:qr_app}
     password: ${QR_DB_PASSWORD}
     driver-class-name: org.postgresql.Driver
+    hikari:
+      maximum-pool-size: 3
+      minimum-idle: 1
 
   jpa:
     open-in-view: false
@@ -42,6 +45,9 @@ logging:
     org.springframework.web: WARN
     org.springframework.boot.web: WARN
     org.hibernate.SQL: WARN
+
+springdoc:
+  server-url: ${GATEWAY_SERVICE_URL:https://dev.goormpopcorn.shop}
 
 passport:
   secret: ${PASSPORT_SECRET:passport-shared-secret}

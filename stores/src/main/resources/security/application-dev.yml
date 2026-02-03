@@ -1,15 +1,18 @@
 server:
-  port: 8083
+  port: 8080
   shutdown: immediate
 spring:
   config:
     activate:
       on-profile: dev
   datasource:
-    url: jdbc:postgresql://${DB_HOST:localhost}:${DB_PORT:5430}/${DB_NAME:popcorn_db}
+    url: jdbc:postgresql://${DB_HOST:localhost}:${DB_PORT:5432}/${DB_NAME:popcorn_db}
     username: ${STORE_DB_USERNAME:store_app}
     password: ${STORE_DB_PASSWORD:store123}
     driver-class-name: org.postgresql.Driver
+    hikari:
+      maximum-pool-size: 3
+      minimum-idle: 1
   jpa:
     open-in-view: false
     hibernate:
@@ -23,16 +26,19 @@ spring:
     type: simple
 
   flyway:
-    url: jdbc:postgresql://${DB_HOST:localhost}:${DB_PORT:5320}/${DB_NAME:popcorn_db}
+    url: jdbc:postgresql://${DB_HOST:localhost}:${DB_PORT:5432}/${DB_NAME:popcorn_db}
     user: ${STORE_FLYWAY_USERNAME:store_migrator}
     password: ${STORE_FLYWAY_PASSWORD:store123}
     enabled: true
     baseline-on-migrate: true
     validate-on-migrate: true
-    locations: classpath:db/migration/schema,classpath:db/migration/seed
+    locations: classpath:db/migration/schema
     default-schema: store
     schemas: store
     clean-disabled: false
+
+springdoc:
+  server-url: ${GATEWAY_SERVICE_URL:https://dev.goormpopcorn.shop}
 
 
 jwt:

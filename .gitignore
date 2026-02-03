@@ -54,6 +54,7 @@ out/
 backend/env
 backend/env.**
 checkIns/.env*
+secrets.env
 
 
 # Local notes
@@ -90,4 +91,3 @@ k6
 logs/
 *.log
 **/logs/
-

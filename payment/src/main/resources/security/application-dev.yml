@@ -1,5 +1,5 @@
 server:
-  port: 8085
+  port: 8080
   shutdown: immediate
 
 spring:
@@ -14,8 +14,8 @@ spring:
     username: ${PAYMENT_DB_USERNAME:payment_app}
     password: ${PAYMENT_DB_PASSWORD:payment123}
     hikari:
-      maximum-pool-size: 15
-      minimum-idle: 5
+      maximum-pool-size: 3
+      minimum-idle: 1
       idle-timeout: 300000
       connection-timeout: 10000
       max-lifetime: 600000
@@ -77,6 +77,15 @@ toss:
 
 # 이벤트 기반 아키텍처 - HTTP 통신 제거
 # microservices 통신은 Redis Stream 이벤트로 대체
+
+springdoc:
+  server-url: ${GATEWAY_SERVICE_URL:https://dev.goormpopcorn.shop}
+
+# 헬스체크 (개발 환경)
+management:
+  health:
+    redis:
+      enabled: false
 
 # Payment 서비스 비즈니스 설정 (개발용)
 payment:
