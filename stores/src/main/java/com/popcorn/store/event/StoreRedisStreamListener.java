@@ -114,16 +114,6 @@ public class StoreRedisStreamListener implements StreamListener<String, MapRecor
                     log.info("🔗 [STORES] 복합형 예약 요청 이벤트 수신 (스케줄+굿즈)");
                     handleMixedReservationRequested(values);
                     break;
-                case "goods-reserved":
-                    log.info("✅ [STORES] 굿즈 재고 예약 성공 이벤트 수신 (내부) - orderId: {}, goodsId: {}, quantity: {}개 예약 완료",
-                            values.get("orderId"), values.get("goodsId"), values.get("quantity"));
-                    // 내부적으로 발행한 이벤트 - Order 서비스에서 처리 예정
-                    break;
-                case "goods-reservation-failed":
-                    log.warn("❌ [STORES] 굿즈 재고 예약 실패 이벤트 수신 (내부) - orderId: {}, goodsId: {}, reason: {}",
-                            values.get("orderId"), values.get("goodsId"), values.get("reason"));
-                    // 내부적으로 발행한 이벤트 - Order 서비스에서 처리 예정
-                    break;
                 case "goods-reservation-cancel-requested":
                     log.info("↩️ [STORES] 굿즈 예약 취소 요청 이벤트 수신");
                     handleGoodsReservationCancelRequested(values);
@@ -140,16 +130,6 @@ public class StoreRedisStreamListener implements StreamListener<String, MapRecor
                     log.info("📦 [STORES] 재고 차감 요청 이벤트 수신 - orderId: {}", values.get("orderId"));
                     handleStockDeductionRequest(values);
                     break;
-                case "stock-deduction-success":
-                    log.info("📦✅ [STORES] 재고 차감 성공 이벤트 수신 (→Order 전송됨) - orderId: {}, orderNo: {}, stockDetails: {}",
-                            values.get("orderId"), values.get("orderNo"), values.get("stockDetails"));
-                    // Order 서비스로 성공 결과 전송 완료
-                    break;
-                case "stock-deduction-failed":
-                    log.warn("📦❌ [STORES] 재고 차감 실패 이벤트 수신 (→Order 전송됨) - orderId: {}, orderNo: {}, reason: {}",
-                            values.get("orderId"), values.get("orderNo"), values.get("reason"));
-                    // Order 서비스로 실패 결과 전송 완료
-                    break;
                 case "price-lookup-requested":
                     log.info("💰 [STORES] 가격 조회 요청 이벤트 수신");
                     publishPriceLookupResponseEvent(values);
@@ -157,16 +137,6 @@ public class StoreRedisStreamListener implements StreamListener<String, MapRecor
                 case "popup-info-lookup-requested":
                     log.info("🏬 [STORES] 팝업 정보 조회 요청 이벤트 수신");
                     handlePopupInfoLookupRequested(values);
-                    break;
-                case "schedule-reservation-success":
-                    log.info("📅✅ [STORES] 스케줄 예약 성공 이벤트 수신 (→Order 전송됨) - orderId: {}, orderNo: {}",
-                            values.get("orderId"), values.get("orderNo"));
-                    // Order 서비스에서 발행한 스케줄 예약 성공 알림 - 로깅만 처리
-                    break;
-                case "schedule-reservation-failed":
-                    log.warn("📅❌ [STORES] 스케줄 예약 실패 이벤트 수신 (→Order 전송됨) - orderId: {}, orderNo: {}, reason: {}",
-                            values.get("orderId"), values.get("orderNo"), values.get("reason"));
-                    // Order 서비스에서 발행한 스케줄 예약 실패 알림 - 로깅만 처리
                     break;
                 case "schedule-confirmation-requested":
                     log.info("📅🔒 [STORES] 스케줄 확정 요청 이벤트 수신");
@@ -176,8 +146,8 @@ public class StoreRedisStreamListener implements StreamListener<String, MapRecor
                     log.info("📦🔒 [STORES] 재고 확정/복구 요청 이벤트 수신");
                     handleInventoryConfirmationRequested(values);
                     break;
+                // 로깅만 하는 이벤트들은 조용히 무시
                 default:
-                    log.info("🔔 [STORES] 알 수 없는 이벤트 타입 - type: {}", eventType);
                     break;
             }
         } catch (Exception e) {

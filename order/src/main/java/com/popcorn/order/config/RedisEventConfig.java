@@ -1,6 +1,6 @@
 package com.popcorn.order.config;
 
-import com.popcorn.order.event.OrderRedisStreamListener;
+import com.popcorn.order.event.publisher.OrderRedisStreamListener;
 import lombok.RequiredArgsConstructor;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
