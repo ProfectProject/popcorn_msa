@@ -29,20 +29,27 @@ jobs:
         id: filter
         with:
           filters: |
-            users: 
-              - 'services/users/**'
-            gateway:
-              - 'services/gateway/**'
-            payments:
-              - 'services/payment/**'
-            checkIns:
-              - 'services/checkIns/**'
-            orderQuery:
-              - 'services/orderQuery/**'
+            users:
+              - 'users/**'
+            stores:
+              - 'stores/**'
             order:
-              - 'services/order/**'
-            store:
-              - 'services/store/**'
+              - 'order/**'
+            orderQuery:
+              - 'orderQuery/**'
+            payment:
+              - 'payment/**'
+            gateway:
+              - 'gateway/**'
+            checkIns:
+              - 'checkIns/**'
+            common-lib:
+              - 'common-lib/**'
+            build-config:
+              - 'gradle/**'
+              - '*.gradle'
+              - 'gradle.properties'
+              - '.github/workflows/unified-cicd.yml'
 
       - name: Build matrix output
         id: set-matrix
@@ -53,11 +60,11 @@ jobs:
           if [[ "${{ steps.filter.outputs.users }}" == "true" ]]; then
             services+=("users")
           fi
-          if [[ "${{ steps.filter.outputs.orders }}" == "true" ]]; then
-            services+=("orders")
+          if [[ "${{ steps.filter.outputs.order }}" == "true" ]]; then
+            services+=("order")
           fi
-          if [[ "${{ steps.filter.outputs.payments }}" == "true" ]]; then
-            services+=("payments")
+          if [[ "${{ steps.filter.outputs.payment }}" == "true" ]]; then
+            services+=("payment")
           fi
           if [[ "${{ steps.filter.outputs.orderQuery }}" == "true" ]]; then
             services+=("orderQuery")
@@ -72,10 +79,8 @@ jobs:
             services+=("checkIns")
           fi
 
-          if [[ ${#services[@]} -eq 0 ]]; then
-            echo 'has_changes=false' >> "$GITHUB_OUTPUT"
-            echo 'services_json=[]' >> "$GITHUB_OUTPUT"
-            exit 0
+          if [[ ${#services[@]} -eq 0 ]] || [[ "${{ steps.filter.outputs.common-lib }}" == "true" ]] || [[ "${{ steps.filter.outputs.build-config }}" == "true" ]]; then
+            services=("users" "stores" "order" "orderQuery" "payment" "gateway" "checkIns")
           fi
 
           # JSON 배열 만들기
@@ -92,7 +97,7 @@ jobs:
   test:
     name: Test (matrix)
     needs: detect-changes
-    if: needs.detect-changes.outputs.has_changes == 'true'
+    if: always()
     runs-on: ubuntu-latest
 
     strategy:
@@ -106,13 +111,17 @@ jobs:
       - name: Run tests
         run: |
           echo "Testing service: ${{ matrix.service }}"
-          cd services/${{ matrix.service }}
-          echo "(put your test command here)"
+          if [ -d "${{ matrix.service }}" ]; then
+            cd "${{ matrix.service }}"
+            echo "(put your test command here)"
+          else
+            echo "Directory not found for service: ${{ matrix.service }} (skipping)"
+          fi
 
   # [2] 서비스 빌드
   build-service:
     needs: detect-changes
-    if: needs.detect-changes.outputs.has_changes == 'true'
+    if: always()
     runs-on: ubuntu-latest
     strategy:
       fail-fast: false
@@ -151,14 +160,13 @@ jobs:
   # [3] Docker 빌드 및 푸시
   docker-build-push-ecr:
     needs: [detect-changes, build-service] # ✅ detect-changes가 필요함
-    # develop 브랜치 푸시 시에만 작동
-    if: github.event_name == 'push' && github.ref == 'refs/heads/test-ci'
+    if: github.event_name == 'push'
     runs-on: ubuntu-latest
     strategy:
       fail-fast: false
       matrix:
         # ✅ 여기서도 matrix를 정의해야 ${{ matrix.service }}를 사용할 수 있습니다.
-        service: ${{ fromJson(needs.detect-changes.outputs.services) }}
+        service: ${{ fromJson(needs.detect-changes.outputs.services_json) }}
 
     name: Push ${{ matrix.service }} to ECR
 
