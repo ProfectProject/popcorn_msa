@@ -1,4 +1,4 @@
-package com.popcorn.order.service;
+package com.popcorn.order.service.core;
 
 import java.time.LocalDateTime;
 import java.util.List;
@@ -23,6 +23,7 @@ import com.popcorn.order.entity.OrderStatusHistory;
 import com.popcorn.order.repository.OrderRepository;
 import com.popcorn.order.repository.OrderStatusHistoryRepository;
 import com.popcorn.order.dto.store.PopupInfoResponse;
+import com.popcorn.order.service.lookup.OrderPopupLookupService;
 
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;

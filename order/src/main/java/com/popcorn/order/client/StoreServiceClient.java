@@ -17,6 +17,7 @@ import org.springframework.web.context.request.ServletRequestAttributes;
 import com.popcorn.order.client.dto.StoreApiResponse;
 import com.popcorn.order.client.dto.PriceResponse;
 import com.popcorn.order.client.dto.PriceResult;
+import com.popcorn.order.dto.store.PopupInfoResponse;
 
 /**
  * Store 서비스와의 동기 HTTP 통신 클라이언트
@@ -137,6 +138,60 @@ public class StoreServiceClient {
             }
         } catch (Exception e) {
             log.error("❌ [HTTP] 굿즈 가격 조회 예외 - goodsId: {}, error: {}", goodsId, e.getMessage(), e);
+            return null;
+        }
+    }
+
+    /**
+     * 팝업 정보 조회 (동기식)
+     * Store 서비스의 실제 API 호출
+     */
+    public PopupInfoResponse getPopupInfo(UUID popupId) {
+        try {
+            log.info("🏪 [HTTP] 팝업 정보 조회 요청 - popupId: {}", popupId);
+
+            // 현재 요청의 Authorization 헤더 가져오기
+            String currentAuthHeader = getCurrentAuthorizationHeader();
+
+            StoreApiResponse<PopupInfoResponse> response = defaultWebClient
+                    .get()
+                    .uri(storeServiceBaseUrl + "/api/stores/v1/popups/{popupId}", popupId)
+                    .headers(headers -> {
+                        if (currentAuthHeader != null) {
+                            headers.set("Authorization", currentAuthHeader);
+                        }
+                        headers.set("X-Internal-Service", "order-service");
+                        headers.set("X-Internal-Call", "true");
+                    })
+                    .retrieve()
+                    .onStatus(HttpStatus.NOT_FOUND::equals, clientResponse -> {
+                        log.warn("🏪 [HTTP] 팝업 정보 없음 - popupId: {}", popupId);
+                        return clientResponse.createException();
+                    })
+                    .bodyToMono(new org.springframework.core.ParameterizedTypeReference<StoreApiResponse<PopupInfoResponse>>() {})
+                    .timeout(Duration.ofMillis(timeoutMs))
+                    .block();
+
+            if (response != null && response.getData() != null) {
+                log.info("✅ [HTTP] 팝업 정보 조회 성공 - popupId: {}, title: {}",
+                        popupId, response.getData().getTitle());
+                return response.getData();
+            } else {
+                log.warn("⚠️ [HTTP] 팝업 정보 응답이 null - popupId: {}", popupId);
+                return null;
+            }
+
+        } catch (WebClientResponseException e) {
+            if (e.getStatusCode() == HttpStatus.NOT_FOUND) {
+                log.warn("🏪 [HTTP] 팝업 정보 없음 - popupId: {}", popupId);
+                return null;
+            } else {
+                log.error("❌ [HTTP] 팝업 정보 조회 실패 - popupId: {}, status: {}, error: {}",
+                        popupId, e.getStatusCode(), e.getMessage());
+                return null;
+            }
+        } catch (Exception e) {
+            log.error("❌ [HTTP] 팝업 정보 조회 예외 - popupId: {}, error: {}", popupId, e.getMessage(), e);
             return null;
         }
     }

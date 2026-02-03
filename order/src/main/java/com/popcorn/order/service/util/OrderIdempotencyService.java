@@ -1,4 +1,4 @@
-package com.popcorn.order.service;
+package com.popcorn.order.service.util;
 
 import com.popcorn.order.dto.idempotency.IdempotencyKeyResponse;
 import com.popcorn.order.dto.idempotency.IdempotencyKeyValidationResponse;

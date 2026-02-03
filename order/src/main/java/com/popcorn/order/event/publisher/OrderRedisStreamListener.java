@@ -3,18 +3,16 @@ package com.popcorn.order.event.publisher;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import com.popcorn.order.entity.OrderStatus;
 import com.popcorn.order.repository.OrderRepository;
-import com.popcorn.order.event.lookup.PopupInfoLookupResponseEvent;
 import com.popcorn.order.event.payment.PaymentCompletedEvent;
-import com.popcorn.order.event.schedule.ScheduleReservationSuccessEvent;
-import com.popcorn.order.event.schedule.ScheduleReservationFailedEvent;
-import com.popcorn.order.service.OrderCommandService;
-import com.popcorn.order.service.OrderInfoResponseService;
-import com.popcorn.order.service.PaymentCacheService;
-import com.popcorn.order.service.OrderCacheService;
-import com.popcorn.order.service.OrderPriceLookupService;
-import com.popcorn.order.service.OrderPopupLookupService;
-import com.popcorn.order.service.OrderReservationAwaiter;
-import com.popcorn.order.service.OrderIdempotencyService;
+import com.popcorn.order.event.schedule.ScheduleReservationResultEvent;
+import com.popcorn.order.service.core.OrderCommandService;
+import com.popcorn.order.service.util.OrderInfoResponseService;
+import com.popcorn.order.service.cache.PaymentCacheService;
+import com.popcorn.order.service.cache.OrderCacheService;
+import com.popcorn.order.service.lookup.OrderPriceLookupService;
+import com.popcorn.order.service.lookup.OrderPopupLookupService;
+import com.popcorn.order.service.util.OrderReservationAwaiter;
+import com.popcorn.order.service.util.OrderIdempotencyService;
 import com.popcorn.order.dto.payment.PaymentUrlResponse;
 import lombok.RequiredArgsConstructor;
 import org.slf4j.Logger;
@@ -199,10 +197,7 @@ public class OrderRedisStreamListener implements StreamListener<String, MapRecor
         try {
             switch (eventType) {
                 // 가격 조회, 사용자 주소 조회 응답 이벤트 처리 제거됨 (HTTP 동기 방식으로 변경)
-                case "popup-info-lookup-response":
-                    log.info("🏬 [ORDER] 팝업 정보 조회 응답 이벤트 수신");
-                    handlePopupInfoLookupResponse(values);
-                    break;
+                // 팝업 정보 조회 응답 처리 제거됨 (HTTP 동기 방식으로 변경)
                 case "payment-approved":
                     log.info("💳 [ORDER] 결제 승인 이벤트 수신");
                     handlePaymentApproved(values);
@@ -275,7 +270,7 @@ public class OrderRedisStreamListener implements StreamListener<String, MapRecor
                     reservedSessionsJson, new com.fasterxml.jackson.core.type.TypeReference<List<Map<String, Object>>>() {}
             );
 
-            List<ScheduleReservationSuccessEvent.ReservedSession> sessions = new ArrayList<>();
+            List<ScheduleReservationResultEvent.ReservedSession> sessions = new ArrayList<>();
             for (Map<String, Object> raw : reservedSessionsRaw) {
                 String sessionIdStr = String.valueOf(raw.get("sessionOptionId"));
                 String reservedQtyStr = String.valueOf(raw.get("reservedQuantity"));
@@ -284,7 +279,7 @@ public class OrderRedisStreamListener implements StreamListener<String, MapRecor
                 String remainingStr = raw.get("remainingSeats") != null ? String.valueOf(raw.get("remainingSeats")) : null;
                 String reservationCode = raw.get("reservationCode") != null ? String.valueOf(raw.get("reservationCode")) : null;
 
-                sessions.add(ScheduleReservationSuccessEvent.ReservedSession.create(
+                sessions.add(ScheduleReservationResultEvent.ReservedSession.create(
                         UUID.fromString(sessionIdStr),
                         parseInt(reservedQtyStr),
                         sessionName,
@@ -296,18 +291,14 @@ public class OrderRedisStreamListener implements StreamListener<String, MapRecor
                 ));
             }
 
-            ScheduleReservationSuccessEvent event = ScheduleReservationSuccessEvent.builder()
-                    .eventId(eventId)
-                    .orderId(UUID.fromString(orderIdStr))
-                    .orderNo(orderNo)
-                    .popupId(popupIdStr != null && !popupIdStr.isBlank() ? UUID.fromString(popupIdStr) : null)
-                    .reservedSessions(sessions)
-                    .reservationToken(reservationToken)
-                    .reservedAt(reservedAtStr != null && !reservedAtStr.isBlank()
-                            ? java.time.LocalDateTime.parse(reservedAtStr) : java.time.LocalDateTime.now())
-                    .expiresAt(expiresAtStr != null && !expiresAtStr.isBlank()
-                            ? java.time.LocalDateTime.parse(expiresAtStr) : java.time.LocalDateTime.now().plusMinutes(30))
-                    .build();
+            ScheduleReservationResultEvent event = ScheduleReservationResultEvent.success(
+                    UUID.fromString(orderIdStr),
+                    null, // customerId
+                    Optional.ofNullable(orderNo),
+                    popupIdStr != null && !popupIdStr.isBlank() ? UUID.fromString(popupIdStr) : null,
+                    reservationToken,
+                    sessions
+            );
 
             eventPublisher.publishEvent(event);
 
@@ -350,7 +341,7 @@ public class OrderRedisStreamListener implements StreamListener<String, MapRecor
                     failedSessionsJson, new com.fasterxml.jackson.core.type.TypeReference<List<Map<String, Object>>>() {}
             );
 
-            List<ScheduleReservationFailedEvent.FailedSession> sessions = new ArrayList<>();
+            List<ScheduleReservationResultEvent.FailedSession> sessions = new ArrayList<>();
             for (Map<String, Object> raw : failedSessionsRaw) {
                 String sessionIdStr = String.valueOf(raw.get("sessionOptionId"));
                 String requestedQtyStr = String.valueOf(raw.get("requestedQuantity"));
@@ -359,7 +350,7 @@ public class OrderRedisStreamListener implements StreamListener<String, MapRecor
                 String sessionTimeStr = raw.get("sessionTime") != null ? String.valueOf(raw.get("sessionTime")) : null;
                 String itemReason = raw.get("failureReason") != null ? String.valueOf(raw.get("failureReason")) : null;
 
-                sessions.add(ScheduleReservationFailedEvent.FailedSession.create(
+                sessions.add(ScheduleReservationResultEvent.FailedSession.create(
                         UUID.fromString(sessionIdStr),
                         parseInt(requestedQtyStr),
                         parseInt(availableQtyStr),
@@ -371,16 +362,14 @@ public class OrderRedisStreamListener implements StreamListener<String, MapRecor
                 ));
             }
 
-            ScheduleReservationFailedEvent event = ScheduleReservationFailedEvent.builder()
-                    .eventId(eventId)
-                    .orderId(UUID.fromString(orderIdStr))
-                    .orderNo(orderNo)
-                    .popupId(popupIdStr != null && !popupIdStr.isBlank() ? UUID.fromString(popupIdStr) : null)
-                    .failedSessions(sessions)
-                    .failureReason(failureReason)
-                    .failedAt(failedAtStr != null && !failedAtStr.isBlank()
-                            ? java.time.LocalDateTime.parse(failedAtStr) : java.time.LocalDateTime.now())
-                    .build();
+            ScheduleReservationResultEvent event = ScheduleReservationResultEvent.failure(
+                    UUID.fromString(orderIdStr),
+                    null, // customerId
+                    Optional.ofNullable(orderNo),
+                    popupIdStr != null && !popupIdStr.isBlank() ? UUID.fromString(popupIdStr) : null,
+                    failureReason,
+                    sessions
+            );
 
             eventPublisher.publishEvent(event);
 
@@ -452,46 +441,7 @@ public class OrderRedisStreamListener implements StreamListener<String, MapRecor
 
     // 사용자 주소 조회 응답 처리 메서드 제거됨 (HTTP 동기 방식으로 변경)
 
-    private void handlePopupInfoLookupResponse(Map<String, Object> values) {
-        try {
-            String correlationId = (String) values.get("correlationId");
-            String successStr = (String) values.get("success");
-            String popupIdStr = (String) values.get("popupId");
-
-            if (correlationId != null) {
-                correlationId = correlationId.trim().replaceAll("^\"|\"$", "");
-            }
-            if (successStr != null) {
-                successStr = successStr.trim().replaceAll("^\"|\"$", "");
-            }
-            if (popupIdStr != null) {
-                popupIdStr = popupIdStr.trim().replaceAll("^\"|\"$", "");
-            }
-
-            boolean success = Boolean.parseBoolean(successStr);
-
-            java.util.UUID popupId = null;
-            if (popupIdStr != null && !popupIdStr.isEmpty()) {
-                popupId = java.util.UUID.fromString(popupIdStr);
-            }
-
-            String storeName = (String) values.get("storeName");
-            PopupInfoLookupResponseEvent response;
-            if (success) {
-                response = PopupInfoLookupResponseEvent.success(popupId, correlationId,
-                    (String) values.get("title"), (String) values.get("storeId"));
-            } else {
-                response = PopupInfoLookupResponseEvent.failure(popupId, correlationId,
-                    (String) values.get("message"));
-            }
-
-            orderPopupLookupService.handlePopupInfoLookupResponse(response);
-
-        } catch (Exception e) {
-            log.error("🚨 [ORDER] 팝업 정보 조회 응답 처리 실패 - values: {}, error: {}",
-                    values, e.getMessage(), e);
-        }
-    }
+    // 팝업 정보 조회 응답 처리 메서드 제거됨 (HTTP 동기 방식으로 변경)
 
     private java.util.UUID parseUuidValue(Object value) {
         if (value == null) {

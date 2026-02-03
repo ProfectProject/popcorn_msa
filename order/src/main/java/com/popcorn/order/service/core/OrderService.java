@@ -1,4 +1,4 @@
-package com.popcorn.order.service;
+package com.popcorn.order.service.core;
 
 import java.time.LocalDateTime;
 import java.util.List;

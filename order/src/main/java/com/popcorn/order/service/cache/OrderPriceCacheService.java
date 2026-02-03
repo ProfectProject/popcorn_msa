@@ -1,9 +1,10 @@
-package com.popcorn.order.service;
+package com.popcorn.order.service.cache;
 
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.data.redis.core.RedisTemplate;
 import org.springframework.stereotype.Service;
+import com.popcorn.order.service.lookup.OrderPriceLookupService;
 
 import java.time.Duration;
 import java.util.UUID;

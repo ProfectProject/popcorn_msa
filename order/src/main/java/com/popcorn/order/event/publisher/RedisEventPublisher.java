@@ -86,7 +86,7 @@ public class RedisEventPublisher {
 
             Map<String, String> eventData = Map.of(
                 "eventType", "goods-reservation-requested",
-                "eventId", event.getEventId(),
+                "eventId", event.getEventId().toString(),
                 "orderId", event.getOrderId().toString(),
                 "orderNo", event.getOrderNo(),
                 "popupId", event.getPopupId() != null ? event.getPopupId().toString() : "",
@@ -118,7 +118,7 @@ public class RedisEventPublisher {
 
             Map<String, String> eventData = Map.of(
                 "eventType", "stock-deduction-requested",
-                "eventId", event.getEventId(),
+                "eventId", event.getEventId().toString(),
                 "orderId", event.getOrderId().toString(),
                 "orderNo", event.getOrderNo() != null ? event.getOrderNo() : "",
                 "items", objectMapper.writeValueAsString(event.getDeductionItems() != null ? event.getDeductionItems() : "[]"),
@@ -253,37 +253,7 @@ public class RedisEventPublisher {
         }
     }
 
-    /**
-     * 팝업 정보 조회 요청 이벤트 발행 (Store 서비스에서 수신)
-     */
-    public void publishPopupInfoLookupRequestedEvent(String eventId,
-                                                     String correlationId,
-                                                     java.util.UUID popupId) {
-        try {
-            log.info("팝업 정보 조회 요청 이벤트 Stream 발행 시작 - popupId: {}, correlationId: {}",
-                    popupId, correlationId);
-
-            Map<String, String> eventData = Map.of(
-                "eventType", "popup-info-lookup-requested",
-                "eventId", eventId,
-                "correlationId", correlationId,
-                "popupId", popupId.toString(),
-                "requestedAt", LocalDateTime.now().toString(),
-                "eventTime", LocalDateTime.now().toString()
-            );
-
-            StringRecord record = StreamRecords.string(eventData).withStreamKey(STORE_LOOKUP_STREAM);
-            redisTemplate.opsForStream().add(record);
-
-            log.info("팝업 정보 조회 요청 이벤트 Stream 발행 완료 - popupId: {}, correlationId: {}",
-                    popupId, correlationId);
-
-        } catch (Exception e) {
-            log.error("팝업 정보 조회 요청 이벤트 Stream 발행 실패 - popupId: {}, error: {}",
-                    popupId, e.getMessage(), e);
-            throw new RuntimeException("팝업 정보 조회 요청 이벤트 Stream 발행 실패", e);
-        }
-    }
+    // 팝업 정보 조회 요청 이벤트 발행 메서드 제거됨 (HTTP 동기 방식으로 변경)
 
     // 가격 조회 요청 이벤트 발행 메서드 제거됨 (HTTP 동기 방식으로 변경)
 
@@ -304,7 +274,7 @@ public class RedisEventPublisher {
 
             Map<String, String> eventData = Map.of(
                 "eventType", "schedule-reservation-requested",
-                "eventId", event.getEventId(),
+                "eventId", event.getEventId().toString(),
                 "orderId", event.getOrderId().toString(),
                 "orderNo", event.getOrderNo(),
                 "popupId", event.getPopupId().toString(),
@@ -339,7 +309,7 @@ public class RedisEventPublisher {
 
             Map<String, String> eventData = Map.of(
                 "eventType", "schedule-reservation-cancel-requested",
-                "eventId", event.getEventId(),
+                "eventId", event.getEventId().toString(),
                 "orderId", event.getOrderId().toString(),
                 "orderNo", event.getOrderNo(),
                 "popupId", event.getPopupId().toString(),
@@ -413,7 +383,7 @@ public class RedisEventPublisher {
             java.util.UUID orderId,
             String orderNo,
             java.util.UUID popupId,
-            java.util.List<com.popcorn.order.service.OrderCommandService.ScheduleConfirmationItem> confirmationItems) {
+            java.util.List<com.popcorn.order.service.core.OrderCommandService.ScheduleConfirmationItem> confirmationItems) {
 
         try {
             log.warn("🔥 [DEBUG] 스케줄 확정 요청 이벤트 Stream 발행 시작 - eventId: {}, orderId: {}",

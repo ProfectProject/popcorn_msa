@@ -1,4 +1,4 @@
-package com.popcorn.order.service;
+package com.popcorn.order.service.util;
 
 import com.popcorn.order.entity.Order;
 import com.popcorn.order.entity.OrderItem;

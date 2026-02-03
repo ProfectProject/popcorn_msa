@@ -1,14 +1,13 @@
 package com.popcorn.order.event.stock;
 
-import lombok.AllArgsConstructor;
-import lombok.Builder;
-import lombok.Getter;
-import lombok.NoArgsConstructor;
-import lombok.ToString;
-
 import java.time.LocalDateTime;
+import java.util.HashMap;
 import java.util.List;
+import java.util.Map;
 import java.util.UUID;
+
+import com.popcorn.order.event.order.BaseOrderEvent;
+import lombok.Getter;
 
 /**
  * 굿즈 재고 예약 요청 이벤트
@@ -21,56 +20,61 @@ import java.util.UUID;
  * - Store 모듈: 굿즈 재고 예약 및 예약 레코드 생성
  */
 @Getter
-@NoArgsConstructor
-@AllArgsConstructor
-@Builder
-@ToString
-public class GoodsReservationRequestedEvent {
-
-    /** 이벤트 ID (추적용) */
-    private String eventId;
-
-    /** 주문 ID */
-    private UUID orderId;
+public class GoodsReservationRequestedEvent extends BaseOrderEvent {
 
     /** 주문 번호 */
-    private String orderNo;
+    private final String orderNo;
 
     /** 팝업 ID */
-    private UUID popupId;
+    private final UUID popupId;
 
     /** 예약 요청 항목들 */
-    private List<ReservationItem> reservationItems;
+    private final List<ReservationItem> reservationItems;
 
     /** 요청 시간 */
-    private LocalDateTime requestedAt;
+    private final LocalDateTime requestedAt;
+
+    private GoodsReservationRequestedEvent(UUID orderId, String orderNo, UUID popupId, List<ReservationItem> reservationItems,
+                                         LocalDateTime requestedAt, Long userId) {
+        super(orderId, "goods-reservation-requested", userId);
+        this.orderNo = orderNo;
+        this.popupId = popupId;
+        this.reservationItems = reservationItems;
+        this.requestedAt = requestedAt;
+    }
 
     public static GoodsReservationRequestedEvent create(UUID orderId, String orderNo, UUID popupId,
                                                         List<ReservationItem> reservationItems) {
-        return GoodsReservationRequestedEvent.builder()
-                .eventId(UUID.randomUUID().toString())
-                .orderId(orderId)
-                .orderNo(orderNo)
-                .popupId(popupId)
-                .reservationItems(reservationItems)
-                .requestedAt(LocalDateTime.now())
-                .build();
+        return create(orderId, orderNo, popupId, reservationItems, null);
+    }
+
+    public static GoodsReservationRequestedEvent create(UUID orderId, String orderNo, UUID popupId,
+                                                        List<ReservationItem> reservationItems, Long userId) {
+        return new GoodsReservationRequestedEvent(orderId, orderNo, popupId, reservationItems, LocalDateTime.now(), userId);
+    }
+
+    @Override
+    public Map<String, Object> getEventPayload() {
+        Map<String, Object> payload = new HashMap<>();
+        payload.put("orderId", getOrderId().toString());
+        payload.put("popupId", popupId.toString());
+        payload.put("reservationItems", reservationItems);
+        payload.put("requestedAt", requestedAt.toString());
+        return payload;
     }
 
     @Getter
-    @NoArgsConstructor
-    @AllArgsConstructor
-    @Builder
-    @ToString
     public static class ReservationItem {
-        private UUID goodsId;
-        private Integer quantity;
+        private final UUID goodsId;
+        private final Integer quantity;
+
+        public ReservationItem(UUID goodsId, Integer quantity) {
+            this.goodsId = goodsId;
+            this.quantity = quantity;
+        }
 
         public static ReservationItem create(UUID goodsId, Integer quantity) {
-            return ReservationItem.builder()
-                    .goodsId(goodsId)
-                    .quantity(quantity)
-                    .build();
+            return new ReservationItem(goodsId, quantity);
         }
     }
 }

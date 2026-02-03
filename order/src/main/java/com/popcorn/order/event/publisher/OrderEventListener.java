@@ -23,13 +23,12 @@ import com.popcorn.order.event.order.OrderCancelledEvent;
 import com.popcorn.order.event.stock.StockDeductionFailedEvent;
 import com.popcorn.order.event.stock.StockDeductionRequestedEvent;
 import com.popcorn.order.event.stock.GoodsReservationRequestedEvent;
-import com.popcorn.order.event.schedule.ScheduleReservationSuccessEvent;
-import com.popcorn.order.event.schedule.ScheduleReservationFailedEvent;
+import com.popcorn.order.event.schedule.ScheduleReservationResultEvent;
 import com.popcorn.order.event.schedule.ScheduleReservationCancelRequestedEvent;
-import com.popcorn.order.service.OrderCommandService;
-import com.popcorn.order.service.OrderReservationAwaiter;
+import com.popcorn.order.event.stock.StockDeductionResultEvent;
+import com.popcorn.order.service.core.OrderCommandService;
+import com.popcorn.order.service.util.OrderReservationAwaiter;
 import com.popcorn.order.dto.payment.PaymentUrlResponse;
-import com.popcorn.order.service.OrderReservationAwaiter;
 
 import java.time.LocalDateTime;
 import java.util.ArrayList;
@@ -646,92 +645,7 @@ public class OrderEventListener {
 
     // ================ 📅 스케줄 예약 이벤트 리스너들 ================
 
-    /**
-     * 스케줄 예약 성공 이벤트 수신 → 다음 단계 처리
-     *
-     * @param event 스케줄 예약 성공 이벤트
-     */
-    @EventListener
-    @Transactional
-    public void handleScheduleReservationSuccess(ScheduleReservationSuccessEvent event) {
-        try {
-            log.info("📅 스케줄 예약 성공 이벤트 수신 - orderId: {}, 예약세션수: {}",
-                    event.getOrderId(), event.getReservedSessionCount());
 
-            // 주문 조회
-            Order order = orderRepository.findById(event.getOrderId())
-                    .orElseThrow(() -> new IllegalArgumentException("주문을 찾을 수 없습니다: " + event.getOrderId()));
-            // 주문 항목 로드 (혼합 주문에서 굿즈 여부 판단)
-            List<OrderItem> orderItems = orderItemRepository.findByOrderId(order.getId());
-            order.setOrderItems(orderItems);
-
-            // 주문 상태를 RESERVED로 변경
-            order.updateStatus(OrderStatus.RESERVED);
-            orderRepository.save(order);
-
-            // 상태 이력 저장
-            OrderStatusHistory statusHistory = OrderStatusHistory.builder()
-                    .orderId(order.getId())
-                    .fromStatus(OrderStatus.REQUESTED)
-                    .toStatus(OrderStatus.RESERVED)
-                    .reason("스케줄 예약 성공")
-                    .changedAt(LocalDateTime.now())
-                    .build();
-            orderStatusHistoryRepository.save(statusHistory);
-
-            // 굿즈가 있으면 굿즈 재고 예약 진행
-            boolean hasGoodsItems = order.getOrderItems().stream()
-                    .anyMatch(item -> ItemType.GOODS.equals(item.getOrderItemType()));
-
-            if (hasGoodsItems) {
-                log.info("📅→🛍️ 스케줄 예약 성공, 굿즈 재고 예약 진행 - orderId: {}", event.getOrderId());
-                requestGoodsReservationAfterSchedule(order);
-            } else {
-                // 굿즈가 없으면 바로 결제 대기 상태로 전환
-                log.info("📅→💳 스케줄만 예약 완료, 결제 대기로 전환 - orderId: {}", event.getOrderId());
-                PaymentUrlResponse paymentUrl = moveToPaymentPending(order, "스케줄 예약 완료");
-                orderReservationAwaiter.completeSuccess(order.getId(), paymentUrl);
-            }
-
-            log.info("📅✅ 스케줄 예약 성공 처리 완료 - orderId: {}", event.getOrderId());
-
-        } catch (Exception e) {
-            log.error("🚨 스케줄 예약 성공 이벤트 처리 중 오류 - orderId: {}, eventId: {}",
-                    event.getOrderId(), event.getEventId(), e);
-
-            // 🔥 이벤트 처리 실패 시 반드시 예외 throw + 보상 트랜잭션
-            handleEventProcessingFailure(event.getOrderId(), "스케줄 예약 성공 이벤트 처리", e);
-            throw new RuntimeException("스케줄 예약 성공 이벤트 처리 실패", e);
-        }
-    }
-
-    /**
-     * 스케줄 예약 실패 이벤트 수신 → 주문 취소 처리
-     *
-     * @param event 스케줄 예약 실패 이벤트
-     */
-    @EventListener
-    @Transactional
-    public void handleScheduleReservationFailed(ScheduleReservationFailedEvent event) {
-        try {
-            log.info("📅 스케줄 예약 실패 이벤트 수신 - orderId: {}, 사유: {}",
-                    event.getOrderId(), event.getFailureReason());
-
-            // 주문 취소 처리
-            handleOrderCancellationForScheduleFailure(event);
-            orderReservationAwaiter.completeFailure(event.getOrderId(), event.getFailureReason());
-
-            log.info("📅✅ 스케줄 예약 실패 처리 완료 - orderId: {}", event.getOrderId());
-
-        } catch (Exception e) {
-            log.error("🚨 스케줄 예약 실패 이벤트 처리 중 오류 - orderId: {}, eventId: {}",
-                    event.getOrderId(), event.getEventId(), e);
-
-            // 🔥 이벤트 처리 실패 시 반드시 예외 throw + 보상 트랜잭션
-            handleEventProcessingFailure(event.getOrderId(), "스케줄 예약 실패 이벤트 처리", e);
-            throw new RuntimeException("스케줄 예약 실패 이벤트 처리 실패", e);
-        }
-    }
 
     // ================ 📅 스케줄 예약 헬퍼 메소드들 ================
 
@@ -813,51 +727,6 @@ public class OrderEventListener {
         }
     }
 
-    /**
-     * 스케줄 예약 실패로 인한 주문 취소 처리
-     */
-    private void handleOrderCancellationForScheduleFailure(ScheduleReservationFailedEvent event) {
-        try {
-            UUID orderId = event.getOrderId();
-
-            Order order = orderRepository.findById(orderId)
-                    .orElseThrow(() -> new IllegalArgumentException("주문을 찾을 수 없습니다: " + orderId));
-
-            // 이미 취소된 경우 무시
-            if (order.getOrderStatus() == OrderStatus.CANCELLED) {
-                log.warn("📅 이미 취소된 주문입니다 - orderId: {}", orderId);
-                return;
-            }
-
-            // 주문 취소 처리
-            String cancellationReason = String.format("스케줄 예약 실패 - %s", event.getFailureReason());
-
-            order.updateStatus(OrderStatus.CANCELLED);
-            order.setCancellationReason(cancellationReason);
-            orderRepository.save(order);
-
-            // 상태 이력 저장
-            OrderStatusHistory statusHistory = OrderStatusHistory.builder()
-                    .orderId(order.getId())
-                    .fromStatus(OrderStatus.REQUESTED)
-                    .toStatus(OrderStatus.CANCELLED)
-                    .reason(cancellationReason)
-                    .changedAt(LocalDateTime.now())
-                    .build();
-            orderStatusHistoryRepository.save(statusHistory);
-
-            // 주문 취소 이벤트 발행
-            orderEventPublisher.publishOrderCancelledEvent(order, cancellationReason);
-
-            log.info("📅 스케줄 예약 실패로 인한 주문 취소 처리 완료 - orderId: {}, 사유: {}",
-                    orderId, cancellationReason);
-
-        } catch (Exception e) {
-            log.error("📅❌ 스케줄 예약 실패로 인한 주문 취소 처리 중 오류 - orderId: {}",
-                    event.getOrderId(), e);
-            throw new RuntimeException("주문 취소 처리 실패", e);
-        }
-    }
 
     /**
      * 굿즈 재고 예약 요청 실패 처리 (스케줄 예약 취소)
@@ -924,5 +793,292 @@ public class OrderEventListener {
     private String determinePaymentMethod(Order order) {
         // 🚀 Toss Payment로 고정 (카드, 계좌이체, 가상계좌, 휴대폰 결제 모두 지원)
         return "TOSS_PAYMENT";
+    }
+
+    // ================ 🚀 통합 이벤트 핸들러들 (새로운 통합 방식) ================
+
+    /**
+     * 재고 차감 결과 통합 이벤트 핸들러 (성공/실패 통합)
+     *
+     * 🎯 통합 이벤트의 장점:
+     * - 하나의 핸들러로 성공/실패 모두 처리
+     * - 코드 중복 제거 및 관리 단순화
+     * - status 필드로 분기 처리
+     *
+     * @param event 재고 차감 결과 이벤트
+     */
+    @EventListener
+    @Transactional
+    public void handleStockDeductionResult(StockDeductionResultEvent event) {
+        try {
+            log.info("🔄 [UNIFIED] 재고 차감 결과 이벤트 수신 - orderId: {}, status: {}",
+                    event.getOrderId(), event.getStatus());
+
+            if (event.isSuccess()) {
+                handleStockDeductionSuccess(event);
+            } else {
+                handleStockDeductionFailure(event);
+            }
+
+            log.info("✅ [UNIFIED] 재고 차감 결과 처리 완료 - orderId: {}, status: {}",
+                    event.getOrderId(), event.getStatus());
+
+        } catch (Exception e) {
+            log.error("🚨 [UNIFIED] 재고 차감 결과 이벤트 처리 중 오류 - orderId: {}, status: {}",
+                    event.getOrderId(), event.getStatus(), e);
+
+            // 🔥 이벤트 처리 실패 시 반드시 예외 throw + 보상 트랜잭션
+            handleEventProcessingFailure(event.getOrderId(),
+                "통합 재고 차감 결과 이벤트 처리", e);
+            throw new RuntimeException("통합 재고 차감 결과 이벤트 처리 실패", e);
+        }
+    }
+
+    /**
+     * 재고 차감 성공 처리 (통합 이벤트)
+     */
+    private void handleStockDeductionSuccess(StockDeductionResultEvent event) {
+        log.info("✅ [UNIFIED] 재고 차감 성공 처리 - orderId: {}, 차감 항목: {}개",
+                event.getOrderId(), event.getDeductedItems().size());
+
+        // 기존 재고 차감 성공 로직과 동일
+        handleOrderConfirmation(event.getOrderId());
+
+        // 차감 결과 로그 출력
+        event.getDeductedItems().forEach(item ->
+            log.info("✅ 차감 완료 - {} ID: {}, 차감 수량: {}, 잔여 재고: {}",
+                item.getItemType(), item.getItemId(), item.getDeductedQuantity(), item.getRemainingStock()));
+    }
+
+    /**
+     * 재고 차감 실패 처리 (통합 이벤트)
+     */
+    private void handleStockDeductionFailure(StockDeductionResultEvent event) {
+        log.info("❌ [UNIFIED] 재고 차감 실패 처리 - orderId: {}, 사유: {}",
+                event.getOrderId(), event.getFailureReason());
+
+        // 실패 항목 상세 로그
+        if (event.getFailedItems() != null) {
+            event.getFailedItems().forEach(item ->
+                log.warn("❌ 차감 실패 - {} ID: {}, 요청: {}, 가용: {}, 사유: {}",
+                    item.getItemType(), item.getItemId(), item.getRequestedQuantity(),
+                    item.getAvailableStock(), item.getFailureReason()));
+        }
+
+        // 통합 이벤트로 직접 주문 취소 처리 실행
+        executeOrderCancellationForStockFailure(event);
+    }
+
+    /**
+     * 스케줄 예약 결과 통합 이벤트 핸들러 (성공/실패 통합)
+     *
+     * @param event 스케줄 예약 결과 이벤트
+     */
+    @EventListener
+    @Transactional
+    public void handleScheduleReservationResult(ScheduleReservationResultEvent event) {
+        try {
+            log.info("📅 [UNIFIED] 스케줄 예약 결과 이벤트 수신 - orderId: {}, status: {}",
+                    event.getOrderId(), event.getStatus());
+
+            if (event.isSuccess()) {
+                handleScheduleReservationSuccess(event);
+            } else {
+                handleScheduleReservationFailure(event);
+            }
+
+            log.info("✅ [UNIFIED] 스케줄 예약 결과 처리 완료 - orderId: {}, status: {}",
+                    event.getOrderId(), event.getStatus());
+
+        } catch (Exception e) {
+            log.error("🚨 [UNIFIED] 스케줄 예약 결과 이벤트 처리 중 오류 - orderId: {}, status: {}",
+                    event.getOrderId(), event.getStatus(), e);
+
+            // 🔥 이벤트 처리 실패 시 반드시 예외 throw + 보상 트랜잭션
+            handleEventProcessingFailure(event.getOrderId(),
+                "통합 스케줄 예약 결과 이벤트 처리", e);
+            throw new RuntimeException("통합 스케줄 예약 결과 이벤트 처리 실패", e);
+        }
+    }
+
+    /**
+     * 스케줄 예약 성공 처리 (통합 이벤트)
+     */
+    private void handleScheduleReservationSuccess(ScheduleReservationResultEvent event) {
+        log.info("📅 [UNIFIED] 스케줄 예약 성공 처리 - orderId: {}, 예약 세션: {}개, 토큰: {}",
+                event.getOrderId(),
+                event.getReservedSessions() != null ? event.getReservedSessions().size() : 0,
+                event.getReservationToken());
+
+        // 예약 세션 상세 로그
+        if (event.getReservedSessions() != null) {
+            event.getReservedSessions().forEach(session ->
+                log.info("✅ 예약 완료 - 세션: {}, 시간: {}, 예약 수량: {}, 잔여 좌석: {}",
+                    session.getSessionName(), session.getSessionTime(),
+                    session.getReservedQuantity(), session.getRemainingSeats()));
+        }
+
+        // 직접 비즈니스 로직 실행 (Legacy 이벤트 제거)
+        executeScheduleReservationSuccessLogic(event);
+    }
+
+    /**
+     * 스케줄 예약 실패 처리 (통합 이벤트)
+     */
+    private void handleScheduleReservationFailure(ScheduleReservationResultEvent event) {
+        log.info("📅 [UNIFIED] 스케줄 예약 실패 처리 - orderId: {}, 사유: {}",
+                event.getOrderId(), event.getFailureReason());
+
+        // 실패 세션 상세 로그
+        if (event.getFailedSessions() != null) {
+            event.getFailedSessions().forEach(session ->
+                log.warn("❌ 예약 실패 - 세션: {}, 시간: {}, 요청: {}, 가용: {}, 사유: {}",
+                    session.getSessionName(), session.getSessionTime(),
+                    session.getRequestedQuantity(), session.getAvailableQuantity(),
+                    session.getFailureReason()));
+        }
+
+        // 직접 비즈니스 로직 실행 (Legacy 이벤트 제거)
+        executeScheduleReservationFailureLogic(event);
+    }
+
+    // ================ 🔄 통합 이벤트 직접 처리 메서드들 ================
+
+    /**
+     * 재고 차감 실패로 인한 주문 취소 처리 (통합 이벤트 버전)
+     */
+    private void executeOrderCancellationForStockFailure(StockDeductionResultEvent event) {
+        try {
+            UUID orderId = event.getOrderId();
+
+            Order order = orderRepository.findById(orderId)
+                    .orElseThrow(() -> new IllegalArgumentException("주문을 찾을 수 없습니다: " + orderId));
+
+            // 주문이 이미 취소된 경우 무시
+            if (order.getOrderStatus() == OrderStatus.CANCELLED) {
+                log.warn("이미 취소된 주문입니다 - orderId: {}", orderId);
+                return;
+            }
+
+            // 주문 취소 처리
+            String cancellationReason = String.format("재고 차감 실패 - %s", event.getFailureReason());
+
+            order.updateStatus(OrderStatus.CANCELLED);
+            order.setCancellationReason(cancellationReason);
+            orderRepository.save(order);
+
+            // 주문 취소 이벤트 발행
+            orderEventPublisher.publishOrderCancelledEvent(order, cancellationReason);
+
+            log.info("재고 차감 실패로 인한 주문 취소 처리 완료 - orderId: {}, reason: {}",
+                    orderId, cancellationReason);
+
+        } catch (Exception e) {
+            log.error("재고 차감 실패로 인한 주문 취소 처리 중 오류 - orderId: {}",
+                    event.getOrderId(), e);
+            throw new RuntimeException("주문 취소 처리 실패", e);
+        }
+    }
+
+    // ================ 📋 통합 이벤트 비즈니스 로직 메서드들 ================
+
+    /**
+     * 스케줄 예약 성공 비즈니스 로직 실행 (통합 이벤트용)
+     */
+    private void executeScheduleReservationSuccessLogic(ScheduleReservationResultEvent event) {
+        // 주문 조회
+        Order order = orderRepository.findById(event.getOrderId())
+                .orElseThrow(() -> new IllegalArgumentException("주문을 찾을 수 없습니다: " + event.getOrderId()));
+
+        // 주문 항목 로드 (혼합 주문에서 굿즈 여부 판단)
+        List<OrderItem> orderItems = orderItemRepository.findByOrderId(order.getId());
+        order.setOrderItems(orderItems);
+
+        // 주문 상태를 RESERVED로 변경
+        order.updateStatus(OrderStatus.RESERVED);
+        orderRepository.save(order);
+
+        // 상태 이력 저장
+        OrderStatusHistory statusHistory = OrderStatusHistory.builder()
+                .orderId(order.getId())
+                .fromStatus(OrderStatus.REQUESTED)
+                .toStatus(OrderStatus.RESERVED)
+                .reason("스케줄 예약 성공")
+                .changedAt(LocalDateTime.now())
+                .build();
+        orderStatusHistoryRepository.save(statusHistory);
+
+        // 굿즈가 있으면 굿즈 재고 예약 진행
+        boolean hasGoodsItems = order.getOrderItems().stream()
+                .anyMatch(item -> ItemType.GOODS.equals(item.getOrderItemType()));
+
+        if (hasGoodsItems) {
+            log.info("📅→🛍️ [UNIFIED] 스케줄 예약 성공, 굿즈 재고 예약 진행 - orderId: {}", event.getOrderId());
+            requestGoodsReservationAfterSchedule(order);
+        } else {
+            // 굿즈가 없으면 바로 결제 대기 상태로 전환
+            log.info("📅→💳 [UNIFIED] 스케줄만 예약 완료, 결제 대기로 전환 - orderId: {}", event.getOrderId());
+            PaymentUrlResponse paymentUrl = moveToPaymentPending(order, "스케줄 예약 완료");
+            orderReservationAwaiter.completeSuccess(order.getId(), paymentUrl);
+        }
+
+        log.info("📅✅ [UNIFIED] 스케줄 예약 성공 처리 완료 - orderId: {}", event.getOrderId());
+    }
+
+    /**
+     * 스케줄 예약 실패 비즈니스 로직 실행 (통합 이벤트용)
+     */
+    private void executeScheduleReservationFailureLogic(ScheduleReservationResultEvent event) {
+        // 직접 주문 취소 처리 (Legacy 이벤트 없이)
+        executeOrderCancellationForScheduleFailure(event);
+        orderReservationAwaiter.completeFailure(event.getOrderId(), event.getFailureReason());
+
+        log.info("📅✅ [UNIFIED] 스케줄 예약 실패 처리 완료 - orderId: {}", event.getOrderId());
+    }
+
+    /**
+     * 스케줄 예약 실패로 인한 주문 취소 처리 (통합 이벤트 버전)
+     */
+    private void executeOrderCancellationForScheduleFailure(ScheduleReservationResultEvent event) {
+        try {
+            UUID orderId = event.getOrderId();
+
+            Order order = orderRepository.findById(orderId)
+                    .orElseThrow(() -> new IllegalArgumentException("주문을 찾을 수 없습니다: " + orderId));
+
+            // 이미 취소된 경우 무시
+            if (order.getOrderStatus() == OrderStatus.CANCELLED) {
+                log.warn("📅 [UNIFIED] 이미 취소된 주문입니다 - orderId: {}", orderId);
+                return;
+            }
+
+            // 주문 취소 처리
+            String cancellationReason = String.format("스케줄 예약 실패 - %s", event.getFailureReason());
+
+            order.updateStatus(OrderStatus.CANCELLED);
+            order.setCancellationReason(cancellationReason);
+            orderRepository.save(order);
+
+            // 상태 이력 저장
+            OrderStatusHistory statusHistory = OrderStatusHistory.builder()
+                    .orderId(order.getId())
+                    .fromStatus(OrderStatus.REQUESTED)
+                    .toStatus(OrderStatus.CANCELLED)
+                    .reason(cancellationReason)
+                    .changedAt(LocalDateTime.now())
+                    .build();
+            orderStatusHistoryRepository.save(statusHistory);
+
+            // 주문 취소 이벤트 발행
+            orderEventPublisher.publishOrderCancelledEvent(order, cancellationReason);
+
+            log.info("📅✅ [UNIFIED] 스케줄 예약 실패로 인한 주문 취소 처리 완료 - orderId: {}, 사유: {}",
+                    orderId, cancellationReason);
+
+        } catch (Exception e) {
+            log.error("📅❌ [UNIFIED] 스케줄 예약 실패로 인한 주문 취소 처리 중 오류 - orderId: {}",
+                    event.getOrderId(), e);
+            throw new RuntimeException("주문 취소 처리 실패", e);
+        }
     }
 }

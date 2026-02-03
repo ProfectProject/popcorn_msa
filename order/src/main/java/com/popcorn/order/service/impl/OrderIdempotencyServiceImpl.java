@@ -3,7 +3,7 @@ package com.popcorn.order.service.impl;
 import com.popcorn.order.dto.idempotency.IdempotencyKeyResponse;
 import com.popcorn.order.dto.idempotency.IdempotencyKeyValidationResponse;
 import com.popcorn.order.dto.idempotency.IdempotencyStatisticsResponse;
-import com.popcorn.order.service.OrderIdempotencyService;
+import com.popcorn.order.service.util.OrderIdempotencyService;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.data.redis.core.RedisTemplate;

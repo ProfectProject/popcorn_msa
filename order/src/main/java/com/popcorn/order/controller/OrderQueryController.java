@@ -24,8 +24,8 @@ import com.popcorn.order.dto.response.OrderListResponse;
 import com.popcorn.order.dto.response.OrderResponseCode;
 import com.popcorn.order.dto.response.OrderSummaryResponse;
 import com.popcorn.order.dto.payment.PaymentUrlResponse;
-import com.popcorn.order.service.OrderCacheService;
-import com.popcorn.order.service.OrderQueryService;
+import com.popcorn.order.service.cache.OrderCacheService;
+import com.popcorn.order.service.core.OrderQueryService;
 
 import io.swagger.v3.oas.annotations.Operation;
 import io.swagger.v3.oas.annotations.Parameter;

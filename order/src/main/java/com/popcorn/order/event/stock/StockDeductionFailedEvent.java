@@ -1,13 +1,13 @@
 package com.popcorn.order.event.stock;
 
-import lombok.AllArgsConstructor;
+import java.time.LocalDateTime;
+import java.util.HashMap;
+import java.util.Map;
+import java.util.UUID;
+
+import com.popcorn.order.event.order.BaseOrderEvent;
 import lombok.Builder;
 import lombok.Getter;
-import lombok.NoArgsConstructor;
-import lombok.ToString;
-
-import java.time.LocalDateTime;
-import java.util.UUID;
 
 /**
  * 재고 차감 실패 이벤트
@@ -26,78 +26,78 @@ import java.util.UUID;
  * 이미 완료된 작업들을 롤백합니다.
  */
 @Getter
-@NoArgsConstructor
-@AllArgsConstructor
-@Builder(toBuilder = true)
-@ToString
-public class StockDeductionFailedEvent {
-
-    /** 이벤트 ID (추적용) */
-    private String eventId;
-
-    /** 주문 ID */
-    private UUID orderId;
-
-    /** 주문 번호 */
-    private String orderNo;
+public class StockDeductionFailedEvent extends BaseOrderEvent {
 
     /** 실패 사유 */
-    private String reason;
+    private final String reason;
 
     /** 실패 상세 정보 */
-    private String details;
+    private final String details;
 
     /** 실패 코드 */
-    private String failureCode;
+    private final String failureCode;
 
     /** 재고 차감 실패 시간 */
-    private LocalDateTime failedAt;
+    private final LocalDateTime failedAt;
 
     /** 이벤트 발생 시간 */
-    private LocalDateTime eventTime;
+    private final LocalDateTime eventTime;
+
+    private StockDeductionFailedEvent(UUID orderId, String reason, String details, String failureCode,
+                                    LocalDateTime failedAt, LocalDateTime eventTime, Long userId) {
+        super(orderId, "stock-deduction-failed", userId);
+        this.reason = reason;
+        this.details = details;
+        this.failureCode = failureCode;
+        this.failedAt = failedAt;
+        this.eventTime = eventTime;
+    }
 
     /**
      * Store 모듈에서 발행할 이벤트 생성 팩토리 메서드
      *
      * @param orderId 주문 ID
-     * @param orderNo 주문 번호
      * @param reason 실패 사유
      * @param failureCode 실패 코드
      * @return StockDeductionFailedEvent
      */
-    public static StockDeductionFailedEvent create(UUID orderId, String orderNo,
-                                                  String reason, String failureCode) {
-        return StockDeductionFailedEvent.builder()
-                .eventId(UUID.randomUUID().toString())
-                .orderId(orderId)
-                .orderNo(orderNo)
-                .reason(reason)
-                .failureCode(failureCode)
-                .failedAt(LocalDateTime.now())
-                .eventTime(LocalDateTime.now())
-                .build();
+    public static StockDeductionFailedEvent create(UUID orderId, String reason, String failureCode) {
+        return create(orderId, reason, failureCode, null, null);
+    }
+
+    public static StockDeductionFailedEvent create(UUID orderId, String reason, String failureCode,
+                                                  String details, Long userId) {
+        LocalDateTime now = LocalDateTime.now();
+        return new StockDeductionFailedEvent(orderId, reason, details, failureCode, now, now, userId);
     }
 
     /**
      * 재고 부족으로 인한 실패 이벤트 생성
      */
-    public static StockDeductionFailedEvent forInsufficientStock(UUID orderId, String orderNo,
-                                                                String details) {
-        return create(orderId, orderNo, "재고 부족", "INSUFFICIENT_STOCK")
-                .toBuilder()
-                .details(details)
-                .build();
+    public static StockDeductionFailedEvent forInsufficientStock(UUID orderId, String details) {
+        return create(orderId, "재고 부족", "INSUFFICIENT_STOCK", details, null);
     }
 
     /**
      * 시스템 오류로 인한 실패 이벤트 생성
      */
-    public static StockDeductionFailedEvent forSystemError(UUID orderId, String orderNo,
-                                                          String details) {
-        return create(orderId, orderNo, "시스템 오류", "SYSTEM_ERROR")
-                .toBuilder()
-                .details(details)
-                .build();
+    public static StockDeductionFailedEvent forSystemError(UUID orderId, String details) {
+        return create(orderId, "시스템 오류", "SYSTEM_ERROR", details, null);
+    }
+
+    @Override
+    public Map<String, Object> getEventPayload() {
+        Map<String, Object> payload = new HashMap<>();
+        payload.put("orderId", getOrderId().toString());
+        payload.put("reason", reason);
+        payload.put("details", details);
+        payload.put("failureCode", failureCode);
+        payload.put("failedAt", failedAt.toString());
+        payload.put("eventTime", eventTime.toString());
+        payload.put("isInsufficientStock", isInsufficientStock());
+        payload.put("isSystemError", isSystemError());
+        payload.put("isRetryable", isRetryable());
+        return payload;
     }
 
     /**

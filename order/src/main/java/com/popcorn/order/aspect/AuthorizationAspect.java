@@ -1,7 +1,7 @@
 package com.popcorn.order.aspect;
 
 import com.popcorn.order.annotation.CheckAuth;
-import com.popcorn.order.service.AuthorizationService;
+import com.popcorn.order.service.auth.AuthorizationService;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.aspectj.lang.JoinPoint;

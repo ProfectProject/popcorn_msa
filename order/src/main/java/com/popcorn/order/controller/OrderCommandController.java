@@ -18,7 +18,7 @@ import com.popcorn.order.dto.command.CreateOrderCommand;
 import com.popcorn.order.dto.request.OrderCreateRequest;
 import com.popcorn.order.dto.response.OrderCreateResponse;
 import com.popcorn.order.dto.response.OrderResponseCode;
-import com.popcorn.order.service.OrderCommandService;
+import com.popcorn.order.service.core.OrderCommandService;
 
 import io.swagger.v3.oas.annotations.Operation;
 import io.swagger.v3.oas.annotations.Parameter;

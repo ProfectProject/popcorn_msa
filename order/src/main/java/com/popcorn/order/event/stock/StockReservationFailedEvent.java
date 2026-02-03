@@ -1,14 +1,17 @@
 package com.popcorn.order.event.stock;
 
+import java.time.LocalDateTime;
+import java.util.HashMap;
+import java.util.List;
+import java.util.Map;
+import java.util.UUID;
+
+import com.popcorn.order.event.order.BaseOrderEvent;
 import lombok.AllArgsConstructor;
 import lombok.Builder;
 import lombok.Getter;
 import lombok.NoArgsConstructor;
 import lombok.ToString;
-
-import java.time.LocalDateTime;
-import java.util.List;
-import java.util.UUID;
 
 /**
  * 재고 예약 실패 이벤트
@@ -21,35 +24,28 @@ import java.util.UUID;
  * - Analytics 모듈: 재고 부족 통계
  */
 @Getter
-@NoArgsConstructor
-@AllArgsConstructor
-@Builder(toBuilder = true)
-@ToString
-public class StockReservationFailedEvent {
-
-    /** 이벤트 ID (추적용) */
-    private String eventId;
-
-    /** 주문 ID */
-    private UUID orderId;
-
-    /** 주문 번호 */
-    private String orderNo;
+public class StockReservationFailedEvent extends BaseOrderEvent {
 
     /** 팝업 ID */
-    private UUID popupId;
-
-    /** 고객 ID */
-    private Long customerId;
+    private final UUID popupId;
 
     /** 실패한 재고 항목들 */
-    private List<FailedStockItem> failedItems;
+    private final List<FailedStockItem> failedItems;
 
     /** 실패 이유 */
-    private String failureReason;
+    private final String failureReason;
 
     /** 이벤트 발생 시간 */
-    private LocalDateTime eventTime;
+    private final LocalDateTime eventTime;
+
+    private StockReservationFailedEvent(UUID orderId, UUID popupId, List<FailedStockItem> failedItems,
+                                      String failureReason, LocalDateTime eventTime, Long userId) {
+        super(orderId, "stock-reservation-failed", userId);
+        this.popupId = popupId;
+        this.failedItems = failedItems;
+        this.failureReason = failureReason;
+        this.eventTime = eventTime;
+    }
 
     /**
      * 재고 예약 실패 이벤트 생성 팩토리 메서드
@@ -57,16 +53,8 @@ public class StockReservationFailedEvent {
     public static StockReservationFailedEvent create(UUID orderId, String orderNo, UUID popupId,
                                                    Long customerId, List<FailedStockItem> failedItems,
                                                    String failureReason) {
-        return StockReservationFailedEvent.builder()
-                .eventId(UUID.randomUUID().toString())
-                .orderId(orderId)
-                .orderNo(orderNo)
-                .popupId(popupId)
-                .customerId(customerId)
-                .failedItems(failedItems)
-                .failureReason(failureReason)
-                .eventTime(LocalDateTime.now())
-                .build();
+        return new StockReservationFailedEvent(orderId, popupId, failedItems, failureReason,
+                                             LocalDateTime.now(), customerId);
     }
 
     /**
@@ -104,5 +92,34 @@ public class StockReservationFailedEvent {
                     .failureReason(failureReason)
                     .build();
         }
+    }
+
+    @Override
+    public Map<String, Object> getEventPayload() {
+        Map<String, Object> payload = new HashMap<>();
+        payload.put("orderId", getOrderId().toString());
+        payload.put("popupId", popupId.toString());
+        payload.put("failureReason", failureReason);
+        payload.put("eventTime", eventTime.toString());
+        payload.put("failedItemCount", failedItems != null ? failedItems.size() : 0);
+        payload.put("totalRequestedQuantity", getTotalRequestedQuantity());
+        payload.put("totalAvailableQuantity", getTotalAvailableQuantity());
+        return payload;
+    }
+
+    /**
+     * 총 요청 수량 계산
+     */
+    public int getTotalRequestedQuantity() {
+        return failedItems != null ?
+            failedItems.stream().mapToInt(FailedStockItem::getRequestedQuantity).sum() : 0;
+    }
+
+    /**
+     * 총 가용 수량 계산
+     */
+    public int getTotalAvailableQuantity() {
+        return failedItems != null ?
+            failedItems.stream().mapToInt(FailedStockItem::getAvailableQuantity).sum() : 0;
     }
 }

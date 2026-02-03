@@ -1,10 +1,12 @@
 package com.popcorn.order.event.schedule;
 
 import java.time.LocalDateTime;
+import java.util.HashMap;
 import java.util.List;
+import java.util.Map;
 import java.util.UUID;
 
-import lombok.Builder;
+import com.popcorn.order.event.order.BaseOrderEvent;
 import lombok.Getter;
 
 /**
@@ -21,11 +23,8 @@ import lombok.Getter;
  * - 취소 완료 응답 이벤트 발행
  */
 @Getter
-@Builder
-public class ScheduleReservationCancelRequestedEvent {
+public class ScheduleReservationCancelRequestedEvent extends BaseOrderEvent {
 
-    private final String eventId;
-    private final UUID orderId;
     private final String orderNo;
     private final UUID popupId;
     private final String reservationToken;      // 예약 시 발급된 토큰
@@ -33,8 +32,19 @@ public class ScheduleReservationCancelRequestedEvent {
     private final String cancelReason;
     private final LocalDateTime cancelRequestedAt;
 
+    private ScheduleReservationCancelRequestedEvent(UUID orderId, String orderNo, UUID popupId, String reservationToken,
+                                                    List<CancelItem> cancelItems, String cancelReason,
+                                                    LocalDateTime cancelRequestedAt, Long userId) {
+        super(orderId, "schedule-reservation-cancel-requested", userId);
+        this.orderNo = orderNo;
+        this.popupId = popupId;
+        this.reservationToken = reservationToken;
+        this.cancelItems = cancelItems;
+        this.cancelReason = cancelReason;
+        this.cancelRequestedAt = cancelRequestedAt;
+    }
+
     @Getter
-    @Builder
     public static class CancelItem {
         private final UUID sessionOptionId;    // 취소할 세션 ID
         private final Integer quantity;        // 취소할 좌석 수
@@ -42,33 +52,53 @@ public class ScheduleReservationCancelRequestedEvent {
         private final LocalDateTime sessionTime; // 세션 시간 (로그용)
         private final String reservationCode; // 예약 코드
 
+        public CancelItem(UUID sessionOptionId, Integer quantity, String sessionName,
+                         LocalDateTime sessionTime, String reservationCode) {
+            this.sessionOptionId = sessionOptionId;
+            this.quantity = quantity;
+            this.sessionName = sessionName;
+            this.sessionTime = sessionTime;
+            this.reservationCode = reservationCode;
+        }
+
         public static CancelItem create(UUID sessionOptionId, Integer quantity,
                                       String sessionName, LocalDateTime sessionTime,
                                       String reservationCode) {
-            return CancelItem.builder()
-                    .sessionOptionId(sessionOptionId)
-                    .quantity(quantity)
-                    .sessionName(sessionName != null ? sessionName : "알 수 없는 세션")
-                    .sessionTime(sessionTime)
-                    .reservationCode(reservationCode)
-                    .build();
+            return new CancelItem(sessionOptionId, quantity,
+                    sessionName != null ? sessionName : "알 수 없는 세션",
+                    sessionTime, reservationCode);
         }
     }
 
-    public static ScheduleReservationCancelRequestedEvent create(UUID orderId, String orderNo,
-                                                               UUID popupId, String reservationToken,
+    public static ScheduleReservationCancelRequestedEvent create(UUID orderId, String orderNo, UUID popupId,
+                                                               String reservationToken,
                                                                List<CancelItem> cancelItems,
                                                                String cancelReason) {
-        return ScheduleReservationCancelRequestedEvent.builder()
-                .eventId(UUID.randomUUID().toString())
-                .orderId(orderId)
-                .orderNo(orderNo)
-                .popupId(popupId)
-                .reservationToken(reservationToken)
-                .cancelItems(cancelItems)
-                .cancelReason(cancelReason != null ? cancelReason : "주문 취소")
-                .cancelRequestedAt(LocalDateTime.now())
-                .build();
+        return create(orderId, orderNo, popupId, reservationToken, cancelItems, cancelReason, null);
+    }
+
+    public static ScheduleReservationCancelRequestedEvent create(UUID orderId, String orderNo, UUID popupId,
+                                                               String reservationToken,
+                                                               List<CancelItem> cancelItems,
+                                                               String cancelReason, Long userId) {
+        return new ScheduleReservationCancelRequestedEvent(
+                orderId, orderNo, popupId, reservationToken, cancelItems,
+                cancelReason != null ? cancelReason : "주문 취소",
+                LocalDateTime.now(), userId);
+    }
+
+    @Override
+    public Map<String, Object> getEventPayload() {
+        Map<String, Object> payload = new HashMap<>();
+        payload.put("orderId", getOrderId().toString());
+        payload.put("popupId", popupId.toString());
+        payload.put("reservationToken", reservationToken);
+        payload.put("cancelItems", cancelItems);
+        payload.put("cancelReason", cancelReason);
+        payload.put("cancelRequestedAt", cancelRequestedAt.toString());
+        payload.put("cancelItemCount", getCancelItemCount());
+        payload.put("totalCancelQuantity", getTotalCancelQuantity());
+        return payload;
     }
 
     /**

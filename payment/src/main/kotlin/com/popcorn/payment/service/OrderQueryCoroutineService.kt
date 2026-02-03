@@ -40,6 +40,7 @@ class OrderQueryCoroutineService(
         private const val QUERY_TIMEOUT_MS = 5000L
     }
 
+
     /**
      * 주문 ID로 주문 정보 조회 (이벤트 기반)
      *

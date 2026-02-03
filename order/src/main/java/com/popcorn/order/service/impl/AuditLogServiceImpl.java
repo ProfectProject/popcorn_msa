@@ -13,7 +13,7 @@ import org.springframework.stereotype.Service;
 import com.popcorn.order.annotation.PerformanceMonitoring;
 import com.popcorn.order.dto.audit.ApiLogEntry;
 import com.popcorn.order.dto.audit.BusinessEventLog;
-import com.popcorn.order.service.AuditLogService;
+import com.popcorn.order.service.monitor.AuditLogService;
 
 import lombok.extern.slf4j.Slf4j;
 

@@ -1,10 +1,12 @@
 package com.popcorn.order.event.schedule;
 
 import java.time.LocalDateTime;
+import java.util.HashMap;
 import java.util.List;
+import java.util.Map;
 import java.util.UUID;
 
-import lombok.Builder;
+import com.popcorn.order.event.order.BaseOrderEvent;
 import lombok.Getter;
 
 /**
@@ -20,43 +22,60 @@ import lombok.Getter;
  * - 성공/실패 응답 이벤트 발행
  */
 @Getter
-@Builder
-public class ScheduleReservationRequestedEvent {
+public class ScheduleReservationRequestedEvent extends BaseOrderEvent {
 
-    private final String eventId;
-    private final UUID orderId;
     private final String orderNo;
     private final UUID popupId;
     private final List<ReservationItem> reservationItems;
     private final LocalDateTime requestedAt;
 
+    private ScheduleReservationRequestedEvent(UUID orderId, String orderNo, UUID popupId, List<ReservationItem> reservationItems,
+                                            LocalDateTime requestedAt, Long userId) {
+        super(orderId, "schedule-reservation-requested", userId);
+        this.orderNo = orderNo;
+        this.popupId = popupId;
+        this.reservationItems = reservationItems;
+        this.requestedAt = requestedAt;
+    }
+
     @Getter
-    @Builder
     public static class ReservationItem {
         private final UUID sessionOptionId;  // 스케줄 세션 ID
         private final Integer quantity;      // 예약할 좌석 수
         private final String sessionName;   // 세션명 (로그용)
         private final LocalDateTime sessionTime; // 세션 시간 (로그용)
 
+        public ReservationItem(UUID sessionOptionId, Integer quantity, String sessionName, LocalDateTime sessionTime) {
+            this.sessionOptionId = sessionOptionId;
+            this.quantity = quantity;
+            this.sessionName = sessionName;
+            this.sessionTime = sessionTime;
+        }
+
         public static ReservationItem create(UUID sessionOptionId, Integer quantity, String sessionName, LocalDateTime sessionTime) {
-            return ReservationItem.builder()
-                    .sessionOptionId(sessionOptionId)
-                    .quantity(quantity)
-                    .sessionName(sessionName != null ? sessionName : "알 수 없는 세션")
-                    .sessionTime(sessionTime)
-                    .build();
+            return new ReservationItem(sessionOptionId, quantity,
+                    sessionName != null ? sessionName : "알 수 없는 세션", sessionTime);
         }
     }
 
     public static ScheduleReservationRequestedEvent create(UUID orderId, String orderNo, UUID popupId, List<ReservationItem> reservationItems) {
-        return ScheduleReservationRequestedEvent.builder()
-                .eventId(UUID.randomUUID().toString())
-                .orderId(orderId)
-                .orderNo(orderNo)
-                .popupId(popupId)
-                .reservationItems(reservationItems)
-                .requestedAt(LocalDateTime.now())
-                .build();
+        return create(orderId, orderNo, popupId, reservationItems, null);
+    }
+
+    public static ScheduleReservationRequestedEvent create(UUID orderId, String orderNo, UUID popupId, List<ReservationItem> reservationItems, Long userId) {
+        return new ScheduleReservationRequestedEvent(orderId, orderNo, popupId, reservationItems, LocalDateTime.now(), userId);
+    }
+
+    @Override
+    public Map<String, Object> getEventPayload() {
+        Map<String, Object> payload = new HashMap<>();
+        payload.put("orderId", getOrderId().toString());
+        payload.put("popupId", popupId.toString());
+        payload.put("reservationItems", reservationItems);
+        payload.put("requestedAt", requestedAt.toString());
+        payload.put("reservationItemCount", getReservationItemCount());
+        payload.put("totalQuantity", getTotalQuantity());
+        return payload;
     }
 
     /**

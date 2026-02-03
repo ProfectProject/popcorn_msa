@@ -12,7 +12,7 @@ import org.springframework.web.servlet.HandlerInterceptor;
 import org.springframework.web.servlet.ModelAndView;
 
 import com.popcorn.order.annotation.PerformanceMonitoring;
-import com.popcorn.order.service.AuditLogService;
+import com.popcorn.order.service.monitor.AuditLogService;
 import com.popcorn.order.dto.audit.ApiLogEntry;
 
 import lombok.RequiredArgsConstructor;

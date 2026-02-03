@@ -1,12 +1,17 @@
-package com.popcorn.order.service;
+package com.popcorn.order.service.auth;
 
 import com.popcorn.common.security.PassportPrincipal;
+import com.popcorn.order.service.core.OrderQueryService;
+import com.popcorn.order.entity.Order;
+import com.popcorn.order.repository.OrderRepository;
+import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.security.core.Authentication;
 import org.springframework.security.core.GrantedAuthority;
 import org.springframework.stereotype.Service;
 import java.util.Collection;
 import java.util.List;
+import java.util.Optional;
 import java.util.UUID;
 
 /**
@@ -18,8 +23,12 @@ import java.util.UUID;
  * - 리소스별 접근 권한 검증
  */
 @Service
+@RequiredArgsConstructor
 @Slf4j
 public class AuthorizationService {
+
+    private final OrderQueryService orderQueryService;
+    private final OrderRepository orderRepository;
 
     /**
      * 사용자 권한 검증
@@ -181,11 +190,35 @@ public class AuthorizationService {
      * 주문 접근 권한 검증
      */
     private boolean hasOrderAccess(UserInfo userInfo, UUID orderId) {
-        // TODO: 실제로는 주문이 속한 팝업을 조회하고, 그 팝업에 대한 권한을 확인해야 함
-        // OrderQueryService를 통해 주문의 popupId를 조회 후 hasPopupAccess() 호출
+        try {
+            // 1. 주문 정보 조회
+            Optional<Order> orderOpt = orderRepository.findById(orderId);
+            if (orderOpt.isEmpty()) {
+                log.warn("존재하지 않는 주문 접근 시도 - orderId: {}, userId: {}", orderId, userInfo.getUserId());
+                return false;
+            }
 
-        log.debug("주문 접근 권한 임시 허용 - orderId: {}, userId: {}", orderId, userInfo.getUserId());
-        return true; // 임시로 모든 접근 허용
+            Order order = orderOpt.get();
+            UUID popupId = order.getPopupId();
+
+            if (popupId == null) {
+                log.warn("팝업 정보가 없는 주문 - orderId: {}, userId: {}", orderId, userInfo.getUserId());
+                return false;
+            }
+
+            // 2. 주문이 속한 팝업에 대한 권한 확인
+            boolean hasPopupPermission = hasPopupAccess(userInfo, popupId);
+
+            log.debug("주문 접근 권한 검증 완료 - orderId: {}, popupId: {}, userId: {}, hasAccess: {}",
+                    orderId, popupId, userInfo.getUserId(), hasPopupPermission);
+
+            return hasPopupPermission;
+
+        } catch (Exception e) {
+            log.error("주문 접근 권한 검증 중 오류 발생 - orderId: {}, userId: {}, error: {}",
+                    orderId, userInfo.getUserId(), e.getMessage(), e);
+            return false;
+        }
     }
 
     /**

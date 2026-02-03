@@ -1,4 +1,4 @@
-package com.popcorn.order.service;
+package com.popcorn.order.service.lookup;
 
 import java.util.UUID;
 import java.util.concurrent.CompletableFuture;

@@ -12,8 +12,6 @@ import com.popcorn.order.event.stock.StockReservationFailedEvent;
 import com.popcorn.order.event.stock.StockDeductionRequestedEvent;
 import com.popcorn.order.event.schedule.ScheduleReservationRequestedEvent;
 import com.popcorn.order.event.schedule.ScheduleReservationCancelRequestedEvent;
-import com.popcorn.order.event.schedule.ScheduleReservationSuccessEvent;
-import com.popcorn.order.event.schedule.ScheduleReservationFailedEvent;
 
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
@@ -207,13 +205,11 @@ public class OrderEventPublisher {
      */
     public void publishStockDeductionFailedEvent(java.util.UUID orderId, String reason) {
         try {
-            StockDeductionFailedEvent event = StockDeductionFailedEvent.builder()
-                    .eventId(java.util.UUID.randomUUID().toString())
-                    .orderId(orderId)
-                    .reason(reason)
-                    .failedAt(java.time.LocalDateTime.now())
-                    .eventTime(java.time.LocalDateTime.now())
-                    .build();
+            StockDeductionFailedEvent event = StockDeductionFailedEvent.create(
+                    orderId,
+                    reason,
+                    "STOCK_DEDUCTION_FAILED"
+            );
 
             log.warn("재고 차감 실패 이벤트 발행 - orderId: {}, reason: {}",
                     orderId, reason);
@@ -390,63 +386,6 @@ public class OrderEventPublisher {
         }
     }
 
-    /**
-     * 스케줄 예약 성공 이벤트 발행 (내부용)
-     */
-    public void publishScheduleReservationSuccessEvent(Order order,
-                                                      java.util.List<ScheduleReservationSuccessEvent.ReservedSession> reservedSessions,
-                                                      String reservationToken) {
-        try {
-            ScheduleReservationSuccessEvent event = ScheduleReservationSuccessEvent.create(
-                    order.getId(),
-                    order.getOrderNo(),
-                    order.getPopupId(),
-                    reservedSessions,
-                    reservationToken
-            );
-
-            log.info("📅 [ORDER] 스케줄 예약 성공 이벤트 발행 - orderId: {}, 예약세션수: {}",
-                    event.getOrderId(), event.getReservedSessionCount());
-
-            // 내부 이벤트 발행 (Spring Events)
-            applicationEventPublisher.publishEvent(event);
-
-            log.info("📅✅ [ORDER] 스케줄 예약 성공 이벤트 발행 완료 - orderId: {}, eventId: {}",
-                    event.getOrderId(), event.getEventId());
-
-        } catch (Exception e) {
-            log.error("📅❌ [ORDER] 스케줄 예약 성공 이벤트 발행 실패 - orderId: {}", order.getId(), e);
-        }
-    }
-
-    /**
-     * 스케줄 예약 실패 이벤트 발행 (내부용)
-     */
-    public void publishScheduleReservationFailedEvent(Order order,
-                                                     java.util.List<ScheduleReservationFailedEvent.FailedSession> failedSessions,
-                                                     String failureReason) {
-        try {
-            ScheduleReservationFailedEvent event = ScheduleReservationFailedEvent.create(
-                    order.getId(),
-                    order.getOrderNo(),
-                    order.getPopupId(),
-                    failedSessions,
-                    failureReason
-            );
-
-            log.info("📅 [ORDER] 스케줄 예약 실패 이벤트 발행 - orderId: {}, 실패세션수: {}, 사유: {}",
-                    event.getOrderId(), event.getFailedSessionCount(), event.getFailureReason());
-
-            // 내부 이벤트 발행 (Spring Events)
-            applicationEventPublisher.publishEvent(event);
-
-            log.info("📅✅ [ORDER] 스케줄 예약 실패 이벤트 발행 완료 - orderId: {}, eventId: {}",
-                    event.getOrderId(), event.getEventId());
-
-        } catch (Exception e) {
-            log.error("📅❌ [ORDER] 스케줄 예약 실패 이벤트 발행 실패 - orderId: {}", order.getId(), e);
-        }
-    }
 
     /**
      * 스케줄 확정 요청 이벤트 발행 (결제 완료 후)
@@ -456,7 +395,7 @@ public class OrderEventPublisher {
             java.util.UUID orderId,
             String orderNo,
             java.util.UUID popupId,
-            java.util.List<com.popcorn.order.service.OrderCommandService.ScheduleConfirmationItem> confirmationItems) {
+            java.util.List<com.popcorn.order.service.core.OrderCommandService.ScheduleConfirmationItem> confirmationItems) {
 
         try {
             String eventId = java.util.UUID.randomUUID().toString();

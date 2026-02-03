@@ -1,4 +1,4 @@
-package com.popcorn.order.service;
+package com.popcorn.order.service.core;
 
 import java.time.Duration;
 import java.time.LocalDateTime;
@@ -44,6 +44,13 @@ import com.popcorn.order.dto.payment.CreatePaymentRequest;
 import com.popcorn.order.dto.payment.CreatePaymentResponse;
 import com.popcorn.order.dto.payment.PaymentUrlResponse;
 import com.popcorn.common.cache.IdempotencyService;
+import com.popcorn.order.service.cache.OrderCacheService;
+import com.popcorn.order.service.cache.OrderPriceCacheService;
+import com.popcorn.order.service.cache.PaymentCacheService;
+import com.popcorn.order.service.lookup.OrderPriceLookupService;
+import com.popcorn.order.service.util.OrderReservationAwaiter;
+import com.popcorn.order.service.monitor.OrderPerformanceMonitor;
+import com.popcorn.order.service.monitor.PaymentPerformanceMonitor;
 
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
