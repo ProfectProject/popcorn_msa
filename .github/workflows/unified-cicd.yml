@@ -3,15 +3,15 @@ name: MSA CI
 on:
   push:
     branches: [test-ci]
-#    paths:
-#      - 'order/**'
-#      - 'gateway/**'
-#      - 'checkIns/**'
-#      - 'orderQuery/**'
-#      - 'common-lib/**'
-#      - 'gradle/**'
-#      - '*.gradle'
-#      - 'gradle.properties'
+    paths:
+      - 'order/**'
+      - 'gateway/**'
+      - 'checkIns/**'
+      - 'orderQuery/**'
+      - 'common-lib/**'
+      - 'gradle/**'
+      - '*.gradle'
+      - 'gradle.properties'
   pull_request:
     branches: [test-ci]
 
