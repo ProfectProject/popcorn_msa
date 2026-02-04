@@ -1,11 +1,6 @@
 -- Order Entity 구조에 맞춘 주문 관련 테이블 생성 (V1 - 완전 재작성)
 -- Hibernate Entity와 100% 호환되는 구조
 
-DO $$ BEGIN
-    IF NOT EXISTS (SELECT 1 FROM pg_roles WHERE rolname = 'order_migrator') THEN
-        CREATE ROLE order_migrator LOGIN PASSWORD '${ORDER_MIGRATOR_PASSWORD}';
-    END IF;
-END $$;
 
 CREATE SCHEMA IF NOT EXISTS orders AUTHORIZATION order_migrator;
 GRANT ALL PRIVILEGES ON SCHEMA orders TO order_migrator;

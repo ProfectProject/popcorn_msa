@@ -77,6 +77,8 @@ dependencies {
     // === 이벤트 처리 ===
     // TODO: Kafka로 대체 예정
     // implementation 'org.springframework.boot:spring-boot-starter-amqp'
+    //kafka
+	implementation 'org.springframework.kafka:spring-kafka' 
 
     // === 데이터베이스 마이그레이션 ===
     implementation 'org.flywaydb:flyway-core'
