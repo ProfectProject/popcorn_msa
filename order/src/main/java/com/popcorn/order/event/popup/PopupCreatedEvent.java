@@ -5,7 +5,7 @@ import java.util.HashMap;
 import java.util.Map;
 import java.util.UUID;
 
-import com.popcorn.order.event.order.BaseEvent;
+import com.popcorn.order.event.popup.BasePopupEvent;
 import lombok.Getter;
 import lombok.ToString;
 
@@ -26,7 +26,7 @@ import lombok.ToString;
  */
 @Getter
 @ToString(callSuper = true)
-public class PopupCreatedEvent extends BaseEvent {
+public class PopupCreatedEvent extends BasePopupEvent {
 
     /** 팝업 ID */
     private final UUID popupId;
@@ -37,8 +37,8 @@ public class PopupCreatedEvent extends BaseEvent {
     /** 생성 시간 */
     private final LocalDateTime createdAt;
 
-    private PopupCreatedEvent(String eventId, UUID popupId, UUID storeId, LocalDateTime createdAt) {
-        super(eventId, "popup-created");
+    private PopupCreatedEvent(UUID popupId, UUID storeId, LocalDateTime createdAt) {
+        super(popupId, "popup-created");
         this.popupId = popupId;
         this.storeId = storeId;
         this.createdAt = createdAt;
@@ -60,11 +60,10 @@ public class PopupCreatedEvent extends BaseEvent {
      * 팩토리 메서드
      */
     public static PopupCreatedEvent create(UUID popupId, UUID storeId) {
-        String eventId = UUID.randomUUID().toString();
-        return new PopupCreatedEvent(eventId, popupId, storeId, LocalDateTime.now());
+        return new PopupCreatedEvent(popupId, storeId, LocalDateTime.now());
     }
 
-    public static PopupCreatedEvent create(String eventId, UUID popupId, UUID storeId, LocalDateTime createdAt) {
-        return new PopupCreatedEvent(eventId, popupId, storeId, createdAt);
+    public static PopupCreatedEvent create(UUID popupId, UUID storeId, LocalDateTime createdAt) {
+        return new PopupCreatedEvent(popupId, storeId, createdAt);
     }
 }

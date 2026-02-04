@@ -41,21 +41,33 @@ public class CheckInRedisEventConfig {
     private static final String PAYMENT_EVENTS_STREAM = "payment-events";
     private static final String ORDER_EVENTS_STREAM = "order-events";
 
+    // 새로운 BaseEvent 기반 스트림들
+    private static final String CHECKIN_REQUESTS_STREAM = "checkin-requests";
+    private static final String CHECKIN_EVENTS_STREAM = "checkin-events";
+
     // Consumer Group 이름
     private static final String CHECKIN_CONSUMER_GROUP = "checkin-service-group";
     private static final String STANDARD_CONSUMER_NAME = "standard-consumer-1";
     private static final String PAYMENT_CONSUMER_NAME = "payment-consumer-1";
     private static final String ORDER_CONSUMER_NAME = "order-consumer-1";
 
+    // 새로운 BaseEvent 기반 컨슈머들
+    private static final String CHECKIN_REQUESTS_CONSUMER_NAME = "checkin-requests-consumer-1";
+    private static final String CHECKIN_EVENTS_CONSUMER_NAME = "checkin-events-consumer-1";
+
     @PostConstruct
     public void initializeStreamsAndConsumerGroups() {
         try {
-            // Consumer Group 생성 (이미 존재하면 무시)
+            // 기존 Standard 이벤트 Consumer Group 생성
             createConsumerGroupIfNotExists(STANDARD_CHECKINS_EVENTS_STREAM);
             createConsumerGroupIfNotExists(PAYMENT_EVENTS_STREAM);
             createConsumerGroupIfNotExists(ORDER_EVENTS_STREAM);
 
-            log.info("✅ CheckIns Service Redis Stream Consumer Groups 초기화 완료");
+            // 새로운 BaseEvent 기반 Consumer Group 생성
+            createConsumerGroupIfNotExists(CHECKIN_REQUESTS_STREAM);
+            createConsumerGroupIfNotExists(CHECKIN_EVENTS_STREAM);
+
+            log.info("✅ CheckIns Service Redis Stream Consumer Groups 초기화 완료 (총 5개 스트림)");
         } catch (Exception e) {
             log.warn("⚠️ Redis Stream 초기화 중 오류 (정상 동작 가능): {}", e.getMessage());
         }
@@ -137,6 +149,22 @@ public class CheckInRedisEventConfig {
                 (org.springframework.data.redis.stream.StreamListener) checkInRedisStreamListener
         );
         log.info("📝 Redis Stream Consumer 등록: {} - {}", ORDER_EVENTS_STREAM, ORDER_CONSUMER_NAME);
+
+        // 새로운 BaseEvent 기반 CheckIn 요청 Stream 구독 (Payment → CheckIn)
+        checkInContainer.receive(
+                Consumer.from(CHECKIN_CONSUMER_GROUP, CHECKIN_REQUESTS_CONSUMER_NAME),
+                StreamOffset.create(CHECKIN_REQUESTS_STREAM, ReadOffset.lastConsumed()),
+                (org.springframework.data.redis.stream.StreamListener) checkInRedisStreamListener
+        );
+        log.info("📝 Redis Stream Consumer 등록: {} - {}", CHECKIN_REQUESTS_STREAM, CHECKIN_REQUESTS_CONSUMER_NAME);
+
+        // 새로운 BaseEvent 기반 CheckIn 이벤트 Stream 구독 (CheckIn → 다른 도메인)
+        checkInContainer.receive(
+                Consumer.from(CHECKIN_CONSUMER_GROUP, CHECKIN_EVENTS_CONSUMER_NAME),
+                StreamOffset.create(CHECKIN_EVENTS_STREAM, ReadOffset.lastConsumed()),
+                (org.springframework.data.redis.stream.StreamListener) checkInRedisStreamListener
+        );
+        log.info("📝 Redis Stream Consumer 등록: {} - {}", CHECKIN_EVENTS_STREAM, CHECKIN_EVENTS_CONSUMER_NAME);
 
         try {
             checkInContainer.start();

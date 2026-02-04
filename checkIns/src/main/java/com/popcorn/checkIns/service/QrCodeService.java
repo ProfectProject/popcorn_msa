@@ -12,18 +12,20 @@ import org.springframework.transaction.annotation.Transactional;
 import com.popcorn.checkIns.dto.response.QrCodeResponse;
 import com.popcorn.checkIns.dto.response.QrVerifyResponse;
 import com.popcorn.checkIns.event.QrCheckinRequestedEvent;
-import com.popcorn.checkIns.event.standard.StandardCheckinsEventPublisher;
-import com.popcorn.checkIns.event.standard.StandardQrGeneratedEvent;
-import com.popcorn.checkIns.event.standard.StandardCheckinCreatedEvent;
+import com.popcorn.checkIns.event.CheckinRedisEventPublisher;
+import com.popcorn.checkIns.event.CheckinEvents.QrGeneratedEvent;
+import com.popcorn.checkIns.event.CheckinEvents.CheckinCreatedEvent;
 import com.popcorn.checkIns.exception.QrException;
 import com.popcorn.checkIns.repository.QrCodeRepository;
 import com.popcorn.checkIns.repository.QrCodeRow;
 import com.popcorn.checkIns.checkin.repository.CheckinRepository;
 
 import lombok.RequiredArgsConstructor;
+import lombok.extern.slf4j.Slf4j;
 
 @Service
 @RequiredArgsConstructor
+@Slf4j
 public class QrCodeService {
 
 	private static final Duration DEFAULT_TTL = Duration.ofMinutes(10);
@@ -31,7 +33,7 @@ public class QrCodeService {
 	private final QrCodeRepository qrCodeRepository;
 	private final CheckinRepository checkinRepository;
 	private final ApplicationEventPublisher eventPublisher;
-	private final StandardCheckinsEventPublisher standardCheckinsEventPublisher;
+	private final CheckinRedisEventPublisher checkinRedisEventPublisher;
 
 	@Transactional
 	public QrCodeResponse issue(UUID orderId) {
@@ -60,7 +62,7 @@ public class QrCodeService {
 		qrCodeRepository.insert(created);
 
 		// 표준 QR 생성 이벤트 발행
-		publishStandardQrGeneratedEvent(created);
+		publishQrGeneratedEvent(created);
 
 		return toResponse(created);
 	}
@@ -131,7 +133,7 @@ public class QrCodeService {
 		));
 
 		// 표준 체크인 생성 이벤트 발행
-		publishStandardCheckinCreatedEvent(checkinId, row, null, null);
+		publishCheckinCreatedEvent(checkinId, row, null, null);
 
 		return QrVerifyResponse.builder()
 				.valid(true)
@@ -163,53 +165,48 @@ public class QrCodeService {
 	}
 
 	/**
-	 * 표준 QR 생성 이벤트 발행
+	 * BaseEvent 기반 QR 생성 이벤트 발행
 	 */
-	private void publishStandardQrGeneratedEvent(QrCodeRow qrCodeRow) {
+	private void publishQrGeneratedEvent(QrCodeRow qrCodeRow) {
 		try {
-			StandardQrGeneratedEvent event = StandardQrGeneratedEvent.create(
+			QrGeneratedEvent event = QrGeneratedEvent.create(
 					qrCodeRow.orderId(),
 					null, // orderNo는 현재 조회 불가
-					null, // userId는 현재 조회 불가
-					null, // storeId는 현재 조회 불가
-					null, // popupId는 현재 조회 불가
-					qrCodeRow.qrId(),
-					qrCodeRow.qrCode(),
+					qrCodeRow.qrCode(), // qrToken으로 사용
+					null, // qrUrl는 현재 생성하지 않음
 					qrCodeRow.expiresAt(),
 					DEFAULT_TTL.getSeconds(),
-					null  // qrCreatedBy는 현재 조회 불가
+					null  // userId는 현재 조회 불가
 			);
 
-			standardCheckinsEventPublisher.publishQrGeneratedEvent(event);
+			checkinRedisEventPublisher.publishQrGenerated(event);
 		} catch (Exception e) {
 			// 로깅만 수행하고 메인 흐름에 영향을 주지 않음
-			System.out.println("표준 QR 생성 이벤트 발행 실패: " + e.getMessage());
+			log.error("BaseEvent QR 생성 이벤트 발행 실패: {}", e.getMessage(), e);
 		}
 	}
 
 	/**
-	 * 표준 체크인 생성 이벤트 발행
+	 * BaseEvent 기반 체크인 생성 이벤트 발행
 	 */
-	private void publishStandardCheckinCreatedEvent(UUID checkinId, QrCodeRow qrCodeRow,
-													String storeId, String checkinLocation) {
+	private void publishCheckinCreatedEvent(UUID checkinId, QrCodeRow qrCodeRow,
+											String storeId, String checkinLocation) {
 		try {
-			StandardCheckinCreatedEvent event = StandardCheckinCreatedEvent.create(
+			CheckinCreatedEvent event = CheckinCreatedEvent.create(
 					qrCodeRow.orderId(),
-					null, // orderNo는 현재 조회 불가
-					null, // userId는 현재 조회 불가
-					storeId != null ? UUID.fromString(storeId) : null,
+					null, // orderGoodsId는 현재 조회 불가
 					null, // popupId는 현재 조회 불가
-					checkinId,
+					storeId != null ? UUID.fromString(storeId) : null,
 					qrCodeRow.qrId(),
-					qrCodeRow.qrCode(),
-					null, // checkinCreatedBy는 현재 조회 불가
-					checkinLocation
+					qrCodeRow.qrCode(), // qrToken으로 사용
+					checkinLocation,
+					null  // userId는 현재 조회 불가
 			);
 
-			standardCheckinsEventPublisher.publishCheckinCreatedEvent(event);
+			checkinRedisEventPublisher.publishCheckinCreated(event);
 		} catch (Exception e) {
 			// 로깅만 수행하고 메인 흐름에 영향을 주지 않음
-			System.out.println("표준 체크인 생성 이벤트 발행 실패: " + e.getMessage());
+			log.error("BaseEvent 체크인 생성 이벤트 발행 실패: {}", e.getMessage(), e);
 		}
 	}
 }

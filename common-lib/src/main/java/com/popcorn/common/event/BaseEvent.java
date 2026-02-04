@@ -32,6 +32,7 @@ public abstract class BaseEvent {
     private final Map<String, Object> metadata; // 추가 메타데이터
 
     protected BaseEvent(UUID aggregateId, String aggregateType, String eventType, Long userId, Map<String, Object> metadata) {
+        validateEventType(eventType);
         this.eventId = UUID.randomUUID();
         this.aggregateId = aggregateId;
         this.aggregateType = aggregateType;
@@ -89,6 +90,19 @@ public abstract class BaseEvent {
     public String getEventDescription() {
         return String.format("%s[id=%s, aggregateId=%s, aggregateType=%s, userId=%s, timestamp=%s]",
                 eventType, eventId, aggregateId, aggregateType, userId, timestamp);
+    }
+
+    /**
+     * 이벤트 타입이 유효한지 검증합니다.
+     * kebab-case 형식인지 확인합니다.
+     */
+    protected final void validateEventType(String eventType) {
+        if (eventType == null || eventType.trim().isEmpty()) {
+            throw new IllegalArgumentException("이벤트 타입은 필수입니다.");
+        }
+        if (!eventType.matches("^[a-z0-9]+(-[a-z0-9]+)*$")) {
+            throw new IllegalArgumentException("이벤트 타입은 kebab-case 형식이어야 합니다: " + eventType);
+        }
     }
 
     /**

@@ -210,7 +210,7 @@ public class RedisEventPublisher {
             java.util.List<com.popcorn.order.service.core.OrderCommandService.ScheduleConfirmationItem> confirmationItems) {
 
         try {
-            log.warn("🔥 [DEBUG] 스케줄 확정 요청 이벤트 Stream 발행 시작 - eventId: {}, orderId: {}",
+            log.debug("스케줄 확정 요청 이벤트 Stream 발행 시작 - eventId: {}, orderId: {}",
                     eventId, orderId);
 
             // 확정 항목들을 JSON 형태로 직렬화
@@ -236,7 +236,7 @@ public class RedisEventPublisher {
             eventData.put("requestedAt", java.time.LocalDateTime.now().toString());
             eventData.put("eventTime", java.time.LocalDateTime.now().toString());
 
-            log.warn("🔥 [DEBUG] 스케줄 확정 이벤트 데이터: {}", eventData);
+            log.debug("스케줄 확정 이벤트 데이터: {}", eventData);
 
             // String 값으로 변환
             java.util.Map<String, String> stringEventData = eventData.entrySet().stream()
@@ -249,16 +249,16 @@ public class RedisEventPublisher {
             StringRecord record = StreamRecords.string(stringEventData)
                     .withStreamKey("schedule-events");
 
-            log.warn("🔥 [DEBUG] StringRecord 생성 완료");
+            log.debug("StringRecord 생성 완료");
 
             String recordId = redisTemplate.opsForStream().add(record).getValue();
 
-            log.warn("🔥 [DEBUG] Redis Stream 발행 완료 - recordId: {}", recordId);
+            log.debug("Redis Stream 발행 완료 - recordId: {}", recordId);
             log.info("✅ 스케줄 확정 요청 이벤트 Stream 발행 완료 - eventId: {}, orderId: {}, recordId: {}",
                     eventId, orderId, recordId);
 
         } catch (Exception e) {
-            log.error("❌ [ORDER→STORE] 스케줄 확정 요청 이벤트 Stream 발행 실패 - orderId: {}, error: {}",
+            log.error("[ORDER→STORE] 스케줄 확정 요청 이벤트 Stream 발행 실패 - orderId: {}, error: {}",
                     orderId, e.getMessage(), e);
             throw new RuntimeException("스케줄 확정 요청 이벤트 Stream 발행 실패", e);
         }
@@ -318,7 +318,7 @@ public class RedisEventPublisher {
                     methodName, eventData.get("eventType"), recordId, streamName);
 
         } catch (Exception e) {
-            log.error("❌ [{}] 이벤트 Stream 발행 실패: eventType={}, stream={}, error={}",
+            log.error("[{}] 이벤트 Stream 발행 실패: eventType={}, stream={}, error={}",
                     methodName, eventData.get("eventType"), streamName, e.getMessage());
             throw new RuntimeException("Redis Stream 발행 실패: " + methodName, e);
         }

@@ -1,12 +1,14 @@
 package com.popcorn.checkIns;
 
 import io.github.cdimascio.dotenv.Dotenv;
+import lombok.extern.slf4j.Slf4j;
 import org.springframework.boot.SpringApplication;
 import org.springframework.boot.autoconfigure.SpringBootApplication;
 import org.springframework.context.annotation.ComponentScan;
 
 @SpringBootApplication
 @ComponentScan(basePackages = {"com.popcorn.checkIns", "com.popcorn.common"})
+@Slf4j
 public class CheckInsApplication {
 
     public static void main(String[] args) {
@@ -35,24 +37,24 @@ public class CheckInsApplication {
             }
 
             // .env 값들을 시스템 프로퍼티로 설정
-            System.out.println("=== .env 파일 로드 확인 ===");
-            System.out.println("현재 작업 디렉터리: " + System.getProperty("user.dir"));
+            log.info("=== .env 파일 로드 확인 ===");
+            log.info("현재 작업 디렉터리: {}", System.getProperty("user.dir"));
 
             if (!dotenv.entries().isEmpty()) {
                 dotenv.entries().forEach(entry -> {
                     // 이미 시스템 프로퍼티에 설정되어 있지 않은 경우만 설정
                     if (System.getProperty(entry.getKey()) == null) {
                         System.setProperty(entry.getKey(), entry.getValue());
-                        System.out.println("로드됨: " + entry.getKey() + "=" + entry.getValue());
+                        log.info("로드됨: {}={}", entry.getKey(), entry.getValue());
                     }
                 });
             } else {
-                System.out.println(".env 파일을 찾을 수 없거나 비어있습니다.");
+                log.info(".env 파일을 찾을 수 없거나 비어있습니다.");
             }
-            System.out.println("=========================");
+            log.info("=========================");
 
         } catch (Exception e) {
-            System.err.println("=== .env 파일 로드 실패: " + e.getMessage() + " ===");
+            log.error("=== .env 파일 로드 실패: {} ===", e.getMessage());
             // .env 로드에 실패해도 애플리케이션은 계속 실행 (기본값 사용)
         }
     }

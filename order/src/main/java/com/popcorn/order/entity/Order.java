@@ -26,6 +26,7 @@ import lombok.Builder;
 import lombok.Getter;
 import lombok.NoArgsConstructor;
 import lombok.Setter;
+import lombok.extern.slf4j.Slf4j;
 
 import com.fasterxml.jackson.annotation.JsonIgnoreProperties;
 
@@ -54,6 +55,7 @@ import com.fasterxml.jackson.annotation.JsonIgnoreProperties;
 @AllArgsConstructor
 @Builder
 @JsonIgnoreProperties(ignoreUnknown = true)
+@Slf4j
 public class Order extends BaseEntity {
 
     // ========================= 기본 필드 =========================
@@ -273,8 +275,7 @@ public class Order extends BaseEntity {
         }
 
         // 로그 출력
-        System.out.println(String.format("주문 상태 변경: %s -> %s (주문ID: %s)",
-                oldStatus, newStatus, this.id));
+        log.info("주문 상태 변경: {} -> {} (주문ID: {})", oldStatus, newStatus, this.id);
     }
 
     /**

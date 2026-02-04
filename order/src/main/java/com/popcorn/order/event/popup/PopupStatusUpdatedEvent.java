@@ -5,7 +5,7 @@ import java.util.HashMap;
 import java.util.Map;
 import java.util.UUID;
 
-import com.popcorn.order.event.order.BaseEvent;
+import com.popcorn.order.event.popup.BasePopupEvent;
 import lombok.Getter;
 import lombok.ToString;
 
@@ -28,7 +28,7 @@ import lombok.ToString;
  */
 @Getter
 @ToString(callSuper = true)
-public class PopupStatusUpdatedEvent extends BaseEvent {
+public class PopupStatusUpdatedEvent extends BasePopupEvent {
 
     /** 팝업 ID */
     private final UUID popupId;
@@ -42,9 +42,9 @@ public class PopupStatusUpdatedEvent extends BaseEvent {
     /** 변경 시간 */
     private final LocalDateTime updatedAt;
 
-    private PopupStatusUpdatedEvent(String eventId, UUID popupId, String fromStatus,
+    private PopupStatusUpdatedEvent(UUID popupId, String fromStatus,
                                   String toStatus, LocalDateTime updatedAt) {
-        super(eventId, "popup-status-updated");
+        super(popupId, "popup-status-updated");
         this.popupId = popupId;
         this.fromStatus = fromStatus;
         this.toStatus = toStatus;
@@ -68,12 +68,11 @@ public class PopupStatusUpdatedEvent extends BaseEvent {
      * 팩토리 메서드
      */
     public static PopupStatusUpdatedEvent create(UUID popupId, String fromStatus, String toStatus) {
-        String eventId = UUID.randomUUID().toString();
-        return new PopupStatusUpdatedEvent(eventId, popupId, fromStatus, toStatus, LocalDateTime.now());
+        return new PopupStatusUpdatedEvent(popupId, fromStatus, toStatus, LocalDateTime.now());
     }
 
-    public static PopupStatusUpdatedEvent create(String eventId, UUID popupId, String fromStatus,
+    public static PopupStatusUpdatedEvent create(UUID popupId, String fromStatus,
                                                String toStatus, LocalDateTime updatedAt) {
-        return new PopupStatusUpdatedEvent(eventId, popupId, fromStatus, toStatus, updatedAt);
+        return new PopupStatusUpdatedEvent(popupId, fromStatus, toStatus, updatedAt);
     }
 }

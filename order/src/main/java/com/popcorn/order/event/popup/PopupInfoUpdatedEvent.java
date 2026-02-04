@@ -5,7 +5,7 @@ import java.util.HashMap;
 import java.util.Map;
 import java.util.UUID;
 
-import com.popcorn.order.event.order.BaseEvent;
+import com.popcorn.order.event.popup.BasePopupEvent;
 import lombok.Getter;
 import lombok.ToString;
 
@@ -26,7 +26,7 @@ import lombok.ToString;
  */
 @Getter
 @ToString(callSuper = true)
-public class PopupInfoUpdatedEvent extends BaseEvent {
+public class PopupInfoUpdatedEvent extends BasePopupEvent {
 
     /** 팝업 ID */
     private final UUID popupId;
@@ -34,8 +34,8 @@ public class PopupInfoUpdatedEvent extends BaseEvent {
     /** 업데이트 시간 */
     private final LocalDateTime updatedAt;
 
-    private PopupInfoUpdatedEvent(String eventId, UUID popupId, LocalDateTime updatedAt) {
-        super(eventId, "popup-info-updated");
+    private PopupInfoUpdatedEvent(UUID popupId, LocalDateTime updatedAt) {
+        super(popupId, "popup-info-updated");
         this.popupId = popupId;
         this.updatedAt = updatedAt;
     }
@@ -55,11 +55,10 @@ public class PopupInfoUpdatedEvent extends BaseEvent {
      * 팩토리 메서드
      */
     public static PopupInfoUpdatedEvent create(UUID popupId) {
-        String eventId = UUID.randomUUID().toString();
-        return new PopupInfoUpdatedEvent(eventId, popupId, LocalDateTime.now());
+        return new PopupInfoUpdatedEvent(popupId, LocalDateTime.now());
     }
 
-    public static PopupInfoUpdatedEvent create(String eventId, UUID popupId, LocalDateTime updatedAt) {
-        return new PopupInfoUpdatedEvent(eventId, popupId, updatedAt);
+    public static PopupInfoUpdatedEvent create(UUID popupId, LocalDateTime updatedAt) {
+        return new PopupInfoUpdatedEvent(popupId, updatedAt);
     }
 }
