@@ -120,7 +120,7 @@ order:
     max-quantity: ${ORDER_MAX_QUANTITY}
     min-quantity: ${ORDER_MIN_QUANTITY}
   reservation:
-    wait-timeout-ms: ${ORDER_RESERVATION_WAIT_TIMEOUT_MS:5000}
+    wait-timeout-ms: ${ORDER_RESERVATION_WAIT_TIMEOUT_MS:0}
   notification:
     enabled: ${ORDER_NOTIFICATION_ENABLED}
     retry-count: ${ORDER_NOTIFICATION_RETRY}
@@ -236,7 +236,7 @@ order:
     max-quantity: ${ORDER_MAX_QUANTITY:100}  # 최대 주문 수량
     min-quantity: ${ORDER_MIN_QUANTITY:1}    # 최소 주문 수량
   reservation:
-    wait-timeout-ms: ${ORDER_RESERVATION_WAIT_TIMEOUT_MS:3000}   # 예약 응답 대기 시간 (3초로 단축)
+    wait-timeout-ms: ${ORDER_RESERVATION_WAIT_TIMEOUT_MS:0}   # 예약 응답 대기 시간 (즉시 응답)
   price-lookup:
     timeout-ms: ${ORDER_PRICE_LOOKUP_TIMEOUT_MS:3000}   # 가격 조회 타임아웃 (3초로 증가)
   user-lookup:

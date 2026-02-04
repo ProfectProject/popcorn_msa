@@ -67,14 +67,6 @@ logging:
     org.hibernate.SQL: DEBUG
     org.hibernate.type.descriptor.sql.BasicBinder: TRACE
 
-# Toss Payments 설정 (개발용)
-toss:
-  payments:
-    base-url: ${TOSS_PAYMENTS_BASE_URL:https://api.tosspayments.com}
-    secret-key: ${TOSS_PAYMENTS_SECRET_KEY:}
-    client-key: ${TOSS_PAYMENTS_CLIENT_KEY:}
-    test-mode: ${TOSS_PAYMENTS_TEST_MODE:true}  # 개발에서는 테스트 모드
-
 # 외부 서비스 URL 설정 (Order service에서 이전)
 external:
   services:
@@ -104,6 +96,12 @@ payment:
   notification:
     enabled: ${PAYMENT_NOTIFICATION_ENABLED:true}
     retry-count: ${PAYMENT_NOTIFICATION_RETRY:3}
+  # Toss Payments 설정 (개발용)
+  toss:
+    base-url: ${TOSS_PAYMENTS_BASE_URL:https://api.tosspayments.com}
+    secret-key: ${TOSS_SECRET_KEY:}
+    client-key: ${TOSS_CLIENT_KEY:}
+    test-mode: ${TOSS_PAYMENTS_TEST_MODE:true}  # 개발에서는 테스트 모드
 passport:
   secret: ${PASSPORT_SECRET:passport-shared-secret}
   ttl-seconds: 60

@@ -36,6 +36,7 @@ object EventConstants {
         const val ORDER_STATUS_UPDATE_REQUESTED = "ORDER_STATUS_UPDATE_REQUESTED"
         const val INVENTORY_CONFIRMATION_REQUESTED = "INVENTORY_CONFIRMATION_REQUESTED"
         const val ORDER_INFO_REQUEST = "ORDER_INFO_REQUEST"
+        const val ORDER_INFO_RESPONSE = "ORDER_INFO_RESPONSE"
 
         // ================ Compensation Events ================
         const val PAYMENT_VALIDATION_FAILED = "PAYMENT_VALIDATION_FAILED"
@@ -55,6 +56,7 @@ object EventConstants {
     object Streams {
         const val PAYMENT_EVENTS = "payment-events"
         const val PAYMENT_REQUESTS = "payment-requests"
+        const val ORDER_INFO_REQUESTS = "order-info-requests"
     }
 
     /**

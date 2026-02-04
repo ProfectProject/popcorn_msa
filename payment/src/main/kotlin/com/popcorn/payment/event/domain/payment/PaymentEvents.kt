@@ -462,12 +462,20 @@ data class OrderInfoRequestPaymentEvent(
         "occurredAt" to occurredAt.toString()
     )
 
+    // requestId 접근자 추가
+    val requestId: String
+        get() = paymentId.toString()
+
     companion object {
-        fun create(orderId: UUID): OrderInfoRequestPaymentEvent {
+        fun create(
+            orderId: UUID,
+            requestId: String? = null,
+            responseService: String = "payment-service"
+        ): OrderInfoRequestPaymentEvent {
             return OrderInfoRequestPaymentEvent(
-                _requestId = UUID.randomUUID(),
+                _requestId = if (requestId != null) UUID.fromString(requestId) else UUID.randomUUID(),
                 requestedOrderId = orderId,
-                responseService = "payment-service"
+                responseService = responseService
             )
         }
     }
@@ -555,40 +563,80 @@ data class OrderInfoResponseEvent(
     val success: Boolean = false,
 
     /**
-     * 실제 주문번호
+     * 오류 메시지 (실패 시)
+     */
+    val errorMessage: String? = null,
+
+    /**
+     * 실제 라인 아이템들 (새로운 형식)
+     */
+    val actualLines: List<EventLineItem>? = null,
+
+    /**
+     * 고객 ID
+     */
+    val customerId: Long? = null,
+
+    /**
+     * 주문 상태
+     */
+    val orderStatus: String? = null,
+
+    /**
+     * 총 주문 금액
+     */
+    val totalAmount: Int? = null,
+
+    /**
+     * 실제 주문번호 (호환성)
      */
     val actualOrderNo: String? = null,
 
     /**
-     * 실제 userId
+     * 실제 userId (호환성)
      */
     val actualUserId: Long? = null,
 
     /**
-     * 실제 popupId
+     * 실제 popupId (호환성)
      */
     val actualPopupId: String? = null,
 
     /**
-     * 예약 포함 여부
+     * 예약 포함 여부 (호환성)
      */
     val actualHasReservation: Boolean? = null,
 
     /**
-     * 굿즈 포함 여부
+     * 굿즈 포함 여부 (호환성)
      */
     val actualHasGoods: Boolean? = null,
-
-    /**
-     * 실제 라인 아이템들
-     */
-    val actualLines: List<EventLineItem>? = null,
 
     /**
      * 응답 시간
      */
     val respondedAt: LocalDateTime = LocalDateTime.now()
-)
+) : BasePaymentEvent(
+    paymentId = UUID.randomUUID(),
+    eventType = EventConstants.EventTypes.ORDER_INFO_RESPONSE,
+    userId = customerId
+) {
+    override fun getEventPayload(): Map<String, Any> = buildMap {
+        requestId?.let { put("requestId", it) }
+        put("success", success)
+        errorMessage?.let { put("errorMessage", it) }
+        actualLines?.let { put("actualLines", it) }
+        customerId?.let { put("customerId", it) }
+        orderStatus?.let { put("orderStatus", it) }
+        totalAmount?.let { put("totalAmount", it) }
+        actualOrderNo?.let { put("actualOrderNo", it) }
+        actualUserId?.let { put("actualUserId", it) }
+        actualPopupId?.let { put("actualPopupId", it) }
+        actualHasReservation?.let { put("actualHasReservation", it) }
+        actualHasGoods?.let { put("actualHasGoods", it) }
+        put("respondedAt", respondedAt.toString())
+    }
+}
 
 /**
  * 주문 항목 정보 (이벤트용 DTO)

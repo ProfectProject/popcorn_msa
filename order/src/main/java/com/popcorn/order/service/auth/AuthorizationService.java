@@ -1,7 +1,6 @@
 package com.popcorn.order.service.auth;
 
 import com.popcorn.common.security.PassportPrincipal;
-import com.popcorn.order.service.core.OrderQueryService;
 import com.popcorn.order.entity.Order;
 import com.popcorn.order.repository.OrderRepository;
 import lombok.RequiredArgsConstructor;
@@ -27,7 +26,6 @@ import java.util.UUID;
 @Slf4j
 public class AuthorizationService {
 
-    private final OrderQueryService orderQueryService;
     private final OrderRepository orderRepository;
 
     /**
@@ -241,12 +239,68 @@ public class AuthorizationService {
     /**
      * 사용자 정보 DTO
      */
-    @lombok.Builder
-    @lombok.Getter
     public static class UserInfo {
         private Long userId;
         private String role;
         private Long storeId;
         private List<String> authorizedPopupIds;
+
+        private UserInfo(Long userId, String role, Long storeId, List<String> authorizedPopupIds) {
+            this.userId = userId;
+            this.role = role;
+            this.storeId = storeId;
+            this.authorizedPopupIds = authorizedPopupIds;
+        }
+
+        public static UserInfoBuilder builder() {
+            return new UserInfoBuilder();
+        }
+
+        public Long getUserId() {
+            return userId;
+        }
+
+        public String getRole() {
+            return role;
+        }
+
+        public Long getStoreId() {
+            return storeId;
+        }
+
+        public List<String> getAuthorizedPopupIds() {
+            return authorizedPopupIds;
+        }
+
+        public static class UserInfoBuilder {
+            private Long userId;
+            private String role;
+            private Long storeId;
+            private List<String> authorizedPopupIds;
+
+            public UserInfoBuilder userId(Long userId) {
+                this.userId = userId;
+                return this;
+            }
+
+            public UserInfoBuilder role(String role) {
+                this.role = role;
+                return this;
+            }
+
+            public UserInfoBuilder storeId(Long storeId) {
+                this.storeId = storeId;
+                return this;
+            }
+
+            public UserInfoBuilder authorizedPopupIds(List<String> authorizedPopupIds) {
+                this.authorizedPopupIds = authorizedPopupIds;
+                return this;
+            }
+
+            public UserInfo build() {
+                return new UserInfo(userId, role, storeId, authorizedPopupIds);
+            }
+        }
     }
 }

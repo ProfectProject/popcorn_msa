@@ -9,8 +9,8 @@ spring:
       on-profile: local
   data:
     redis:
-      host: ${REDIS_HOST:localhost}
-      port: ${REDIS_PORT:6379}
+      host: localhost
+      port: 6379
       database: 0
 
   datasource:

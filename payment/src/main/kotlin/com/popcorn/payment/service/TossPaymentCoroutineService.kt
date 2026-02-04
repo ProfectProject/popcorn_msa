@@ -9,6 +9,7 @@ import com.popcorn.payment.exception.PaymentException
 import io.github.resilience4j.circuitbreaker.annotation.CircuitBreaker
 import kotlinx.coroutines.async
 import kotlinx.coroutines.coroutineScope
+import kotlinx.coroutines.future.await
 import org.slf4j.LoggerFactory
 import org.springframework.data.redis.core.StringRedisTemplate
 import org.springframework.stereotype.Service
@@ -460,19 +461,50 @@ class TossPaymentCoroutineService(
             // 1. 주문 정보 조회
             val order = orderQueryService.getOrder(UUID.fromString(orderId))
 
-            // 2. 주문 상태 검증
-            if (order.status != "RESERVED" && order.status != "PAYMENT_PENDING") {
+            // 2. 주문 상태 검증 - REQUESTED 상태도 결제 허용 (초기 주문 생성 후 즉시 결제 가능)
+            if (order.status != "REQUESTED" && order.status != "RESERVED" && order.status != "PAYMENT_PENDING") {
                 throw PaymentException.validationFailed("결제 가능한 주문 상태가 아닙니다. 현재 상태: ${order.status}")
             }
 
-            // 3. Order 이벤트 기반 상세 검증 (주소 + 가격) - DB 직접 조회만 사용
-            val orderInfoFuture = paymentOrderInfoService.requestOrderInfo(order.id)
-            val orderInfo = orderInfoFuture.get()
+            // 3. Order 이벤트 기반 상세 검증 (주소 + 가격) - 🚀 타이밍 이슈 해결
+            val orderInfoFuture = paymentOrderInfoService.requestOrderInfo(order.id, timeoutMs = 5000)
 
-            if (orderInfo?.success != true || orderInfo.actualLines.isNullOrEmpty()) {
-                throw PaymentException.validationFailed("주문 정보 응답이 없습니다. 다시 시도해주세요.")
+            // 🚀 CompletableFuture를 코루틴 방식으로 안전하게 처리
+            val orderInfo = try {
+                orderInfoFuture.await()
+            } catch (e: Exception) {
+                log.warn("⚠️ Order 정보 응답 대기 중 예외 발생 - orderId: {}, error: {}", orderId, e.message)
+                null
             }
 
+            // 🔍 Order 정보 응답 상세 로깅
+            log.info("🔍 [DEBUG] Order 정보 응답 분석 - orderId: {}", orderId)
+            log.info("  - success: {}", orderInfo?.success)
+            log.info("  - errorMessage: {}", orderInfo?.errorMessage)
+            log.info("  - actualLines count: {}", orderInfo?.actualLines?.size ?: 0)
+            log.info("  - customerId: {}", orderInfo?.customerId)
+            log.info("  - orderStatus: {}", orderInfo?.orderStatus)
+            log.info("  - totalAmount: {}", orderInfo?.totalAmount)
+
+            if (orderInfo?.actualLines != null && orderInfo.actualLines.isNotEmpty()) {
+                orderInfo.actualLines.forEachIndexed { index, line ->
+                    log.info("  - line[{}]: itemType={}, qty={}, unitPrice={}, linePrice={}, scheduleId={}, goodsId={}",
+                        index, line.itemType, line.qty, line.unitPrice, line.linePrice, line.scheduleId, line.goodsId)
+                }
+            }
+
+            if (orderInfo?.success != true) {
+                log.warn("❌ Order 정보 응답 실패 - orderId: {}, success: {}, errorMessage: {}",
+                    orderId, orderInfo?.success, orderInfo?.errorMessage)
+                throw PaymentException.validationFailed("주문 정보 응답이 실패했습니다: ${orderInfo?.errorMessage ?: "알 수 없는 오류"}")
+            }
+
+            if (orderInfo.actualLines.isNullOrEmpty()) {
+                log.warn("❌ Order 라인 아이템 누락 - orderId: {}, actualLines: {}", orderId, orderInfo.actualLines)
+                throw PaymentException.validationFailed("주문 라인 아이템 정보가 없습니다. 주문 데이터를 확인해주세요.")
+            }
+
+            // 🚀 actualLines는 이미 EventLineItem 타입이므로 직접 사용
             val validationResult = hybridValidationService.validatePaymentRequestFromOrderEvent(
                 userId = order.customerId,
                 lines = orderInfo.actualLines,
@@ -510,8 +542,8 @@ class TossPaymentCoroutineService(
             // 1. 주문 정보 조회
             val order = orderQueryService.getOrder(UUID.fromString(orderId))
 
-            // 2. 주문 상태 검증
-            if (order.status != "RESERVED" && order.status != "PAYMENT_PENDING") {
+            // 2. 주문 상태 검증 - REQUESTED 상태도 결제 허용 (초기 주문 생성 후 즉시 결제 가능)
+            if (order.status != "REQUESTED" && order.status != "RESERVED" && order.status != "PAYMENT_PENDING") {
                 throw PaymentException.validationFailed("결제 가능한 주문 상태가 아닙니다. 현재 상태: ${order.status}")
             }
 
@@ -523,6 +555,7 @@ class TossPaymentCoroutineService(
                 throw PaymentException.validationFailed("주문 정보 응답이 없습니다. 다시 시도해주세요.")
             }
 
+            // 🚀 actualLines는 이미 EventLineItem 타입이므로 직접 사용
             val validationResult = hybridValidationService.validatePaymentRequestFromOrderEvent(
                 userId = order.customerId,
                 lines = orderInfo.actualLines,

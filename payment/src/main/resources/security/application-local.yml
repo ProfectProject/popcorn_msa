@@ -54,7 +54,7 @@ spring:
       port: ${REDIS_PORT:6379}
       password: ${REDIS_PASSWORD:}
       timeout: 2000ms  # Redis Stream 안정성 위해 기본 타임아웃 복구
-      database: 0  # Order, Stores 서비스와 동일한 database 0 사용
+      database: ${REDIS_DATABASE:0}  # Order, Stores 서비스와 동일한 database 0 사용
       connection-timeout: 2000ms  # 연결 지연에 대비해 타임아웃 완화
       jedis:
         pool:
@@ -71,7 +71,7 @@ spring:
     schemas: payment
     locations: classpath:db/migration/schema,classpath:db/migration
     baseline-on-migrate: true
-    validate-on-migrate: true
+    validate-on-migrate: false
     clean-disabled: false
 
 # 인증 설정

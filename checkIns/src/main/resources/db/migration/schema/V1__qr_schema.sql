@@ -1,7 +1,16 @@
 -- QR 관련 테이블 스키마
 -- checkIns 모듈 전용 QR 도메인
 
-CREATE SCHEMA IF NOT EXISTS qr;
+DO $$ BEGIN
+    IF NOT EXISTS (SELECT 1 FROM pg_roles WHERE rolname = 'qr_migrator') THEN
+        CREATE ROLE qr_migrator LOGIN PASSWORD '${QR_MIGRATOR_PASSWORD}';
+    END IF;
+END $$;
+
+CREATE SCHEMA IF NOT EXISTS qr AUTHORIZATION qr_migrator;
+GRANT ALL PRIVILEGES ON SCHEMA qr TO qr_migrator;
+GRANT ALL PRIVILEGES ON ALL TABLES IN SCHEMA qr TO qr_migrator;
+GRANT ALL PRIVILEGES ON ALL SEQUENCES IN SCHEMA qr TO qr_migrator;
 
 -- QR 코드 테이블
 CREATE TABLE IF NOT EXISTS qr.qr_order_qr_codes (

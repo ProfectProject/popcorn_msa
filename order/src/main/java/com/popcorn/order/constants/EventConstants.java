@@ -51,6 +51,8 @@ public final class EventConstants {
         public static final String PAYMENT_USER_CANCELLED = "PAYMENT_USER_CANCELLED";
         public static final String PAYMENT_CANCEL_SUCCEEDED = "PAYMENT_CANCEL_SUCCEEDED";
         public static final String PAYMENT_CANCEL_FAILED = "PAYMENT_CANCEL_FAILED";
+        public static final String PAYMENT_VALIDATION_FAILED = "PAYMENT_VALIDATION_FAILED";
+        public static final String ORDER_COMPENSATION_REQUESTED = "ORDER_COMPENSATION_REQUESTED";
 
         // Store events (store-events stream)
         public static final String GOODS_RESERVATION_SUCCEEDED = "GOODS_RESERVATION_SUCCEEDED";

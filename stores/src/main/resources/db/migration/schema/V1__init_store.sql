@@ -1,3 +1,14 @@
+DO $$ BEGIN
+    IF NOT EXISTS (SELECT 1 FROM pg_roles WHERE rolname = 'store_migrator') THEN
+        CREATE ROLE store_migrator LOGIN PASSWORD '${STORE_MIGRATOR_PASSWORD}';
+    END IF;
+END $$;
+
+CREATE SCHEMA IF NOT EXISTS store AUTHORIZATION store_migrator;
+GRANT ALL PRIVILEGES ON SCHEMA store TO store_migrator;
+GRANT ALL PRIVILEGES ON ALL TABLES IN SCHEMA store TO store_migrator;
+GRANT ALL PRIVILEGES ON ALL SEQUENCES IN SCHEMA store TO store_migrator;
+
 SET search_path TO store;
 
 -- ENUM

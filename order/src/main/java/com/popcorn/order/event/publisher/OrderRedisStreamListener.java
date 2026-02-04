@@ -4,6 +4,7 @@ import com.fasterxml.jackson.databind.ObjectMapper;
 import com.popcorn.order.constants.EventConstants;
 import com.popcorn.order.entity.OrderStatus;
 import com.popcorn.order.repository.OrderRepository;
+import com.popcorn.order.event.compensation.PaymentCompensationRequestedEvent;
 import com.popcorn.order.event.payment.PaymentCompletedEvent;
 import com.popcorn.order.event.schedule.ScheduleReservationSucceededEvent;
 import com.popcorn.order.event.schedule.ScheduleReservationFailedEvent;
@@ -245,6 +246,13 @@ public class OrderRedisStreamListener implements StreamListener<String, MapRecor
                 case EventConstants.EventTypes.MIXED_RESERVATION_FAILED:
                     log.info("🔗❌ [ORDER] 복합형 예약 실패 이벤트 수신");
                     handleMixedReservationFailed(values);
+                    break;
+                case EventConstants.EventTypes.ORDER_COMPENSATION_REQUESTED:
+                    log.info("🔄 [ORDER] 보상 요청 이벤트 수신");
+                    handleOrderCompensationRequested(values);
+                    break;
+                case EventConstants.EventTypes.PAYMENT_VALIDATION_FAILED:
+                    log.info("⚠️ [ORDER] 결제 검증 실패 이벤트 수신 (보상 요청 이벤트를 대기)");
                     break;
                 default:
                     log.debug("🔔 [ORDER] 알 수 없는 이벤트 타입 - type: {}", eventType);
@@ -588,6 +596,231 @@ public class OrderRedisStreamListener implements StreamListener<String, MapRecor
             log.error("🚨 [ORDER] 결제 실패 이벤트 처리 실패 - values: {}, error: {}",
                     values, e.getMessage(), e);
         }
+    }
+
+    /**
+     * Payment 보상 요청 이벤트 처리
+     */
+    private void handleOrderCompensationRequested(Map<String, Object> values) {
+        try {
+            String compensationIdRaw = normalizeString(values.get("compensationId"));
+            String originalPaymentIdRaw = normalizeString(values.get("originalPaymentId"));
+            String orderIdRaw = normalizeString(values.get("orderId"));
+            String orderNo = normalizeString(values.get("orderNo"));
+            String customerIdRaw = normalizeString(values.get("customerId"));
+            String compensationReason = normalizeString(values.get("compensationReason"));
+            String compensationType = normalizeString(values.get("compensationType"));
+            String failedAtRaw = normalizeString(values.get("failedAt"));
+            String priority = normalizeString(values.get("priority"));
+            String correlationId = normalizeString(values.get("correlationId"));
+            String userIdRaw = normalizeString(values.get("userId"));
+
+            if (orderIdRaw == null || orderIdRaw.isBlank()) {
+                log.warn("⚠️ [ORDER] 보상 요청 이벤트 필수 데이터 누락 - values: {}", values);
+                return;
+            }
+
+            UUID orderId = UUID.fromString(orderIdRaw);
+            UUID compensationId = parseUuidOrNull(compensationIdRaw);
+            UUID paymentId = parseUuidOrNull(originalPaymentIdRaw);
+            Long customerId = parseLongOrNull(customerIdRaw);
+            Long userId = parseLongOrNull(userIdRaw);
+            LocalDateTime failedAt = parseDateTimeOrNow(failedAtRaw);
+
+            List<String> actionTypes = parseActionTypes(values.get("requestedActions"));
+            if (actionTypes.isEmpty()) {
+                actionTypes = defaultActionTypesFor(compensationType);
+            }
+
+            List<PaymentCompensationRequestedEvent.CompensationAction> actions = new ArrayList<>();
+            for (String actionType : actionTypes) {
+                Map<String, Object> params = new HashMap<>();
+                if ("UPDATE_ORDER_STATUS".equals(actionType)) {
+                    params.put("newStatus", resolveTargetStatus(compensationType));
+                    params.put("reason", compensationReason != null ? compensationReason : "payment_compensation");
+                } else if ("CANCEL_RESERVATION".equals(actionType)) {
+                    params.put("reason", resolveFailureReasonKey(compensationType));
+                } else if ("RELEASE_STOCK".equals(actionType)) {
+                    params.put("reason", resolveFailureReasonKey(compensationType));
+                }
+
+                actions.add(PaymentCompensationRequestedEvent.CompensationAction.builder()
+                        .actionType(actionType)
+                        .targetResource(orderId.toString())
+                        .parameters(params)
+                        .build());
+            }
+
+            PaymentCompensationRequestedEvent event = PaymentCompensationRequestedEvent.builder()
+                    .compensationId(compensationId != null ? compensationId : UUID.randomUUID())
+                    .paymentId(paymentId)
+                    .orderId(orderId)
+                    .orderNo(orderNo)
+                    .customerId(customerId)
+                    .compensationReason(compensationReason)
+                    .compensationType(compensationType)
+                    .failedAt(failedAt)
+                    .requestedActions(actions)
+                    .priority(priority)
+                    .correlationId(correlationId)
+                    .userId(userId)
+                    .build();
+
+            eventPublisher.publishEvent(event);
+            log.info("✅ [ORDER] 보상 요청 이벤트 변환/발행 완료 - orderId: {}, compensationId: {}",
+                    orderId, event.getCompensationId());
+
+        } catch (Exception e) {
+            log.error("🚨 [ORDER] 보상 요청 이벤트 처리 실패 - values: {}, error: {}",
+                    values, e.getMessage(), e);
+        }
+    }
+
+    private String normalizeString(Object value) {
+        if (value == null) {
+            return null;
+        }
+        String raw = value.toString().trim();
+        return raw.replaceAll("^\"|\"$", "");
+    }
+
+    private UUID parseUuidOrNull(String value) {
+        if (value == null || value.isBlank() || "N/A".equalsIgnoreCase(value)) {
+            return null;
+        }
+        try {
+            return UUID.fromString(value);
+        } catch (Exception e) {
+            return null;
+        }
+    }
+
+    private Long parseLongOrNull(String value) {
+        if (value == null || value.isBlank()) {
+            return null;
+        }
+        try {
+            return Long.parseLong(value);
+        } catch (Exception e) {
+            return null;
+        }
+    }
+
+    private LocalDateTime parseDateTimeOrNow(String value) {
+        if (value == null || value.isBlank()) {
+            return LocalDateTime.now();
+        }
+        try {
+            return LocalDateTime.parse(value);
+        } catch (Exception e) {
+            return LocalDateTime.now();
+        }
+    }
+
+    private List<String> parseActionTypes(Object raw) {
+        if (raw == null) {
+            return new ArrayList<>();
+        }
+
+        List<String> actionTypes = new ArrayList<>();
+
+        if (raw instanceof List) {
+            List<?> list = (List<?>) raw;
+            for (Object item : list) {
+                if (item != null) {
+                    String cleaned = cleanActionType(item.toString());
+                    if (!cleaned.isBlank()) {
+                        actionTypes.add(cleaned);
+                    }
+                }
+            }
+            return actionTypes;
+        }
+
+        String rawString = raw.toString().trim();
+        if (rawString.isBlank()) {
+            return new ArrayList<>();
+        }
+
+        log.debug("🔍 [PARSING] 원본 requestedActions: '{}'", rawString);
+
+        // 다양한 형태의 배열/리스트 형식 처리
+        String cleaned = rawString;
+
+        // 외부 대괄호 제거
+        cleaned = cleaned.replaceAll("^\\[|\\]$", "");
+
+        // JSON 배열 형태인 경우
+        if (cleaned.contains("[") || cleaned.contains("]")) {
+            cleaned = cleaned.replaceAll("\\[|\\]", "");
+        }
+
+        log.debug("🔍 [PARSING] 대괄호 제거 후: '{}'", cleaned);
+
+        if (cleaned.isBlank()) {
+            return new ArrayList<>();
+        }
+
+        // 쉼표로 분리
+        String[] parts = cleaned.split(",");
+        for (String part : parts) {
+            String action = cleanActionType(part);
+            if (!action.isBlank()) {
+                actionTypes.add(action);
+                log.debug("🔍 [PARSING] 파싱된 액션: '{}'", action);
+            }
+        }
+
+        log.info("✅ [PARSING] 최종 파싱된 액션들: {}", actionTypes);
+        return actionTypes;
+    }
+
+    /**
+     * 액션 타입 문자열 정리
+     */
+    private String cleanActionType(String raw) {
+        if (raw == null) return "";
+
+        String cleaned = raw.trim();
+
+        // 따옴표 제거
+        cleaned = cleaned.replaceAll("^\"|\"$", "");
+        cleaned = cleaned.replaceAll("^'|'$", "");
+
+        // 남은 대괄호 제거
+        cleaned = cleaned.replaceAll("^\\[|\\]$", "");
+
+        // 혹시 모르는 특수문자 제거
+        cleaned = cleaned.replaceAll("[\\[\\]\"']", "");
+
+        return cleaned.trim();
+    }
+
+    private List<String> defaultActionTypesFor(String compensationType) {
+        List<String> actions = new ArrayList<>();
+        if ("PAYMENT_FAILURE".equals(compensationType)) {
+            actions.add("CANCEL_RESERVATION");
+            actions.add("RELEASE_STOCK");
+            actions.add("UPDATE_ORDER_STATUS");
+        } else {
+            actions.add("CANCEL_RESERVATION");
+            actions.add("UPDATE_ORDER_STATUS");
+        }
+        return actions;
+    }
+
+    private String resolveTargetStatus(String compensationType) {
+        if ("PAYMENT_FAILURE".equals(compensationType)) {
+            return "PAYMENT_FAILED";
+        }
+        return "CANCELLED";
+    }
+
+    private String resolveFailureReasonKey(String compensationType) {
+        if ("PAYMENT_FAILURE".equals(compensationType)) {
+            return "payment_failure";
+        }
+        return "validation_failure";
     }
 
     /**

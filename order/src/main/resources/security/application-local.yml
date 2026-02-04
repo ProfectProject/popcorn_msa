@@ -158,7 +158,7 @@ order:
   cancel:
     timeout: ${ORDER_CANCEL_TIMEOUT:600}   # ⚡ 취소 가능 시간: 30분 → 10분 (67% 단축)
   reservation:
-    wait-timeout-ms: ${ORDER_RESERVATION_WAIT_TIMEOUT_MS:60000}  # 예약 응답 대기 시간 (60초로 증가)
+    wait-timeout-ms: ${ORDER_RESERVATION_WAIT_TIMEOUT_MS:0}  # 예약 응답 대기 시간 (즉시 응답)
   notification:
     enabled: ${ORDER_NOTIFICATION_ENABLED:true}  # 알림 활성화
     retry-count: ${ORDER_NOTIFICATION_RETRY:2}   # ⚡ 알림 재시도 횟수: 3 → 2 (빠른 실패)

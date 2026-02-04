@@ -35,10 +35,15 @@ spring:
       connection-timeout: 2000ms  # 연결 지연에 대비해 타임아웃 완화
       jedis:
         pool:
-          max-active: 20  # 10 → 20 (더 많은 동시 연결)
-          max-idle: 16   # 8 → 16 (더 많은 유휴 연결)
-          min-idle: 8    # 2 → 8 (더 많은 최소 연결)
-          max-wait: 2000ms # 커넥션 풀 대기 여유 확대
+          max-active: 50  # 30 → 50 (극한 성능 최적화) 🚀
+          max-idle: 30   # 20 → 30 (더 많은 유휴 연결 유지) 🚀
+          min-idle: 15    # 10 → 15 (빠른 연결 확보) 🚀
+          max-wait: 500ms # 1000ms → 500ms (대기시간 대폭 단축) ⚡
+          time-between-eviction-runs: 60000ms # 유휴 연결 정리 주기
+          min-evictable-idle-time: 300000ms # 최소 유휴 시간
+          test-on-borrow: false # 대출 시 유효성 검사 비활성화 (성능 향상)
+          test-on-return: false # 반환 시 유효성 검사 비활성화 (성능 향상)
+          test-while-idle: true # 유휴 중 검사만 활성화
 
   flyway:
     enabled: true

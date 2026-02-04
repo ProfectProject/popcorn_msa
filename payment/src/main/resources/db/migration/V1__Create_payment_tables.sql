@@ -1,5 +1,14 @@
 -- Initial payment schema for payment-service
-CREATE SCHEMA IF NOT EXISTS payment;
+DO $$ BEGIN
+    IF NOT EXISTS (SELECT 1 FROM pg_roles WHERE rolname = 'payment_migrator') THEN
+        CREATE ROLE payment_migrator LOGIN PASSWORD '${PAYMENT_MIGRATOR_PASSWORD}';
+    END IF;
+END $$;
+
+CREATE SCHEMA IF NOT EXISTS payment AUTHORIZATION payment_migrator;
+GRANT ALL PRIVILEGES ON SCHEMA payment TO payment_migrator;
+GRANT ALL PRIVILEGES ON ALL TABLES IN SCHEMA payment TO payment_migrator;
+GRANT ALL PRIVILEGES ON ALL SEQUENCES IN SCHEMA payment TO payment_migrator;
 
 DO $$ BEGIN
     CREATE TYPE payment.payment_method AS ENUM ('CARD','TRANSFER','EASY_PAY');

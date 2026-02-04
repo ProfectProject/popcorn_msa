@@ -10,7 +10,7 @@ spring:
 
 spring:
   config:
-    import: classpath:security/application-local.yml,optional:file:.env[.properties]
+    import: optional:file:.env[.properties],classpath:security/application-local.yml
     activate:
       on-profile: local
 

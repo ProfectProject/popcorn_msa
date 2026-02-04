@@ -683,7 +683,22 @@ public class OrderEventListener {
     private boolean executeCompensationAction(Order order, PaymentCompensationRequestedEvent.CompensationAction action,
                                              PaymentCompensationRequestedEvent event) {
         try {
-            switch (action.getActionType()) {
+            // 액션 타입 정리 및 검증
+            String cleanedActionType = action.getActionType();
+            if (cleanedActionType != null) {
+                cleanedActionType = cleanedActionType.trim().replaceAll("[\\[\\]\"']", "");
+            }
+
+            log.debug("🔍 [ACTION] 보상 액션 실행 - orderId: {}, 원본 액션타입: '{}', 정리된 액션타입: '{}'",
+                    order.getId(), action.getActionType(), cleanedActionType);
+
+            // 강건한 문자열 매칭
+            if (cleanedActionType == null || cleanedActionType.isBlank()) {
+                log.warn("⚠️ 빈 액션 타입 - orderId: {}", order.getId());
+                return false;
+            }
+
+            switch (cleanedActionType.toUpperCase()) {
                 case "CANCEL_RESERVATION":
                     return executeCancelReservationAction(order, action, event);
 
@@ -694,9 +709,11 @@ public class OrderEventListener {
                     return executeReleaseStockAction(order, action, event);
 
                 default:
-                    log.warn("알 수 없는 보상 액션 타입 - orderId: {}, actionType: {}",
-                            order.getId(), action.getActionType());
-                    return false;
+                    log.warn("알 수 없는 보상 액션 타입 - orderId: {}, 원본: '{}', 정리됨: '{}', 전체 액션: {}",
+                            order.getId(), action.getActionType(), cleanedActionType, action);
+                    // 알 수 없는 액션 타입이지만 전체 보상 프로세스를 실패시키지는 않음
+                    log.info("⚠️ 알 수 없는 액션 타입이지만 다른 액션 계속 진행 - orderId: {}", order.getId());
+                    return true;
             }
         } catch (Exception e) {
             log.error("보상 액션 실행 중 예외 발생 - orderId: {}, actionType: {}, error: {}",

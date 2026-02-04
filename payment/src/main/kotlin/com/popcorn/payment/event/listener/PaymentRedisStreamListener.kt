@@ -33,6 +33,7 @@ class PaymentRedisStreamListener(
     private val eventScope = CoroutineScope(Dispatchers.Default)
 
     override fun onMessage(record: MapRecord<String, String, Any>) {
+        val startTime = System.currentTimeMillis()
         try {
             val streamName = record.stream
             val recordId = record.id.value
@@ -41,23 +42,41 @@ class PaymentRedisStreamListener(
             log.info("🔔 [PAYMENT] Stream 메시지 수신 - stream: {}, recordId: {}, eventType: {}",
                 streamName, recordId, values["eventType"])
 
-            // 스트림별 처리
-            if ("order-info-responses" == streamName) {
-                log.info("📞 [PAYMENT] Order 정보 응답 수신")
-                handleOrderInfoResponse(values)
-            } else {
-                // 기존 eventType 기반 처리
-                val rawEventType = values["eventType"] as? String
-                val eventType = rawEventType?.trim()?.trim('"')
-                handleStreamEvent(eventType, values)
+            // 🚀 스트림별 최적화된 처리
+            when (streamName) {
+                "order-info-responses" -> {
+                    log.info("📞 [PAYMENT] Order 정보 응답 수신")
+                    handleOrderInfoResponse(values)
+                }
+                "payment-events" -> {
+                    // 기존 eventType 기반 처리 (성능 최적화)
+                    val rawEventType = values["eventType"] as? String
+                    val eventType = rawEventType?.trim()?.trim('"')
+                    handleStreamEvent(eventType, values)
+                }
+                else -> {
+                    // 알려지지 않은 스트림도 기본 처리
+                    val rawEventType = values["eventType"] as? String
+                    val eventType = rawEventType?.trim()?.trim('"')
+                    handleStreamEvent(eventType, values)
+                }
             }
 
+            val processingTime = System.currentTimeMillis() - startTime
             // 메시지 처리 완료 후 ACK (자동으로 처리됨)
-            log.debug("✅ [PAYMENT] 메시지 처리 완료 - stream: {}, recordId: {}", streamName, recordId)
+            log.debug("✅ [PAYMENT] 메시지 처리 완료 - stream: {}, recordId: {}, 처리시간: {}ms",
+                streamName, recordId, processingTime)
+
+            // 🚀 성능 모니터링
+            if (processingTime > 100) {
+                log.warn("⚠️ [PAYMENT] Stream 메시지 처리 지연 - stream: {}, 처리시간: {}ms",
+                    streamName, processingTime)
+            }
 
         } catch (e: Exception) {
-            log.error("🚨 [PAYMENT] Stream 메시지 처리 실패 - record: {}, error: {}",
-                record, e.message, e)
+            val processingTime = System.currentTimeMillis() - startTime
+            log.error("🚨 [PAYMENT] Stream 메시지 처리 실패 - record: {}, 처리시간: {}ms, error: {}",
+                record, processingTime, e.message, e)
             // TODO: 실패한 메시지를 DLQ(Dead Letter Queue)로 이동하거나 재시도 로직 구현
         }
     }
@@ -238,16 +257,28 @@ class PaymentRedisStreamListener(
             log.info("📞 [PAYMENT] Order 정보 응답 처리 시작 - requestId: {}, success: {}",
                 values["requestId"], values["success"])
 
-            // Map을 OrderInfoResponseEvent로 변환
+            // Map을 OrderInfoResponseEvent로 변환 (Order 서비스 응답 포맷 호환)
+            val customerIdValue = normalizeString(values["customerId"])
+                ?: normalizeString(values["actualUserId"])
+            val orderStatusValue = normalizeString(values["orderStatus"])
+                ?: normalizeString(values["status"])
+            val totalAmountValue = normalizeString(values["totalAmount"])
+                ?: normalizeString(values["amount"])
+
             val response = OrderInfoResponseEvent(
                 requestId = normalizeString(values["requestId"]),
                 success = normalizeString(values["success"])?.toBoolean() ?: false,
+                errorMessage = normalizeString(values["errorMessage"])
+                    ?: normalizeString(values["message"]),
+                actualLines = parseOrderLineInfos(values["actualLines"]),
+                customerId = customerIdValue?.toLongOrNull(),
+                orderStatus = orderStatusValue,
+                totalAmount = totalAmountValue?.toIntOrNull(),
                 actualOrderNo = normalizeString(values["actualOrderNo"]),
                 actualUserId = normalizeString(values["actualUserId"])?.toLongOrNull(),
                 actualPopupId = normalizeString(values["actualPopupId"]),
                 actualHasReservation = normalizeString(values["actualHasReservation"])?.toBoolean(),
-                actualHasGoods = normalizeString(values["actualHasGoods"])?.toBoolean(),
-                actualLines = parseEventLineItems(values["actualLines"])
+                actualHasGoods = normalizeString(values["actualHasGoods"])?.toBoolean()
             )
 
             // PaymentOrderInfoService에 응답 전달
@@ -296,6 +327,79 @@ class PaymentRedisStreamListener(
             }
         } catch (e: Exception) {
             log.warn("Order lines JSON 파싱 실패: {}", e.message)
+            emptyList()
+        }
+    }
+
+    /**
+     * 🚀 EventLineItem 파싱 메서드 (새로운 이벤트 형식용)
+     */
+    private fun parseOrderLineInfos(rawLines: Any?): List<com.popcorn.payment.event.domain.payment.EventLineItem> {
+        log.info("🔍 [DEBUG] parseOrderLineInfos 시작 - rawLines type: {}, value: {}",
+            rawLines?.javaClass?.simpleName, rawLines)
+
+        if (rawLines == null) {
+            log.info("🔍 [DEBUG] rawLines is null, returning empty list")
+            return emptyList()
+        }
+
+        return try {
+            when (rawLines) {
+                is List<*> -> {
+                    log.info("🔍 [DEBUG] rawLines is List, size: {}", rawLines.size)
+                    rawLines.mapNotNull { item ->
+                        log.info("🔍 [DEBUG] Processing list item type: {}, value: {}",
+                            item?.javaClass?.simpleName, item)
+                        when (item) {
+                            is Map<*, *> -> {
+                                val result = objectMapper.convertValue(item, com.popcorn.payment.event.domain.payment.EventLineItem::class.java)
+                                log.info("🔍 [DEBUG] Converted map to EventLineItem: {}", result)
+                                result
+                            }
+                            else -> {
+                                log.warn("🔍 [DEBUG] Unexpected list item type: {}", item?.javaClass?.simpleName)
+                                null
+                            }
+                        }
+                    }
+                }
+                is String -> {
+                    log.info("🔍 [DEBUG] rawLines is String: '{}'", rawLines)
+                    var trimmed = rawLines.trim().trim('"')
+                    log.info("🔍 [DEBUG] After basic trimming: '{}'", trimmed)
+
+                    // 이중 이스케이프 처리 - JSON 문자열이 escape되어 있는 경우 처리
+                    if (trimmed.startsWith("[{\\\"") || trimmed.startsWith("{\\\"")) {
+                        log.info("🔍 [DEBUG] Detected escaped JSON, unescaping...")
+                        trimmed = trimmed.replace("\\\"", "\"").replace("\\\\", "\\")
+                        log.info("🔍 [DEBUG] After unescaping: '{}'", trimmed)
+                    }
+
+                    if (trimmed.isBlank() || trimmed == "[]") {
+                        log.info("🔍 [DEBUG] Empty or blank string, returning empty list")
+                        emptyList()
+                    } else {
+                        log.info("🔍 [DEBUG] Attempting to parse JSON string: '{}'", trimmed)
+                        val typeRef = object : com.fasterxml.jackson.core.type.TypeReference<List<com.popcorn.payment.event.domain.payment.EventLineItem>>() {}
+                        val result = objectMapper.readValue(trimmed, typeRef)
+                        log.info("🔍 [DEBUG] JSON parsing successful, result count: {}", result.size)
+                        result.forEachIndexed { index, item ->
+                            log.info("🔍 [DEBUG] Parsed item[{}]: itemType={}, qty={}, unitPrice={}, linePrice={}",
+                                index, item.itemType, item.qty, item.unitPrice, item.linePrice)
+                        }
+                        result
+                    }
+                }
+                else -> {
+                    log.info("🔍 [DEBUG] rawLines is other type: {}, attempting direct conversion", rawLines.javaClass.simpleName)
+                    val typeRef = object : com.fasterxml.jackson.core.type.TypeReference<List<com.popcorn.payment.event.domain.payment.EventLineItem>>() {}
+                    val result = objectMapper.convertValue(rawLines, typeRef)
+                    log.info("🔍 [DEBUG] Direct conversion successful, result count: {}", result.size)
+                    result
+                }
+            }
+        } catch (e: Exception) {
+            log.error("❌ [DEBUG] EventLineItem JSON 파싱 실패 - rawLines: {}, error: {}", rawLines, e.message, e)
             emptyList()
         }
     }

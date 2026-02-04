@@ -25,6 +25,7 @@ class PaymentRedisEventPublisher(
     companion object {
         private val PAYMENT_EVENTS_STREAM = EventConstants.Streams.PAYMENT_EVENTS
         private val PAYMENT_REQUESTS_STREAM = EventConstants.Streams.PAYMENT_REQUESTS
+        private val ORDER_INFO_REQUESTS_STREAM = EventConstants.Streams.ORDER_INFO_REQUESTS
         private const val QR_EVENTS_STREAM = "qr-events"
         private const val ORDER_EVENTS_STREAM = "order-events"
         private const val INVENTORY_EVENTS_STREAM = "inventory-events"
@@ -118,7 +119,9 @@ class PaymentRedisEventPublisher(
 
             // BasePaymentEvent 기반 이벤트 처리 (제네릭)
             is BasePaymentEvent -> when (event.eventType) {
-                EventConstants.EventTypes.PAYMENT_CREATE_REQUESTED, EventConstants.EventTypes.PAYMENT_CANCEL_REQUESTED -> PAYMENT_REQUESTS_STREAM to event.eventType
+                EventConstants.EventTypes.PAYMENT_CREATE_REQUESTED,
+                EventConstants.EventTypes.PAYMENT_CANCEL_REQUESTED -> PAYMENT_REQUESTS_STREAM to event.eventType
+                EventConstants.EventTypes.ORDER_INFO_REQUEST -> ORDER_INFO_REQUESTS_STREAM to event.eventType
                 else -> PAYMENT_EVENTS_STREAM to event.eventType
             }
 

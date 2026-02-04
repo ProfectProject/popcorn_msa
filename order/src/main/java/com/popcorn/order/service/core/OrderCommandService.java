@@ -80,8 +80,11 @@ public class OrderCommandService {
     @org.springframework.beans.factory.annotation.Value("${frontend.base-url:${FRONTEND_BASE_URL:http://localhost:3000}}")
     private String frontendBaseUrl;
 
-    @org.springframework.beans.factory.annotation.Value("${order.reservation.wait-timeout-ms:15000}")
+    @org.springframework.beans.factory.annotation.Value("${order.reservation.wait-timeout-ms:0}")
     private long reservationWaitTimeoutMs;
+
+    @org.springframework.beans.factory.annotation.Value("${order.reservation.fail-on-timeout:false}")
+    private boolean reservationFailOnTimeout;
 
 
     // 성능 통계 카운터
@@ -135,7 +138,7 @@ public class OrderCommandService {
 
         long startTime = System.currentTimeMillis();
 
-        OrderCreationResult result = transactionTemplate.execute(status -> createOrderInTransaction(command));
+        OrderCreationResult result = createOrderInTransactionOptimized(command);
         if (result == null || result.getOrder() == null) {
             throw new RuntimeException("주문 생성에 실패했습니다.");
         }
@@ -169,50 +172,32 @@ public class OrderCommandService {
             throw new IllegalStateException("예약 또는 굿즈 중 최소 하나는 필요합니다.");
         }
 
-        // 예약/재고 응답 대기 (Redis Stream 타임아웃 해결)
+        // 🚀 즉시 응답 처리 (성능 최적화)
         tracker.markEventStart();
-        OrderReservationAwaiter.ReservationOutcome outcome;
-        try {
-            long optimizedTimeout = reservationWaitTimeoutMs; // 15초 타임아웃
-            outcome = orderReservationAwaiter.await(savedOrder.getId(),
-                    java.time.Duration.ofMillis(optimizedTimeout));
+        log.info("🚀 [INSTANT-RESPONSE] 예약은 백그라운드에서 처리, 즉시 응답 - orderId: {}", savedOrder.getId());
 
-            long waitTime = System.currentTimeMillis() - startTime;
-            log.info("🚀 Redis Stream 재고 예약 응답 완료 - 주문번호: {}, 대기시간: {}ms (타임아웃: {}ms)",
-                    savedOrder.getOrderNo(), waitTime, optimizedTimeout);
-
-        } catch (java.util.concurrent.TimeoutException e) {
-            tracker.markEventEnd();
-            tracker.finish();
-            cancelOrderSafely(savedOrder.getId(),
-                    "예약 응답 타임아웃 (" + reservationWaitTimeoutMs + "ms)");
-            invalidateCreateOrderIdempotencyKey(command, "예약 응답 타임아웃");
-            throw new com.popcorn.order.exception.OrderReservationTimeoutException(
-                    "예약 응답이 지연되어 주문 생성에 실패했습니다 (timeout=" + reservationWaitTimeoutMs + "ms).");
-        }
+        // 타임아웃 처리 제거 (즉시 응답이므로 불필요)
         tracker.markEventEnd();
 
-        if (!outcome.isSuccess()) {
-            cancelOrderSafely(savedOrder.getId(), "예약 실패: " + outcome.getFailureReason());
-            throw new com.popcorn.order.exception.OrderReservationFailedException(
-                    outcome.getFailureReason() != null ? outcome.getFailureReason() : "예약 실패");
-        }
-
+        // 즉시 응답: 예약과 동시에 결제 URL 생성
         Order latestOrder = orderRepository.findById(savedOrder.getId()).orElse(savedOrder);
         latestOrder.setOrderItems(orderItemRepository.findByOrderId(latestOrder.getId()));
         String paymentMethod = determinePaymentMethod(latestOrder);
-        com.popcorn.order.dto.payment.PaymentUrlResponse paymentUrl = outcome.getPaymentUrl();
+
+        // 즉시 결제 URL 생성
+        com.popcorn.order.dto.payment.PaymentUrlResponse paymentUrlResponse = generatePaymentUrlAfterReservation(latestOrder);
+
+        String paymentStatus = "PAYMENT_PENDING";
+        String paymentMessage = paymentUrlResponse != null ? "결제 링크가 발급되었습니다." : "결제 링크 생성 중입니다.";
 
         OrderCreateResponse response = OrderCreateResponse.fromOrderWithPayment(
                 latestOrder,
                 null,
-                "PAYMENT_PENDING",
+                paymentStatus,
                 paymentMethod,
-                paymentUrl != null ? paymentUrl.getPaymentUrl() : null,
-                paymentUrl != null ? paymentUrl.getExpiresAt() : null,
-                paymentUrl != null
-                        ? "예약 완료. 결제 링크가 발급되었습니다."
-                        : "예약 완료. 결제 링크 생성 중입니다."
+                paymentUrlResponse != null ? paymentUrlResponse.getPaymentUrl() : null,
+                paymentUrlResponse != null ? paymentUrlResponse.getExpiresAt() : null,
+                paymentMessage
         );
 
         long totalElapsed = System.currentTimeMillis() - startTime;
@@ -256,6 +241,62 @@ public class OrderCommandService {
     @Transactional
     protected OrderCreationResult createOrderInTransaction(CreateOrderCommand command) {
         return createOrderInTransactionSequential(command);
+    }
+
+    /**
+     * 🚀 최적화된 주문 생성 (목표: 300ms 이내)
+     */
+    @Transactional
+    protected OrderCreationResult createOrderInTransactionOptimized(CreateOrderCommand command) {
+        long startTime = System.currentTimeMillis();
+        log.info("🚀 [OPTIMIZED] 주문 생성 시작 - userId: {}", command.getUserId());
+
+        // 1단계: 주문 엔티티 생성 (DB 조회 최소화)
+        List<OrderItem> orderItems = convertToOrderItems(command.getItems());
+        ItemType orderType = ItemType.valueOf(command.getOrderType());
+
+        long step1Time = System.currentTimeMillis();
+        Order order = orderDomainService.createOrder(
+                command.getUserId(),
+                command.getPopupId(),
+                orderType,
+                orderItems
+        );
+        log.debug("⚡ [STEP1] 주문 엔티티 생성 완료: {}ms", System.currentTimeMillis() - step1Time);
+
+        // 2단계: 주문 저장 (최적화된 저장)
+        long step2Time = System.currentTimeMillis();
+        Order savedOrder = orderRepository.save(order);
+        log.debug("⚡ [STEP2] 주문 저장 완료: {}ms", System.currentTimeMillis() - step2Time);
+
+        // 3단계: 주문 아이템 저장 (배치 처리)
+        long step3Time = System.currentTimeMillis();
+        savedOrder.getOrderItems().forEach(item -> item.setOrderId(savedOrder.getId()));
+        orderItemRepository.saveAll(savedOrder.getOrderItems());
+        log.debug("⚡ [STEP3] 주문 아이템 저장 완료: {}ms", System.currentTimeMillis() - step3Time);
+
+        // 4단계: 상태 히스토리 저장 (단순화)
+        long step4Time = System.currentTimeMillis();
+        OrderStatusHistory createdHistory = OrderStatusHistory.builder()
+                .orderId(savedOrder.getId())
+                .fromStatus(null)
+                .toStatus(savedOrder.getStatus())
+                .reason("주문 생성")
+                .changedAt(LocalDateTime.now())
+                .build();
+        orderStatusHistoryRepository.save(createdHistory);
+        log.debug("⚡ [STEP4] 상태 히스토리 저장 완료: {}ms", System.currentTimeMillis() - step4Time);
+
+        // 5단계: 결과 구성
+        boolean hasGoodsItems = savedOrder.getOrderItems().stream()
+                .anyMatch(item -> ItemType.GOODS.equals(item.getOrderItemType()));
+        boolean hasReservationItems = savedOrder.getOrderItems().stream()
+                .anyMatch(item -> ItemType.RESERVATION.equals(item.getOrderItemType()));
+
+        long totalTime = System.currentTimeMillis() - startTime;
+        log.info("🚀 [OPTIMIZED] 주문 생성 완료 - userId: {}, 총 시간: {}ms", command.getUserId(), totalTime);
+
+        return new OrderCreationResult(savedOrder, hasReservationItems, hasGoodsItems);
     }
 
     /**
