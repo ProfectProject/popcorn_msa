@@ -20,11 +20,8 @@ import java.util.*
  * - 시스템 부하 분산
  */
 data class PaymentCancelRetryEvent(
-    /** 결제 ID (PaymentEvent 필수 필드) */
-    override val paymentId: UUID,
-
-    /** 주문 ID (PaymentEvent 필수 필드) */
-    override val orderId: UUID,
+    /** 주문 ID */
+    val orderId: UUID,
 
     /** 주문 번호 */
     val orderNo: String,
@@ -41,12 +38,30 @@ data class PaymentCancelRetryEvent(
     /** 다음 재시도 예정 시간 */
     val nextRetryAt: LocalDateTime,
 
-    /** 이벤트 발생 시간 (PaymentEvent 필수 필드) */
-    override val occurredAt: LocalDateTime = LocalDateTime.now(),
+    /** 이벤트 발생 시간 */
+    val occurredAt: LocalDateTime = LocalDateTime.now(),
 
     /** 이벤트 ID (추적용) */
-    val eventId: String = UUID.randomUUID().toString()
-) : PaymentEvent {
+    val eventId: String = UUID.randomUUID().toString(),
+
+    /** 결제 ID */
+    val relatedPaymentId: UUID
+) : BasePaymentEvent(
+    paymentId = relatedPaymentId,
+    eventType = "payment-cancel-retry"
+) {
+
+    override fun getEventPayload(): Map<String, Any> = mapOf(
+        "paymentId" to paymentId,
+        "orderId" to orderId,
+        "orderNo" to orderNo,
+        "cancelReason" to cancelReason,
+        "retryCount" to retryCount,
+        "delaySeconds" to delaySeconds,
+        "nextRetryAt" to nextRetryAt.toString(),
+        "occurredAt" to occurredAt.toString(),
+        "eventId" to eventId
+    )
 
     companion object {
         /**

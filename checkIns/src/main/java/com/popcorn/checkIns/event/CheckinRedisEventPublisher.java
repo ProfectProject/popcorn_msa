@@ -2,6 +2,7 @@ package com.popcorn.checkIns.event;
 
 import com.fasterxml.jackson.databind.ObjectMapper;
 import com.popcorn.checkIns.event.CheckinEvents.*;
+import com.popcorn.common.constants.EventConstants;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.data.redis.connection.stream.StreamRecords;
@@ -27,9 +28,9 @@ public class CheckinRedisEventPublisher implements CheckinEventPublisher {
     private final RedisTemplate<String, Object> redisTemplate;
     private final ObjectMapper objectMapper;
 
-    // Stream 이름 상수
-    private static final String CHECKIN_EVENTS_STREAM = "checkin-events";
-    private static final String CHECKIN_REQUESTS_STREAM = "checkin-requests";
+    // EventConstants 사용으로 상수 통합 관리
+    private static final String CHECKIN_EVENTS_STREAM = EventConstants.Streams.CHECKIN_EVENTS;
+    private static final String CHECKIN_REQUESTS_STREAM = EventConstants.Streams.CHECKIN_REQUESTS;
 
     @Override
     public void publish(BaseCheckinEvent event) {
@@ -87,8 +88,8 @@ public class CheckinRedisEventPublisher implements CheckinEventPublisher {
      */
     private String resolveStreamName(BaseCheckinEvent event) {
         return switch (event.getEventType()) {
-            case "qr-generation-requested" -> CHECKIN_REQUESTS_STREAM;
-            case "qr-generated", "checkin-created" -> CHECKIN_EVENTS_STREAM;
+            case EventConstants.EventTypes.QR_GENERATION_REQUESTED -> CHECKIN_REQUESTS_STREAM;
+            case EventConstants.EventTypes.QR_GENERATED, EventConstants.EventTypes.CHECKIN_CREATED -> CHECKIN_EVENTS_STREAM;
             default -> null;
         };
     }

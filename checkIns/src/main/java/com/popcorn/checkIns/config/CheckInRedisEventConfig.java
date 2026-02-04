@@ -1,6 +1,7 @@
 package com.popcorn.checkIns.config;
 
 import com.popcorn.checkIns.event.CheckInRedisStreamListener;
+import com.popcorn.common.constants.EventConstants;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.boot.autoconfigure.condition.ConditionalOnProperty;
@@ -36,24 +37,20 @@ public class CheckInRedisEventConfig {
 
     private StreamMessageListenerContainer checkInContainer;
 
-    // Stream 이름 상수
-    private static final String STANDARD_CHECKINS_EVENTS_STREAM = "standard-checkins-events";
-    private static final String PAYMENT_EVENTS_STREAM = "payment-events";
-    private static final String ORDER_EVENTS_STREAM = "order-events";
-
-    // 새로운 BaseEvent 기반 스트림들
-    private static final String CHECKIN_REQUESTS_STREAM = "checkin-requests";
-    private static final String CHECKIN_EVENTS_STREAM = "checkin-events";
+    // EventConstants 사용으로 상수 통합 관리
+    private static final String STANDARD_CHECKINS_EVENTS_STREAM = EventConstants.Streams.STANDARD_CHECKINS_EVENTS;
+    private static final String PAYMENT_EVENTS_STREAM = EventConstants.Streams.PAYMENT_EVENTS;
+    private static final String ORDER_EVENTS_STREAM = EventConstants.Streams.ORDER_EVENTS;
+    private static final String CHECKIN_REQUESTS_STREAM = EventConstants.Streams.CHECKIN_REQUESTS;
+    private static final String CHECKIN_EVENTS_STREAM = EventConstants.Streams.CHECKIN_EVENTS;
 
     // Consumer Group 이름
-    private static final String CHECKIN_CONSUMER_GROUP = "checkin-service-group";
-    private static final String STANDARD_CONSUMER_NAME = "standard-consumer-1";
-    private static final String PAYMENT_CONSUMER_NAME = "payment-consumer-1";
-    private static final String ORDER_CONSUMER_NAME = "order-consumer-1";
-
-    // 새로운 BaseEvent 기반 컨슈머들
-    private static final String CHECKIN_REQUESTS_CONSUMER_NAME = "checkin-requests-consumer-1";
-    private static final String CHECKIN_EVENTS_CONSUMER_NAME = "checkin-events-consumer-1";
+    private static final String CHECKIN_CONSUMER_GROUP = EventConstants.ConsumerGroups.CHECKIN_SERVICE_GROUP;
+    private static final String STANDARD_CONSUMER_NAME = EventConstants.Consumers.STANDARD_CONSUMER;
+    private static final String PAYMENT_CONSUMER_NAME = EventConstants.Consumers.PAYMENT_EVENTS_CONSUMER;
+    private static final String ORDER_CONSUMER_NAME = EventConstants.Consumers.ORDER_EVENTS_CONSUMER;
+    private static final String CHECKIN_REQUESTS_CONSUMER_NAME = EventConstants.Consumers.CHECKIN_REQUESTS_CONSUMER;
+    private static final String CHECKIN_EVENTS_CONSUMER_NAME = EventConstants.Consumers.CHECKIN_EVENTS_CONSUMER;
 
     @PostConstruct
     public void initializeStreamsAndConsumerGroups() {

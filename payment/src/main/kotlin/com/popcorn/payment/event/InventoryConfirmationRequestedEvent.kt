@@ -19,11 +19,8 @@ import java.util.*
  * - 재고 예약 → 확정/복구 플로우 관리
  */
 data class InventoryConfirmationRequestedEvent(
-    /** 결제 ID (PaymentEvent 필수 필드) */
-    override val paymentId: UUID,
-
-    /** 주문 ID (PaymentEvent 필수 필드) */
-    override val orderId: UUID,
+    /** 주문 ID */
+    val orderId: UUID,
 
     /** 처리 유형 (CONFIRM: 차감 확정, RESTORE: 복구) */
     val actionType: String,
@@ -34,12 +31,25 @@ data class InventoryConfirmationRequestedEvent(
     /** 요청 시간 */
     val requestedAt: LocalDateTime,
 
-    /** 이벤트 발생 시간 (PaymentEvent 필수 필드) */
-    override val occurredAt: LocalDateTime = LocalDateTime.now(),
+    /** 이벤트 발생 시간 */
+    val occurredAt: LocalDateTime = LocalDateTime.now(),
 
     /** 이벤트 ID (추적용) */
     val eventId: String = UUID.randomUUID().toString()
-) : PaymentEvent {
+) : BasePaymentEvent(
+    paymentId = UUID.randomUUID(), // 재고 확인 요청의 경우 임시 ID
+    eventType = "inventory-confirmation-requested"
+) {
+
+    override fun getEventPayload(): Map<String, Any> = mapOf(
+        "paymentId" to paymentId,
+        "orderId" to orderId,
+        "actionType" to actionType,
+        "reason" to reason,
+        "requestedAt" to requestedAt.toString(),
+        "occurredAt" to occurredAt.toString(),
+        "eventId" to eventId
+    )
 
     companion object {
         /**
@@ -50,7 +60,6 @@ data class InventoryConfirmationRequestedEvent(
             orderId: UUID
         ): InventoryConfirmationRequestedEvent {
             return InventoryConfirmationRequestedEvent(
-                paymentId = paymentId,
                 orderId = orderId,
                 actionType = "CONFIRM",
                 reason = "결제 승인 완료",
@@ -68,7 +77,6 @@ data class InventoryConfirmationRequestedEvent(
             reason: String = "결제 실패/취소"
         ): InventoryConfirmationRequestedEvent {
             return InventoryConfirmationRequestedEvent(
-                paymentId = paymentId,
                 orderId = orderId,
                 actionType = "RESTORE",
                 reason = reason,

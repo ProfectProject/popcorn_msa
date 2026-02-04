@@ -1,5 +1,6 @@
 package com.popcorn.payment.event
 
+import com.popcorn.payment.common.exception.PaymentExceptionHandler
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.launch
@@ -11,24 +12,29 @@ import org.springframework.stereotype.Component
  * 결제 이벤트 발행 서비스 구현체
  */
 @Component
-class PaymentEventPublisherImpl(
+class BasePaymentEventPublisherImpl(
     private val applicationEventPublisher: ApplicationEventPublisher,
     private val paymentRedisEventPublisher: PaymentRedisEventPublisher
-) : PaymentEventPublisher {
+) : BasePaymentEventPublisher {
 
-    private val log = LoggerFactory.getLogger(PaymentEventPublisherImpl::class.java)
+    private val log = LoggerFactory.getLogger(BasePaymentEventPublisherImpl::class.java)
     private val eventScope = CoroutineScope(Dispatchers.Default)
 
     /**
      * 단일 이벤트 발행
      */
-    override suspend fun publish(event: PaymentEvent) {
+    override suspend fun publish(event: BasePaymentEvent) {
         try {
             log.debug("📨 이벤트 발행: {}", event::class.simpleName)
             applicationEventPublisher.publishEvent(event)
             paymentRedisEventPublisher.publish(event)
         } catch (e: Exception) {
-            log.error("❌ 이벤트 발행 실패: event={}, error={}", event::class.simpleName, e.message, e)
+            PaymentExceptionHandler.handleEventPublishException(
+                logger = log,
+                eventType = event.eventType,
+                eventClass = event::class.simpleName,
+                exception = e
+            )
             // 이벤트 발행 실패해도 메인 로직에는 영향 없음
         }
     }
@@ -36,7 +42,7 @@ class PaymentEventPublisherImpl(
     /**
      * 다중 이벤트 발행
      */
-    override suspend fun publishAll(events: List<PaymentEvent>) {
+    override suspend fun publishAll(events: List<BasePaymentEvent>) {
         events.forEach { event ->
             eventScope.launch {
                 publish(event)
@@ -47,7 +53,7 @@ class PaymentEventPublisherImpl(
     /**
      * 비동기 이벤트 발행 (Fire and Forget)
      */
-    fun publishAsync(event: PaymentEvent) {
+    fun publishAsync(event: BasePaymentEvent) {
         eventScope.launch {
             publish(event)
         }

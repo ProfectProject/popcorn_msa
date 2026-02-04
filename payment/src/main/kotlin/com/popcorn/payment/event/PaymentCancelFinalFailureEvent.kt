@@ -21,11 +21,8 @@ import java.util.*
  * - 고객 서비스 품질 유지를 위한 추가 대응 트리거
  */
 data class PaymentCancelFinalFailureEvent(
-    /** 결제 ID (PaymentEvent 필수 필드) */
-    override val paymentId: UUID,
-
-    /** 주문 ID (PaymentEvent 필수 필드) */
-    override val orderId: UUID,
+    /** 주문 ID */
+    val orderId: UUID,
 
     /** 주문 번호 */
     val orderNo: String,
@@ -42,12 +39,31 @@ data class PaymentCancelFinalFailureEvent(
     /** 고객 ID (CS 대응용) */
     val customerId: Long?,
 
-    /** 이벤트 발생 시간 (PaymentEvent 필수 필드) */
-    override val occurredAt: LocalDateTime = LocalDateTime.now(),
+    /** 이벤트 발생 시간 */
+    val occurredAt: LocalDateTime = LocalDateTime.now(),
 
     /** 이벤트 ID (추적용) */
-    val eventId: String = UUID.randomUUID().toString()
-) : PaymentEvent {
+    val eventId: String = UUID.randomUUID().toString(),
+
+    /** 결제 ID */
+    val relatedPaymentId: UUID
+) : BasePaymentEvent(
+    paymentId = relatedPaymentId,
+    eventType = "payment-cancel-final-failure",
+    userId = customerId
+) {
+
+    override fun getEventPayload(): Map<String, Any> = mapOf(
+        "paymentId" to paymentId,
+        "orderId" to orderId,
+        "orderNo" to orderNo,
+        "originalReason" to originalReason,
+        "finalFailureReason" to finalFailureReason,
+        "totalRetryCount" to totalRetryCount,
+        "customerId" to (customerId?.toString() ?: ""),
+        "occurredAt" to occurredAt.toString(),
+        "eventId" to eventId
+    )
 
     companion object {
         /**

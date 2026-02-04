@@ -1,5 +1,6 @@
 package com.popcorn.checkIns.event;
 
+import com.popcorn.common.constants.EventConstants;
 import java.time.LocalDateTime;
 import java.util.Map;
 import java.util.UUID;
@@ -30,7 +31,7 @@ public class CheckinEvents {
 
         public QrGenerationRequestedEvent(UUID qrId, UUID orderId, UUID paymentId, String orderNo,
                                         UUID storeId, UUID popupId, Long userId) {
-            super(qrId, "qr-generation-requested", userId);
+            super(qrId, EventConstants.EventTypes.QR_GENERATION_REQUESTED, userId);
             this.orderId = orderId;
             this.paymentId = paymentId;
             this.orderNo = orderNo;
@@ -85,7 +86,7 @@ public class CheckinEvents {
 
         public QrGeneratedEvent(UUID qrId, UUID orderId, String orderNo, String qrToken, String qrUrl,
                                LocalDateTime expiresAt, Long ttlSeconds, Long userId) {
-            super(qrId, "qr-generated", userId);
+            super(qrId, EventConstants.EventTypes.QR_GENERATED, userId);
             this.orderId = orderId;
             this.orderNo = orderNo;
             this.qrToken = qrToken;
@@ -145,7 +146,7 @@ public class CheckinEvents {
 
         public CheckinCreatedEvent(UUID checkinId, UUID orderId, UUID orderGoodsId, UUID popupId, UUID storeId,
                                   UUID qrId, String qrToken, String checkinLocation, Long userId) {
-            super(checkinId, "checkin-created", userId);
+            super(checkinId, EventConstants.EventTypes.CHECKIN_CREATED, userId);
             this.orderId = orderId;
             this.orderGoodsId = orderGoodsId;
             this.popupId = popupId;

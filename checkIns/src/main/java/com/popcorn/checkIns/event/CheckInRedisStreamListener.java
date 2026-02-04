@@ -1,6 +1,8 @@
 package com.popcorn.checkIns.event;
 
 import com.fasterxml.jackson.databind.ObjectMapper;
+import com.popcorn.checkIns.event.CheckinEvents.*;
+import com.popcorn.checkIns.service.QrCodeService;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.context.ApplicationEventPublisher;
@@ -9,6 +11,7 @@ import org.springframework.data.redis.stream.StreamListener;
 import org.springframework.stereotype.Component;
 
 import java.util.Map;
+import java.util.UUID;
 
 /**
  * CheckIns 서비스 Redis Stream 이벤트 리스너
@@ -23,6 +26,7 @@ public class CheckInRedisStreamListener implements StreamListener<String, MapRec
 
     private final ObjectMapper objectMapper;
     private final ApplicationEventPublisher eventPublisher;
+    private final QrCodeService qrCodeService;
 
     @Override
     public void onMessage(MapRecord<String, String, Object> record) {
@@ -31,7 +35,7 @@ public class CheckInRedisStreamListener implements StreamListener<String, MapRec
             String recordId = record.getId().getValue();
             Map<String, Object> values = record.getValue();
 
-            log.info("🔔 [CHECKINS] Stream 메시지 수신 - stream: {}, recordId: {}, eventType: {}",
+            log.info("[CHECKINS] Stream 메시지 수신 - stream: {}, recordId: {}, eventType: {}",
                     streamName, recordId, values.get("eventType"));
 
             String eventType = (String) values.get("eventType");
@@ -41,10 +45,10 @@ public class CheckInRedisStreamListener implements StreamListener<String, MapRec
             }
             handleStreamEvent(eventType, values);
 
-            log.debug("✅ [CHECKINS] 메시지 처리 완료 - stream: {}, recordId: {}", streamName, recordId);
+            log.debug("[CHECKINS] 메시지 처리 완료 - stream: {}, recordId: {}", streamName, recordId);
 
         } catch (Exception e) {
-            log.error("🚨 [CHECKINS] Stream 메시지 처리 실패 - record: {}, error: {}",
+            log.error("[CHECKINS] Stream 메시지 처리 실패 - record: {}, error: {}",
                     record, e.getMessage(), e);
         }
     }
@@ -59,14 +63,14 @@ public class CheckInRedisStreamListener implements StreamListener<String, MapRec
 
                 // 표준 QR 생성 이벤트
                 case "QR_GENERATED":
-                    log.info("🎯 [CHECKINS] QR 생성 이벤트 수신 (Standard) - orderId: {}, qrCode: {}",
+                    log.info("[CHECKINS] QR 생성 이벤트 수신 (Standard) - orderId: {}, qrCode: {}",
                             values.get("orderId"), values.get("qrCode"));
                     handleQrGeneratedEvent(values);
                     break;
 
                 // 표준 체크인 생성 이벤트
                 case "CHECKIN_CREATED":
-                    log.info("🎉 [CHECKINS] 체크인 생성 이벤트 수신 (Standard) - checkinId: {}, orderId: {}",
+                    log.info("[CHECKINS] 체크인 생성 이벤트 수신 (Standard) - checkinId: {}, orderId: {}",
                             values.get("checkinId"), values.get("orderId"));
                     handleCheckinCreatedEvent(values);
                     break;
@@ -75,21 +79,21 @@ public class CheckInRedisStreamListener implements StreamListener<String, MapRec
 
                 // QR 생성 요청 이벤트 (Payment → CheckIn)
                 case "qr-generation-requested":
-                    log.info("🔔 [CHECKINS] QR 생성 요청 수신 (BaseEvent) - orderId: {}, paymentId: {}",
+                    log.info("[CHECKINS] QR 생성 요청 수신 (BaseEvent) - orderId: {}, paymentId: {}",
                             values.get("orderId"), values.get("paymentId"));
                     handleQrGenerationRequested(values);
                     break;
 
                 // QR 생성 완료 이벤트 (BaseEvent 기반)
                 case "qr-generated":
-                    log.info("✅ [CHECKINS] QR 생성 완료 (BaseEvent) - orderId: {}, qrId: {}",
+                    log.info("[CHECKINS] QR 생성 완료 (BaseEvent) - orderId: {}, qrId: {}",
                             values.get("orderId"), values.get("qrId"));
                     handleBaseQrGeneratedEvent(values);
                     break;
 
                 // 체크인 생성 이벤트 (BaseEvent 기반)
                 case "checkin-created":
-                    log.info("🎯 [CHECKINS] 체크인 생성 완료 (BaseEvent) - orderId: {}, checkinId: {}",
+                    log.info("[CHECKINS] 체크인 생성 완료 (BaseEvent) - orderId: {}, checkinId: {}",
                             values.get("orderId"), values.get("checkinId"));
                     handleBaseCheckinCreatedEvent(values);
                     break;
@@ -98,18 +102,18 @@ public class CheckInRedisStreamListener implements StreamListener<String, MapRec
 
                 // 결제 승인 시 QR 코드 생성 준비
                 case "payment-approved":
-                    log.info("💳 [CHECKINS] 결제 승인 이벤트 수신 - paymentId: {}, orderId: {}",
+                    log.info("[CHECKINS] 결제 승인 이벤트 수신 - paymentId: {}, orderId: {}",
                             values.get("paymentId"), values.get("orderId"));
                     handlePaymentApproved(values);
                     break;
 
                 // 처리하지 않는 이벤트들은 조용히 무시
                 default:
-                    log.debug("📝 [CHECKINS] 처리하지 않는 이벤트 타입: {}", eventType);
+                    log.debug("[CHECKINS] 처리하지 않는 이벤트 타입: {}", eventType);
                     break;
             }
         } catch (Exception e) {
-            log.error("🚨 [CHECKINS] 이벤트 처리 실패 - eventType: {}, error: {}", eventType, e.getMessage(), e);
+            log.error("[CHECKINS] 이벤트 처리 실패 - eventType: {}, error: {}", eventType, e.getMessage(), e);
         }
     }
 
@@ -122,13 +126,13 @@ public class CheckInRedisStreamListener implements StreamListener<String, MapRec
             String qrCode = (String) values.get("qrCode");
             String qrId = (String) values.get("qrId");
 
-            log.info("🎯 [CHECKINS] QR 생성 이벤트 처리 완료 - orderId: {}, qrId: {}", orderId, qrId);
+            log.info("[CHECKINS] QR 생성 이벤트 처리 완료 - orderId: {}, qrId: {}", orderId, qrId);
 
             // 추가적인 QR 코드 후처리가 필요한 경우 여기서 수행
             // 예: 외부 알림 시스템 연동, 로깅, 모니터링 등
 
         } catch (Exception e) {
-            log.error("🚨 [CHECKINS] QR 생성 이벤트 처리 실패 - values: {}, error: {}", values, e.getMessage(), e);
+            log.error("[CHECKINS] QR 생성 이벤트 처리 실패 - values: {}, error: {}", values, e.getMessage(), e);
         }
     }
 
@@ -141,13 +145,13 @@ public class CheckInRedisStreamListener implements StreamListener<String, MapRec
             String orderId = (String) values.get("orderId");
             String qrCode = (String) values.get("qrCode");
 
-            log.info("🎉 [CHECKINS] 체크인 생성 이벤트 처리 완료 - checkinId: {}, orderId: {}", checkinId, orderId);
+            log.info("[CHECKINS] 체크인 생성 이벤트 처리 완료 - checkinId: {}, orderId: {}", checkinId, orderId);
 
             // 추가적인 체크인 후처리가 필요한 경우 여기서 수행
             // 예: 사용자 알림, 포인트 적립, 외부 시스템 연동 등
 
         } catch (Exception e) {
-            log.error("🚨 [CHECKINS] 체크인 생성 이벤트 처리 실패 - values: {}, error: {}", values, e.getMessage(), e);
+            log.error("[CHECKINS] 체크인 생성 이벤트 처리 실패 - values: {}, error: {}", values, e.getMessage(), e);
         }
     }
 
@@ -158,11 +162,11 @@ public class CheckInRedisStreamListener implements StreamListener<String, MapRec
         try {
             String orderId = (String) values.get("orderId");
             if (orderId != null) {
-                log.info("💳 [CHECKINS] 결제 승인으로 인한 QR 코드 생성 준비 - orderId: {}", orderId);
+                log.info("[CHECKINS] 결제 승인으로 인한 QR 코드 생성 준비 - orderId: {}", orderId);
                 // 향후 자동 QR 코드 생성 로직 추가 가능
             }
         } catch (Exception e) {
-            log.error("🚨 [CHECKINS] 결제 승인 처리 실패 - values: {}, error: {}", values, e.getMessage(), e);
+            log.error("[CHECKINS] 결제 승인 처리 실패 - values: {}, error: {}", values, e.getMessage(), e);
         }
     }
 
@@ -179,17 +183,45 @@ public class CheckInRedisStreamListener implements StreamListener<String, MapRec
             String storeId = (String) values.get("storeId");
             String popupId = (String) values.get("popupId");
 
-            log.info("📱 [CHECKINS] QR 생성 요청 처리 시작 - orderId: {}, paymentId: {}", orderId, paymentId);
+            log.info("[CHECKINS] QR 생성 요청 처리 시작 - orderId: {}, paymentId: {}", orderId, paymentId);
 
-            // TODO: 실제 QR 코드 생성 로직 구현
-            // 1. QR 코드 생성
-            // 2. QrGeneratedEvent 발행
-            // 3. CheckIn 도메인 비즈니스 로직 수행
+            // 1. QR 코드 생성 - QrCodeService를 통해 실제 QR 코드 발급
+            try {
+                UUID orderUuid = UUID.fromString(orderId);
+                var qrCodeResponse = qrCodeService.issue(orderUuid);
 
-            log.info("✅ [CHECKINS] QR 생성 요청 처리 완료 - orderId: {}", orderId);
+                log.info("[CHECKINS] QR 코드 생성 완료 - orderId: {}, qrCode: {}, expiresAt: {}",
+                        orderId, qrCodeResponse.getQrCode(), qrCodeResponse.getExpiresAt());
+
+                // 2. QrGeneratedEvent 발행 - BaseEvent 기반 이벤트 발행
+                QrGeneratedEvent qrGeneratedEvent = QrGeneratedEvent.create(
+                        orderUuid,           // orderId
+                        orderNo,            // orderNo (가능한 경우)
+                        qrCodeResponse.getQrCode(), // qrToken으로 사용
+                        null,               // qrUrl (현재는 생성하지 않음)
+                        qrCodeResponse.getExpiresAt(), // expiresAt
+                        600L,              // ttlSeconds (10분)
+                        null               // userId (현재 조회 불가)
+                );
+
+                // 3. CheckIn 도메인 비즈니스 로직 수행 - 이벤트 발행을 통한 후처리
+                eventPublisher.publishEvent(qrGeneratedEvent);
+
+                log.info("[CHECKINS] QR 생성 이벤트 발행 완료 - orderId: {}, eventId: {}",
+                        orderId, qrGeneratedEvent.getEventId());
+
+            } catch (IllegalArgumentException e) {
+                log.error("[CHECKINS] 잘못된 주문 ID 형식 - orderId: {}, error: {}", orderId, e.getMessage());
+                throw e;
+            } catch (Exception e) {
+                log.error("[CHECKINS] QR 코드 생성 중 오류 발생 - orderId: {}, error: {}", orderId, e.getMessage(), e);
+                throw e;
+            }
+
+            log.info("[CHECKINS] QR 생성 요청 처리 완료 - orderId: {}", orderId);
 
         } catch (Exception e) {
-            log.error("🚨 [CHECKINS] QR 생성 요청 처리 실패 - values: {}, error: {}", values, e.getMessage(), e);
+            log.error("[CHECKINS] QR 생성 요청 처리 실패 - values: {}, error: {}", values, e.getMessage(), e);
         }
     }
 
@@ -204,14 +236,14 @@ public class CheckInRedisStreamListener implements StreamListener<String, MapRec
             String qrUrl = (String) values.get("qrUrl");
             String expiresAt = (String) values.get("expiresAt");
 
-            log.info("🎯 [CHECKINS] BaseEvent QR 생성 완료 처리 - orderId: {}, qrId: {}", orderId, qrId);
+            log.info("[CHECKINS] BaseEvent QR 생성 완료 처리 - orderId: {}, qrId: {}", orderId, qrId);
 
             // BaseEvent 메타데이터 활용
             String eventId = (String) values.get("eventId");
             String correlationId = (String) values.get("correlationId");
             String timestamp = (String) values.get("timestamp");
 
-            log.debug("📊 [CHECKINS] BaseEvent 메타데이터 - eventId: {}, correlationId: {}, timestamp: {}",
+            log.debug("[CHECKINS] BaseEvent 메타데이터 - eventId: {}, correlationId: {}, timestamp: {}",
                     eventId, correlationId, timestamp);
 
             // QR 코드 후처리 로직
@@ -220,7 +252,7 @@ public class CheckInRedisStreamListener implements StreamListener<String, MapRec
             // 3. 로깅 및 모니터링
 
         } catch (Exception e) {
-            log.error("🚨 [CHECKINS] BaseEvent QR 생성 처리 실패 - values: {}, error: {}", values, e.getMessage(), e);
+            log.error("[CHECKINS] BaseEvent QR 생성 처리 실패 - values: {}, error: {}", values, e.getMessage(), e);
         }
     }
 
@@ -236,14 +268,14 @@ public class CheckInRedisStreamListener implements StreamListener<String, MapRec
             String storeId = (String) values.get("storeId");
             String checkinAt = (String) values.get("checkinAt");
 
-            log.info("🎉 [CHECKINS] BaseEvent 체크인 생성 완료 처리 - checkinId: {}, orderId: {}", checkinId, orderId);
+            log.info("[CHECKINS] BaseEvent 체크인 생성 완료 처리 - checkinId: {}, orderId: {}", checkinId, orderId);
 
             // BaseEvent 메타데이터 활용
             String eventId = (String) values.get("eventId");
             String correlationId = (String) values.get("correlationId");
             String userId = (String) values.get("userId");
 
-            log.debug("📊 [CHECKINS] BaseEvent 메타데이터 - eventId: {}, correlationId: {}, userId: {}",
+            log.debug("[CHECKINS] BaseEvent 메타데이터 - eventId: {}, correlationId: {}, userId: {}",
                     eventId, correlationId, userId);
 
             // 체크인 후처리 로직
@@ -253,7 +285,7 @@ public class CheckInRedisStreamListener implements StreamListener<String, MapRec
             // 4. 외부 시스템 연동
 
         } catch (Exception e) {
-            log.error("🚨 [CHECKINS] BaseEvent 체크인 생성 처리 실패 - values: {}, error: {}", values, e.getMessage(), e);
+            log.error("[CHECKINS] BaseEvent 체크인 생성 처리 실패 - values: {}, error: {}", values, e.getMessage(), e);
         }
     }
 }

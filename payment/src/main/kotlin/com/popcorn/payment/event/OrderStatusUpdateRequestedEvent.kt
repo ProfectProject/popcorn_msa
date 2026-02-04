@@ -17,11 +17,8 @@ import java.util.*
  * - Payment 서비스에서 Order 서비스 직접 호출 제거
  */
 data class OrderStatusUpdateRequestedEvent(
-    /** 결제 ID (PaymentEvent 필수 필드, 실패/만료된 결제의 ID) */
-    override val paymentId: UUID,
-
-    /** 주문 ID (PaymentEvent 필수 필드) */
-    override val orderId: UUID,
+    /** 주문 ID */
+    val orderId: UUID,
 
     /** 변경할 상태 */
     val newStatus: String,
@@ -32,12 +29,28 @@ data class OrderStatusUpdateRequestedEvent(
     /** 요청 시간 */
     val requestedAt: LocalDateTime,
 
-    /** 이벤트 발생 시간 (PaymentEvent 필수 필드) */
-    override val occurredAt: LocalDateTime = LocalDateTime.now(),
+    /** 이벤트 발생 시간 */
+    val occurredAt: LocalDateTime = LocalDateTime.now(),
 
     /** 이벤트 ID (추적용) */
-    val eventId: String = UUID.randomUUID().toString()
-) : PaymentEvent {
+    val eventId: String = UUID.randomUUID().toString(),
+
+    /** 결제 ID (실패/만료된 결제의 ID) */
+    val relatedPaymentId: UUID
+) : BasePaymentEvent(
+    paymentId = relatedPaymentId,
+    eventType = "order-status-update-requested"
+) {
+
+    override fun getEventPayload(): Map<String, Any> = mapOf(
+        "paymentId" to paymentId,
+        "orderId" to orderId,
+        "newStatus" to newStatus,
+        "reason" to (reason ?: ""),
+        "requestedAt" to requestedAt.toString(),
+        "occurredAt" to occurredAt.toString(),
+        "eventId" to eventId
+    )
 
     companion object {
         /**
@@ -49,12 +62,12 @@ data class OrderStatusUpdateRequestedEvent(
             reason: String
         ): OrderStatusUpdateRequestedEvent {
             return OrderStatusUpdateRequestedEvent(
-                paymentId = paymentId,
                 orderId = orderId,
                 newStatus = "FAILED",
                 reason = reason,
                 requestedAt = LocalDateTime.now(),
-                occurredAt = LocalDateTime.now()
+                occurredAt = LocalDateTime.now(),
+                relatedPaymentId = paymentId
             )
         }
 
@@ -66,12 +79,12 @@ data class OrderStatusUpdateRequestedEvent(
             orderId: UUID
         ): OrderStatusUpdateRequestedEvent {
             return OrderStatusUpdateRequestedEvent(
-                paymentId = paymentId,
                 orderId = orderId,
                 newStatus = "EXPIRED",
                 reason = "결제 만료",
                 requestedAt = LocalDateTime.now(),
-                occurredAt = LocalDateTime.now()
+                occurredAt = LocalDateTime.now(),
+                relatedPaymentId = paymentId
             )
         }
 
@@ -85,12 +98,12 @@ data class OrderStatusUpdateRequestedEvent(
             reason: String? = null
         ): OrderStatusUpdateRequestedEvent {
             return OrderStatusUpdateRequestedEvent(
-                paymentId = paymentId,
                 orderId = orderId,
                 newStatus = newStatus,
                 reason = reason,
                 requestedAt = LocalDateTime.now(),
-                occurredAt = LocalDateTime.now()
+                occurredAt = LocalDateTime.now(),
+                relatedPaymentId = paymentId
             )
         }
     }

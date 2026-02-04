@@ -89,6 +89,34 @@ public class QrCodeService {
 	@Transactional(transactionManager = "jdbcTransactionManager")
 	public QrVerifyResponse verify(String qrCode) {
 		LocalDateTime now = LocalDateTime.now();
+
+		// 1. QR 코드 조회 및 기본 검증
+		QrCodeRow qrCodeRow = validateAndGetQrCode(qrCode, now);
+
+		// 2. 주문 상태 검증
+		validateOrderStatus(qrCodeRow.orderId());
+
+		// 3. 기존 체크인 확인
+		java.util.Optional<com.popcorn.checkIns.checkin.repository.CheckinRow> existingCheckin =
+				findExistingCheckin(qrCodeRow.qrId());
+
+		if (existingCheckin.isPresent()) {
+			return buildResponseForExistingCheckin(existingCheckin.get(), qrCodeRow);
+		}
+
+		// 4. 새 체크인 생성
+		UUID checkinId = createNewCheckin(qrCodeRow, now);
+
+		// 5. 이벤트 발행
+		publishCheckinEvents(checkinId, qrCodeRow, now);
+
+		return buildResponseForNewCheckin(checkinId, qrCodeRow);
+	}
+
+	/**
+	 * QR 코드 조회 및 기본 검증
+	 */
+	private QrCodeRow validateAndGetQrCode(String qrCode, LocalDateTime now) {
 		QrCodeRow row = qrCodeRepository.findLatestByQrCode(qrCode)
 				.orElseThrow(QrException::qrNotFound);
 
@@ -96,51 +124,82 @@ public class QrCodeService {
 			throw QrException.qrExpired();
 		}
 
-		String orderStatus = qrCodeRepository.findOrderStatus(row.orderId())
+		return row;
+	}
+
+	/**
+	 * 주문 상태 검증
+	 */
+	private void validateOrderStatus(UUID orderId) {
+		String orderStatus = qrCodeRepository.findOrderStatus(orderId)
 				.orElseThrow(QrException::orderNotFound);
 
 		ensurePaid(orderStatus);
-		ensureReservationOrder(row.orderId());
+		ensureReservationOrder(orderId);
+	}
 
-		java.util.Optional<com.popcorn.checkIns.checkin.repository.CheckinRow> existing =
-				checkinRepository.findLatestByOrderQrCodeId(row.qrId());
-		if (existing.isPresent()) {
-			return QrVerifyResponse.builder()
-					.valid(true)
-					.checkinId(existing.get().checkinId())
-					.orderId(row.orderId())
-					.qrCode(row.qrCode())
-					.expiresAt(row.expiresAt())
-					.build();
-		}
+	/**
+	 * 기존 체크인 조회
+	 */
+	private java.util.Optional<com.popcorn.checkIns.checkin.repository.CheckinRow> findExistingCheckin(UUID qrId) {
+		return checkinRepository.findLatestByOrderQrCodeId(qrId);
+	}
 
-		// 동기적으로 체크인 처리 (응답 속도를 위해)
-		java.util.UUID checkinId = checkinRepository.insert(
-				row.orderId(),
-				row.qrId(),
+	/**
+	 * 기존 체크인에 대한 응답 생성
+	 */
+	private QrVerifyResponse buildResponseForExistingCheckin(
+			com.popcorn.checkIns.checkin.repository.CheckinRow existingCheckin,
+			QrCodeRow qrCodeRow) {
+		return QrVerifyResponse.builder()
+				.valid(true)
+				.checkinId(existingCheckin.checkinId())
+				.orderId(qrCodeRow.orderId())
+				.qrCode(qrCodeRow.qrCode())
+				.expiresAt(qrCodeRow.expiresAt())
+				.build();
+	}
+
+	/**
+	 * 새로운 체크인 생성
+	 */
+	private UUID createNewCheckin(QrCodeRow qrCodeRow, LocalDateTime now) {
+		return checkinRepository.insert(
+				qrCodeRow.orderId(),
+				qrCodeRow.qrId(),
 				null,
 				now
 		);
+	}
 
+	/**
+	 * 체크인 관련 이벤트 발행
+	 */
+	private void publishCheckinEvents(UUID checkinId, QrCodeRow qrCodeRow, LocalDateTime now) {
 		// 기존 체크인 요청 이벤트 발행 (비동기 후처리)
 		eventPublisher.publishEvent(new QrCheckinRequestedEvent(
 				this,
-				row.qrId(),
-				row.orderId(),
-				row.qrCode(),
-				row.expiresAt(),
+				qrCodeRow.qrId(),
+				qrCodeRow.orderId(),
+				qrCodeRow.qrCode(),
+				qrCodeRow.expiresAt(),
 				now
 		));
 
 		// 표준 체크인 생성 이벤트 발행
-		publishCheckinCreatedEvent(checkinId, row, null, null);
+		publishCheckinCreatedEvent(checkinId, qrCodeRow, null, null);
+	}
 
+	/**
+	 * 새로운 체크인에 대한 응답 생성
+	 */
+	private QrVerifyResponse buildResponseForNewCheckin(UUID checkinId, QrCodeRow qrCodeRow) {
 		return QrVerifyResponse.builder()
 				.valid(true)
 				.checkinId(checkinId)
-				.orderId(row.orderId())
-				.qrCode(row.qrCode())
-				.expiresAt(row.expiresAt())
+				.orderId(qrCodeRow.orderId())
+				.qrCode(qrCodeRow.qrCode())
+				.expiresAt(qrCodeRow.expiresAt())
 				.build();
 	}
 
