@@ -19,11 +19,8 @@ import java.util.*
  * - 서비스별 책임 분리 (Payment는 결제만, Order는 주문 및 QR 관리)
  */
 data class QrCodeGenerationRequestedEvent(
-    /** 결제 ID (PaymentEvent 필수 필드) */
-    override val paymentId: UUID,
-
-    /** 주문 ID (PaymentEvent 필수 필드) */
-    override val orderId: UUID,
+    /** 주문 ID */
+    val orderId: UUID,
 
     /** 주문 번호 */
     val orderNo: String,
@@ -34,12 +31,29 @@ data class QrCodeGenerationRequestedEvent(
     /** 요청 시간 */
     val requestedAt: LocalDateTime,
 
-    /** 이벤트 발생 시간 (PaymentEvent 필수 필드) */
-    override val occurredAt: LocalDateTime = LocalDateTime.now(),
+    /** 이벤트 발생 시간 */
+    val occurredAt: LocalDateTime = LocalDateTime.now(),
 
     /** 이벤트 ID (추적용) */
-    val eventId: String = UUID.randomUUID().toString()
-) : PaymentEvent {
+    val eventId: String = UUID.randomUUID().toString(),
+
+    /** 결제 ID */
+    val relatedPaymentId: UUID
+) : BasePaymentEvent(
+    paymentId = relatedPaymentId,
+    eventType = "qr-generation-requested",
+    userId = customerId
+) {
+
+    override fun getEventPayload(): Map<String, Any> = mapOf(
+        "paymentId" to paymentId,
+        "orderId" to orderId,
+        "orderNo" to orderNo,
+        "customerId" to (customerId?.toString() ?: ""),
+        "requestedAt" to requestedAt.toString(),
+        "occurredAt" to occurredAt.toString(),
+        "eventId" to eventId
+    )
 
     companion object {
         /**
@@ -52,13 +66,13 @@ data class QrCodeGenerationRequestedEvent(
             customerId: Long?
         ): QrCodeGenerationRequestedEvent {
             return QrCodeGenerationRequestedEvent(
-                paymentId = paymentId,
                 orderId = orderId,
                 orderNo = orderNo,
                 customerId = customerId,
                 requestedAt = LocalDateTime.now(),
                 occurredAt = LocalDateTime.now(),
-                eventId = UUID.randomUUID().toString()
+                eventId = UUID.randomUUID().toString(),
+                relatedPaymentId = paymentId
             )
         }
     }

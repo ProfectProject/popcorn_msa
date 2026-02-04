@@ -76,14 +76,14 @@ data class PaymentCancelRetryEvent(
             orderNo: String = orderId.toString()
         ): PaymentCancelRetryEvent {
             return PaymentCancelRetryEvent(
-                paymentId = paymentId,
                 orderId = orderId,
                 orderNo = orderNo,
                 cancelReason = cancelReason,
                 retryCount = retryCount,
                 delaySeconds = delaySeconds,
                 nextRetryAt = LocalDateTime.now().plusSeconds(delaySeconds.toLong()),
-                occurredAt = LocalDateTime.now()
+                occurredAt = LocalDateTime.now(),
+                relatedPaymentId = paymentId
             )
         }
     }

@@ -79,14 +79,14 @@ data class PaymentCancelFinalFailureEvent(
             customerId: Long? = null
         ): PaymentCancelFinalFailureEvent {
             return PaymentCancelFinalFailureEvent(
-                paymentId = paymentId,
                 orderId = orderId,
                 orderNo = orderNo,
                 originalReason = originalReason,
                 finalFailureReason = finalFailureReason,
                 totalRetryCount = totalRetryCount,
                 customerId = customerId,
-                occurredAt = LocalDateTime.now()
+                occurredAt = LocalDateTime.now(),
+                relatedPaymentId = paymentId
             )
         }
     }

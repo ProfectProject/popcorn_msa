@@ -1,8 +1,8 @@
 package com.popcorn.payment.service
 
-import com.popcorn.payment.event.standard.OrderInfoRequestEvent
-import com.popcorn.payment.event.standard.OrderInfoResponseEvent
-import com.popcorn.payment.event.standard.StandardPaymentEventPublisher
+import com.popcorn.payment.event.OrderInfoRequestPaymentEvent
+import com.popcorn.payment.event.OrderInfoResponseEvent
+import com.popcorn.payment.event.BasePaymentEventPublisher
 import org.slf4j.LoggerFactory
 import org.springframework.stereotype.Service
 import java.util.UUID
@@ -16,7 +16,7 @@ import java.util.concurrent.TimeUnit
  */
 @Service
 class PaymentOrderInfoService(
-    private val standardPaymentEventPublisher: StandardPaymentEventPublisher,
+    private val paymentEventPublisher: BasePaymentEventPublisher,
     private val redisTemplate: org.springframework.data.redis.core.RedisTemplate<String, Any>
 ) {
     private val log = LoggerFactory.getLogger(PaymentOrderInfoService::class.java)
@@ -27,33 +27,33 @@ class PaymentOrderInfoService(
     /**
      * Order 정보 요청 (이벤트 기반 - Redis Stream)
      */
-    fun requestOrderInfo(orderId: UUID, timeoutMs: Long = 15000): CompletableFuture<OrderInfoResponseEvent?> {
-        val request = OrderInfoRequestEvent.create(orderId)
+    suspend fun requestOrderInfo(orderId: UUID, timeoutMs: Long = 15000): CompletableFuture<OrderInfoResponseEvent?> {
+        val request = OrderInfoRequestPaymentEvent.create(orderId)
         val future = CompletableFuture<OrderInfoResponseEvent>()
 
-        pendingRequests[request.requestId!!] = future
+        pendingRequests[request.paymentId.toString()] = future
 
         try {
-            log.info("🔄 [EVENT] Order 정보 요청 이벤트 발행 - orderId: {}, requestId: {}", orderId, request.requestId)
+            log.info("🔄 [EVENT] Order 정보 요청 이벤트 발행 - orderId: {}, requestId: {}", orderId, request.paymentId)
 
             // Redis Stream으로 요청 이벤트 발행
             publishOrderInfoRequest(request)
 
             return future.completeOnTimeout(null, timeoutMs, TimeUnit.MILLISECONDS)
                 .whenComplete { result, throwable ->
-                    pendingRequests.remove(request.requestId)
+                    pendingRequests.remove(request.paymentId.toString())
                     if (result == null) {
                         log.warn("🔄 [EVENT] Order 정보 요청 타임아웃 - orderId: {}, requestId: {}, timeout: {}ms",
-                            orderId, request.requestId, timeoutMs)
+                            orderId, request.paymentId, timeoutMs)
                     }
                     if (throwable != null) {
                         log.error("🔄 [EVENT] Order 정보 요청 중 예외 발생 - orderId: {}, requestId: {}, error: {}",
-                            orderId, request.requestId, throwable.message)
+                            orderId, request.paymentId, throwable.message)
                     }
                 }
 
         } catch (e: Exception) {
-            pendingRequests.remove(request.requestId)
+            pendingRequests.remove(request.paymentId.toString())
             log.error("❌ [EVENT] Order 정보 요청 발행 실패 - orderId: {}, error: {}", orderId, e.message, e)
             return CompletableFuture.completedFuture(null)
         }
@@ -81,21 +81,14 @@ class PaymentOrderInfoService(
     /**
      * Order 정보 요청 이벤트 발행 (Redis Stream)
      */
-    private fun publishOrderInfoRequest(request: OrderInfoRequestEvent) {
+    private suspend fun publishOrderInfoRequest(request: OrderInfoRequestPaymentEvent) {
         try {
-            // 요청 전용 Stream에 발행
-            val eventData = request.toStreamMap()
-            val record = org.springframework.data.redis.connection.stream.StreamRecords
-                .string(eventData)
-                .withStreamKey("order-info-requests")
-
-            val recordId = redisTemplate.opsForStream<String, Any>().add(record)?.value
-            log.info("📤 Order 정보 요청 이벤트 발행 완료 - requestId: {}, recordId: {}",
-                request.requestId, recordId)
+            paymentEventPublisher.publish(request)
+            log.info("📤 Order 정보 요청 이벤트 발행 완료 - requestId: {}", request.paymentId)
 
         } catch (e: Exception) {
             log.error("❌ Order 정보 요청 이벤트 발행 실패 - requestId: {}, error: {}",
-                request.requestId, e.message, e)
+                request.paymentId, e.message, e)
             throw e
         }
     }

@@ -32,7 +32,7 @@ class BasePaymentEventPublisherImpl(
             PaymentExceptionHandler.handleEventPublishException(
                 logger = log,
                 eventType = event.eventType,
-                eventClass = event::class.simpleName,
+                eventClass = event::class.simpleName ?: "Unknown",
                 exception = e
             )
             // 이벤트 발행 실패해도 메인 로직에는 영향 없음
@@ -53,7 +53,7 @@ class BasePaymentEventPublisherImpl(
     /**
      * 비동기 이벤트 발행 (Fire and Forget)
      */
-    fun publishAsync(event: BasePaymentEvent) {
+    override fun publishAsync(event: BasePaymentEvent) {
         eventScope.launch {
             publish(event)
         }
@@ -71,7 +71,7 @@ class BasePaymentEventPublisherImpl(
         customerId: Long?
     ) {
         val event = PaymentCreatedEvent(
-            paymentId = paymentId,
+            _paymentId = paymentId,
             orderId = orderId,
             orderNo = orderNo,
             amount = amount,
@@ -95,7 +95,7 @@ class BasePaymentEventPublisherImpl(
         customerId: Long?
     ) {
         val event = PaymentApprovedEvent(
-            paymentId = paymentId,
+            _paymentId = paymentId,
             orderId = orderId,
             orderNo = orderNo,
             amount = amount,
@@ -120,7 +120,7 @@ class BasePaymentEventPublisherImpl(
         customerId: Long?
     ) {
         val event = PaymentFailedEvent(
-            paymentId = paymentId,
+            _paymentId = paymentId,
             orderId = orderId,
             orderNo = orderNo,
             amount = amount,
@@ -143,7 +143,7 @@ class BasePaymentEventPublisherImpl(
         customerId: Long?
     ) {
         val event = PaymentCancelledEvent(
-            paymentId = paymentId,
+            _paymentId = paymentId,
             orderId = orderId,
             orderNo = orderNo,
             cancelAmount = cancelAmount,

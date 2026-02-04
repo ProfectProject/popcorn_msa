@@ -20,7 +20,7 @@ import org.springframework.stereotype.Component
  */
 @Component
 class PaymentEventListener(
-    private val paymentEventPublisher: PaymentEventPublisherImpl
+    private val paymentEventPublisher: BasePaymentEventPublisherImpl
 ) {
 
     private val log = LoggerFactory.getLogger(PaymentEventListener::class.java)

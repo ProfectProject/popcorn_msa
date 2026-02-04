@@ -5,7 +5,7 @@ import com.popcorn.payment.client.TossPaymentsCoroutineClient
 import com.popcorn.payment.config.CoroutineTransactionManager
 import com.popcorn.payment.dto.TossPaymentCancelRequest
 import com.popcorn.payment.dto.TossPaymentConfirmRequest
-import com.popcorn.payment.event.PaymentEventPublisherImpl
+import com.popcorn.payment.event.BasePaymentEventPublisherImpl
 import com.popcorn.payment.exception.PaymentException
 import io.github.resilience4j.circuitbreaker.annotation.CircuitBreaker
 import kotlinx.coroutines.async
@@ -30,7 +30,7 @@ class TossPaymentCoroutineService(
     private val paymentCommandService: PaymentCommandCoroutineService,
     private val orderQueryService: OrderQueryCoroutineService,
     private val objectMapper: ObjectMapper,
-    private val paymentEventPublisher: PaymentEventPublisherImpl,
+    private val paymentEventPublisher: BasePaymentEventPublisherImpl,
     private val stringRedisTemplate: StringRedisTemplate
 ) {
 

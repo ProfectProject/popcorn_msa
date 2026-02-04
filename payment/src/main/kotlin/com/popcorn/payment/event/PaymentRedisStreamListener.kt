@@ -2,7 +2,7 @@ package com.popcorn.payment.event
 
 import com.fasterxml.jackson.databind.ObjectMapper
 import com.popcorn.payment.service.PaymentOrderInfoService
-import com.popcorn.payment.event.standard.OrderInfoResponseEvent
+import com.popcorn.payment.event.OrderInfoResponseEvent
 import com.popcorn.payment.service.TossPaymentCoroutineService
 import com.popcorn.payment.event.PaymentCancelFailedEvent
 import kotlinx.coroutines.CoroutineScope
@@ -24,7 +24,7 @@ class PaymentRedisStreamListener(
     private val objectMapper: ObjectMapper,
     private val paymentOrderInfoService: PaymentOrderInfoService,
     private val tossPaymentCoroutineService: TossPaymentCoroutineService,
-    private val paymentEventPublisher: PaymentEventPublisherImpl
+    private val paymentEventPublisher: BasePaymentEventPublisherImpl
 ) : StreamListener<String, MapRecord<String, String, Any>> {
 
     private val log = LoggerFactory.getLogger(PaymentRedisStreamListener::class.java)
@@ -190,7 +190,7 @@ class PaymentRedisStreamListener(
                 log.error("🚨 [PAYMENT] 결제 취소 처리 실패 - orderId={}, error={}", orderId, e.message, e)
                 paymentEventPublisher.publishAsync(
                     PaymentCancelFailedEvent(
-                        paymentId = java.util.UUID(0, 0),
+                        _paymentId = java.util.UUID(0, 0),
                         orderId = orderId,
                         orderNo = orderNo ?: orderId.toString(),
                         cancelReason = reason,
@@ -237,18 +237,16 @@ class PaymentRedisStreamListener(
                 values["requestId"], values["success"])
 
             // Map을 OrderInfoResponseEvent로 변환
-            val response = OrderInfoResponseEvent().apply {
-                requestId = normalizeString(values["requestId"])
-                success = normalizeString(values["success"])?.toBoolean() ?: false
-                actualOrderNo = normalizeString(values["actualOrderNo"])
-                actualUserId = normalizeString(values["actualUserId"])?.toLongOrNull()
-                actualPopupId = normalizeString(values["actualPopupId"])
-                actualHasReservation = normalizeString(values["actualHasReservation"])?.toBoolean()
-                actualHasGoods = normalizeString(values["actualHasGoods"])?.toBoolean()
-
-                // lines JSON 파싱
+            val response = OrderInfoResponseEvent(
+                requestId = normalizeString(values["requestId"]),
+                success = normalizeString(values["success"])?.toBoolean() ?: false,
+                actualOrderNo = normalizeString(values["actualOrderNo"]),
+                actualUserId = normalizeString(values["actualUserId"])?.toLongOrNull(),
+                actualPopupId = normalizeString(values["actualPopupId"]),
+                actualHasReservation = normalizeString(values["actualHasReservation"])?.toBoolean(),
+                actualHasGoods = normalizeString(values["actualHasGoods"])?.toBoolean(),
                 actualLines = parseEventLineItems(values["actualLines"])
-            }
+            )
 
             // PaymentOrderInfoService에 응답 전달
             paymentOrderInfoService.handleOrderInfoResponse(response)
@@ -267,7 +265,7 @@ class PaymentRedisStreamListener(
         return trimmed.trim('"')
     }
 
-    private fun parseEventLineItems(rawLines: Any?): List<com.popcorn.payment.event.standard.EventLineItem> {
+    private fun parseEventLineItems(rawLines: Any?): List<com.popcorn.payment.event.EventLineItem> {
         if (rawLines == null) {
             return emptyList()
         }
@@ -275,8 +273,8 @@ class PaymentRedisStreamListener(
             when (rawLines) {
                 is List<*> -> rawLines.mapNotNull { item ->
                     when (item) {
-                        is com.popcorn.payment.event.standard.EventLineItem -> item
-                        is Map<*, *> -> objectMapper.convertValue(item, com.popcorn.payment.event.standard.EventLineItem::class.java)
+                        is com.popcorn.payment.event.EventLineItem -> item
+                        is Map<*, *> -> objectMapper.convertValue(item, com.popcorn.payment.event.EventLineItem::class.java)
                         else -> null
                     }
                 }
@@ -285,12 +283,12 @@ class PaymentRedisStreamListener(
                     if (trimmed.isBlank() || trimmed == "[]") {
                         emptyList()
                     } else {
-                        val typeRef = object : com.fasterxml.jackson.core.type.TypeReference<List<com.popcorn.payment.event.standard.EventLineItem>>() {}
+                        val typeRef = object : com.fasterxml.jackson.core.type.TypeReference<List<com.popcorn.payment.event.EventLineItem>>() {}
                         objectMapper.readValue(trimmed, typeRef)
                     }
                 }
                 else -> {
-                    val typeRef = object : com.fasterxml.jackson.core.type.TypeReference<List<com.popcorn.payment.event.standard.EventLineItem>>() {}
+                    val typeRef = object : com.fasterxml.jackson.core.type.TypeReference<List<com.popcorn.payment.event.EventLineItem>>() {}
                     objectMapper.convertValue(rawLines, typeRef)
                 }
             }

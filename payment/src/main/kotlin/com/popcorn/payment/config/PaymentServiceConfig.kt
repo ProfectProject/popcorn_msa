@@ -1,6 +1,6 @@
 package com.popcorn.payment.config
 
-import com.popcorn.payment.event.standard.StandardPaymentEventPublisher
+import com.popcorn.payment.event.BasePaymentEventPublisher
 import com.popcorn.payment.repository.PaymentRepository
 import com.popcorn.payment.service.PaymentCommandCoroutineService
 import com.popcorn.payment.service.PaymentOrderInfoService
@@ -16,13 +16,13 @@ class PaymentServiceConfig {
     fun paymentCommandCoroutineService(
         transactionManager: CoroutineTransactionManager,
         paymentRepository: PaymentRepository,
-        standardPaymentEventPublisher: StandardPaymentEventPublisher,
+        paymentEventPublisher: BasePaymentEventPublisher,
         paymentOrderInfoService: PaymentOrderInfoService
     ): PaymentCommandCoroutineService {
         return PaymentCommandCoroutineService(
             transactionManager,
             paymentRepository,
-            standardPaymentEventPublisher,
+            paymentEventPublisher,
             paymentOrderInfoService
         )
     }

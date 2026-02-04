@@ -29,21 +29,30 @@ data class PaymentCreatedEvent(
     val amount: Int,
     val paymentMethod: String,
     val customerId: Long?,
+    val popupId: String? = null,
+    val hasReservation: Boolean? = null,
+    val hasGoods: Boolean? = null,
+    val lines: List<EventLineItem>? = null,
     val occurredAt: LocalDateTime = LocalDateTime.now()
 ) : BasePaymentEvent(
     paymentId = _paymentId,
     eventType = "payment-created",
     userId = customerId
 ) {
-    override fun getEventPayload(): Map<String, Any> = mapOf(
-        "paymentId" to paymentId,
-        "orderId" to orderId,
-        "orderNo" to orderNo,
-        "amount" to amount,
-        "paymentMethod" to paymentMethod,
-        "occurredAt" to occurredAt.toString(),
-        "customerId" to (customerId ?: "null")
-    )
+    override fun getEventPayload(): Map<String, Any> = buildMap {
+        put("paymentId", paymentId)
+        put("orderId", orderId)
+        put("orderNo", orderNo)
+        put("amount", amount)
+        put("paymentMethod", paymentMethod)
+        put("occurredAt", occurredAt.toString())
+        put("customerId", customerId ?: "null")
+
+        popupId?.let { put("popupId", it) }
+        hasReservation?.let { put("hasReservation", it) }
+        hasGoods?.let { put("hasGoods", it) }
+        lines?.let { put("lines", it) }
+    }
 
     companion object {
         fun create(
@@ -52,7 +61,11 @@ data class PaymentCreatedEvent(
             orderNo: String,
             amount: Int,
             paymentMethod: String,
-            customerId: Long?
+            customerId: Long?,
+            popupId: String? = null,
+            hasReservation: Boolean? = null,
+            hasGoods: Boolean? = null,
+            lines: List<EventLineItem>? = null
         ): PaymentCreatedEvent {
             return PaymentCreatedEvent(
                 _paymentId = paymentId,
@@ -60,7 +73,11 @@ data class PaymentCreatedEvent(
                 orderNo = orderNo,
                 amount = amount,
                 paymentMethod = paymentMethod,
-                customerId = customerId
+                customerId = customerId,
+                popupId = popupId,
+                hasReservation = hasReservation,
+                hasGoods = hasGoods,
+                lines = lines
             )
         }
     }
@@ -79,23 +96,64 @@ data class PaymentApprovedEvent(
     val paymentKey: String?,
     val approvedAt: LocalDateTime,
     val customerId: Long?,
+    val popupId: String? = null,
+    val hasReservation: Boolean? = null,
+    val hasGoods: Boolean? = null,
+    val lines: List<EventLineItem>? = null,
     val occurredAt: LocalDateTime = LocalDateTime.now()
 ) : BasePaymentEvent(
     paymentId = _paymentId,
     eventType = "payment-approved",
     userId = customerId
 ) {
-    override fun getEventPayload(): Map<String, Any> = mapOf(
-        "paymentId" to paymentId,
-        "orderId" to orderId,
-        "orderNo" to orderNo,
-        "amount" to amount,
-        "paymentMethod" to paymentMethod,
-        "paymentKey" to (paymentKey ?: "null"),
-        "approvedAt" to approvedAt.toString(),
-        "occurredAt" to occurredAt.toString(),
-        "customerId" to (customerId ?: "null")
-    )
+    override fun getEventPayload(): Map<String, Any> = buildMap {
+        put("paymentId", paymentId)
+        put("orderId", orderId)
+        put("orderNo", orderNo)
+        put("amount", amount)
+        put("paymentMethod", paymentMethod)
+        put("paymentKey", paymentKey ?: "null")
+        put("approvedAt", approvedAt.toString())
+        put("occurredAt", occurredAt.toString())
+        put("customerId", customerId ?: "null")
+
+        popupId?.let { put("popupId", it) }
+        hasReservation?.let { put("hasReservation", it) }
+        hasGoods?.let { put("hasGoods", it) }
+        lines?.let { put("lines", it) }
+    }
+
+    companion object {
+        fun create(
+            paymentId: UUID,
+            orderId: UUID,
+            orderNo: String,
+            amount: Int,
+            paymentMethod: String,
+            paymentKey: String?,
+            approvedAt: LocalDateTime,
+            customerId: Long?,
+            popupId: String? = null,
+            hasReservation: Boolean? = null,
+            hasGoods: Boolean? = null,
+            lines: List<EventLineItem>? = null
+        ): PaymentApprovedEvent {
+            return PaymentApprovedEvent(
+                _paymentId = paymentId,
+                orderId = orderId,
+                orderNo = orderNo,
+                amount = amount,
+                paymentMethod = paymentMethod,
+                paymentKey = paymentKey,
+                approvedAt = approvedAt,
+                customerId = customerId,
+                popupId = popupId,
+                hasReservation = hasReservation,
+                hasGoods = hasGoods,
+                lines = lines
+            )
+        }
+    }
 }
 
 /**
@@ -379,7 +437,156 @@ data class PaymentCancelRequestedEvent(
     )
 }
 
+/**
+ * Order 정보 요청 이벤트 (Payment → Order)
+ * Payment 서비스에서 Order 정보가 필요할 때 발행하는 이벤트
+ */
+data class OrderInfoRequestPaymentEvent(
+    private val _requestId: UUID,
+    val requestedOrderId: UUID,
+    val responseService: String,
+    val requestedAt: LocalDateTime = LocalDateTime.now(),
+    val occurredAt: LocalDateTime = LocalDateTime.now()
+) : BasePaymentEvent(
+    paymentId = _requestId,
+    eventType = "order-info-request",
+    userId = null
+) {
+    override fun getEventPayload(): Map<String, Any> = mapOf(
+        "requestId" to paymentId,
+        "requestedOrderId" to requestedOrderId,
+        "responseService" to responseService,
+        "requestedAt" to requestedAt.toString(),
+        "occurredAt" to occurredAt.toString()
+    )
+
+    companion object {
+        fun create(orderId: UUID): OrderInfoRequestPaymentEvent {
+            return OrderInfoRequestPaymentEvent(
+                _requestId = UUID.randomUUID(),
+                requestedOrderId = orderId,
+                responseService = "payment-service"
+            )
+        }
+    }
+}
+
 // ================ 기본 데이터 클래스들 ================
+
+/**
+ * 표준 이벤트 라인 아이템 구조
+ * 주문 내 개별 항목 정보 (예약/굿즈)
+ */
+data class EventLineItem(
+    /**
+     * 아이템 타입: SCHEDULE(예약) 또는 GOODS(굿즈)
+     */
+    val itemType: String? = null,
+
+    // === 예약 관련 필드 (itemType = "SCHEDULE") ===
+    /**
+     * 스케줄 ID (예약용)
+     */
+    val scheduleId: UUID? = null,
+
+    /**
+     * 스케줄 시작 시간
+     */
+    val scheduleStartAt: String? = null,
+
+    /**
+     * 스케줄 종료 시간
+     */
+    val scheduleEndAt: String? = null,
+
+    // === 굿즈 관련 필드 (itemType = "GOODS") ===
+    /**
+     * 굿즈 변형 ID (굿즈용)
+     */
+    val goodsId: UUID? = null,
+
+    /**
+     * 굿즈 이름
+     */
+    val goodsName: String? = null,
+
+    /**
+     * 재고 단위 (예: "BLACK-M")
+     */
+    val stockUnit: String? = null,
+
+    // === 공통 필드 ===
+    /**
+     * 주문 굿즈 ID
+     */
+    val orderGoodsId: UUID? = null,
+
+    /**
+     * 수량
+     */
+    val qty: Int? = null,
+
+    /**
+     * 단가
+     */
+    val unitPrice: Int? = null,
+
+    /**
+     * 라인 총 금액 (unitPrice * qty)
+     */
+    val linePrice: Int? = null
+)
+
+/**
+ * Order 정보 응답 이벤트 (Order → Payment)
+ * Order 서비스에서 Payment 서비스의 요청에 응답하는 이벤트
+ */
+data class OrderInfoResponseEvent(
+    /**
+     * 원본 요청 ID (매칭용)
+     */
+    val requestId: String? = null,
+
+    /**
+     * 응답 성공 여부
+     */
+    val success: Boolean = false,
+
+    /**
+     * 실제 주문번호
+     */
+    val actualOrderNo: String? = null,
+
+    /**
+     * 실제 userId
+     */
+    val actualUserId: Long? = null,
+
+    /**
+     * 실제 popupId
+     */
+    val actualPopupId: String? = null,
+
+    /**
+     * 예약 포함 여부
+     */
+    val actualHasReservation: Boolean? = null,
+
+    /**
+     * 굿즈 포함 여부
+     */
+    val actualHasGoods: Boolean? = null,
+
+    /**
+     * 실제 라인 아이템들
+     */
+    val actualLines: List<EventLineItem>? = null,
+
+    /**
+     * 응답 시간
+     */
+    val respondedAt: LocalDateTime = LocalDateTime.now()
+)
 
 /**
  * 주문 항목 정보 (이벤트용 DTO)

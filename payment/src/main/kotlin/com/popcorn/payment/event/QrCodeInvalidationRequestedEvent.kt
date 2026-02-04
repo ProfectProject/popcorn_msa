@@ -19,11 +19,8 @@ import java.util.*
  * - 서비스 간 직접 호출 제거
  */
 data class QrCodeInvalidationRequestedEvent(
-    /** 결제 ID (PaymentEvent 필수 필드, 취소된 결제의 ID) */
-    override val paymentId: UUID,
-
-    /** 주문 ID (PaymentEvent 필수 필드) */
-    override val orderId: UUID,
+    /** 주문 ID */
+    val orderId: UUID,
 
     /** 무효화 사유 */
     val reason: String,
@@ -31,12 +28,27 @@ data class QrCodeInvalidationRequestedEvent(
     /** 요청 시간 */
     val requestedAt: LocalDateTime,
 
-    /** 이벤트 발생 시간 (PaymentEvent 필수 필드) */
-    override val occurredAt: LocalDateTime = LocalDateTime.now(),
+    /** 이벤트 발생 시간 */
+    val occurredAt: LocalDateTime = LocalDateTime.now(),
 
     /** 이벤트 ID (추적용) */
-    val eventId: String = UUID.randomUUID().toString()
-) : PaymentEvent {
+    val eventId: String = UUID.randomUUID().toString(),
+
+    /** 결제 ID (취소된 결제의 ID) */
+    val relatedPaymentId: UUID
+) : BasePaymentEvent(
+    paymentId = relatedPaymentId,
+    eventType = "qr-invalidation-requested"
+) {
+
+    override fun getEventPayload(): Map<String, Any> = mapOf(
+        "paymentId" to paymentId,
+        "orderId" to orderId,
+        "reason" to reason,
+        "requestedAt" to requestedAt.toString(),
+        "occurredAt" to occurredAt.toString(),
+        "eventId" to eventId
+    )
 
     companion object {
         /**
@@ -48,12 +60,12 @@ data class QrCodeInvalidationRequestedEvent(
             reason: String
         ): QrCodeInvalidationRequestedEvent {
             return QrCodeInvalidationRequestedEvent(
-                paymentId = paymentId,
                 orderId = orderId,
                 reason = reason,
                 requestedAt = LocalDateTime.now(),
                 occurredAt = LocalDateTime.now(),
-                eventId = UUID.randomUUID().toString()
+                eventId = UUID.randomUUID().toString(),
+                relatedPaymentId = paymentId
             )
         }
     }
