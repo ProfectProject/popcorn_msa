@@ -3,6 +3,7 @@ package com.popcorn.payment.event.publisher
 import com.popcorn.payment.event.base.BasePaymentEvent
 import com.popcorn.payment.event.base.BasePaymentEventPublisher
 import com.popcorn.payment.event.listener.PaymentRedisEventPublisher
+import com.popcorn.payment.event.kafka.PaymentKafkaEventPublisher
 import com.popcorn.payment.event.domain.payment.*
 import com.popcorn.payment.event.domain.legacy.PaymentCompletedEvent
 import com.popcorn.payment.event.integration.request.*
@@ -11,11 +12,13 @@ import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.launch
 import org.slf4j.LoggerFactory
+import org.springframework.beans.factory.annotation.Autowired
 import org.springframework.context.ApplicationEventPublisher
 import org.springframework.stereotype.Component
 
 /**
  * 결제 이벤트 발행 서비스 구현체
+ * - 점진적 전환을 위한 이중 발행 지원 (Redis + Kafka)
  */
 @Component
 class BasePaymentEventPublisherImpl(
@@ -26,14 +29,54 @@ class BasePaymentEventPublisherImpl(
     private val log = LoggerFactory.getLogger(BasePaymentEventPublisherImpl::class.java)
     private val eventScope = CoroutineScope(Dispatchers.Default)
 
+    // Kafka Publisher는 Optional로 주입 (kafka.enabled=true 시에만 활성화)
+    @Autowired(required = false)
+    private val paymentKafkaEventPublisher: PaymentKafkaEventPublisher? = null
+
     /**
      * 단일 이벤트 발행
+     * - 이중 발행: Redis Stream + Kafka (점진적 전환)
      */
     override suspend fun publish(event: BasePaymentEvent) {
+        var redisSuccess = false
+        var kafkaSuccess = false
+
         try {
-            log.debug("📨 이벤트 발행: {}", event::class.simpleName)
+            log.debug("📨 이벤트 발행 시작: {}", event::class.simpleName)
+
+            // 1. 로컬 이벤트 발행
             applicationEventPublisher.publishEvent(event)
-            paymentRedisEventPublisher.publish(event)
+
+            // 2. Redis Stream 발행
+            try {
+                paymentRedisEventPublisher.publish(event)
+                redisSuccess = true
+                log.debug("✅ Redis 이벤트 발행 성공: {}", event::class.simpleName)
+            } catch (e: Exception) {
+                log.warn("⚠️ Redis 이벤트 발행 실패: {} - error: {}", event::class.simpleName, e.message)
+            }
+
+            // 3. Kafka 발행 (활성화된 경우에만)
+            paymentKafkaEventPublisher?.let { kafkaPublisher ->
+                try {
+                    kafkaPublisher.publishAsync(event)
+                    kafkaSuccess = true
+                    log.debug("✅ Kafka 이벤트 발행 성공: {}", event::class.simpleName)
+                } catch (e: Exception) {
+                    log.warn("⚠️ Kafka 이벤트 발행 실패: {} - error: {}", event::class.simpleName, e.message)
+                }
+            }
+
+            // 성공률 로깅
+            val totalChannels = if (paymentKafkaEventPublisher != null) 2 else 1
+            val successChannels = (if (redisSuccess) 1 else 0) + (if (kafkaSuccess) 1 else 0)
+
+            if (successChannels < totalChannels) {
+                log.warn("⚠️ 이벤트 발행 부분 실패: {} - 성공: {}/{} (Redis: {}, Kafka: {})",
+                    event::class.simpleName, successChannels, totalChannels, redisSuccess,
+                    if (paymentKafkaEventPublisher != null) kafkaSuccess else "N/A")
+            }
+
         } catch (e: Exception) {
             PaymentExceptionHandler.handleEventPublishException(
                 logger = log,

@@ -63,7 +63,7 @@ object EventConstants {
      * Consumer Group 이름들
      */
     object ConsumerGroups {
-        const val PAYMENT_SERVICE_GROUP = "payment-service-group"
+        const val PAYMENT_SERVICE_GROUP = "payment-service-group"  // Redis Stream & Kafka 공통 사용
     }
 
     /**

@@ -1,0 +1,532 @@
+package com.popcorn.payment.event.kafka
+
+import com.fasterxml.jackson.databind.ObjectMapper
+import com.popcorn.payment.constants.EventConstants
+import com.popcorn.payment.event.domain.payment.OrderInfoResponseEvent
+import com.popcorn.payment.event.domain.payment.PaymentCancelFailedEvent
+import com.popcorn.payment.event.domain.payment.EventLineItem
+import com.popcorn.payment.event.publisher.BasePaymentEventPublisherImpl
+import com.popcorn.payment.service.PaymentOrderInfoService
+import com.popcorn.payment.service.TossPaymentCoroutineService
+import com.popcorn.payment.service.kafka.KafkaIdempotencyService
+import kotlinx.coroutines.CoroutineScope
+import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.launch
+import org.apache.kafka.clients.consumer.ConsumerRecord
+import org.slf4j.LoggerFactory
+import org.springframework.boot.autoconfigure.condition.ConditionalOnProperty
+import org.springframework.kafka.annotation.KafkaListener
+import org.springframework.kafka.support.Acknowledgment
+import org.springframework.kafka.support.KafkaHeaders
+import org.springframework.messaging.handler.annotation.Header
+import org.springframework.messaging.handler.annotation.Payload
+import org.springframework.stereotype.Component
+
+/**
+ * Payment 서비스 Kafka 이벤트 리스너
+ * - Consumer Group: payment-cg
+ * - 주문, 결제, 재고 관련 이벤트 수신
+ * - 멱등성 보장 및 에러 핸들링
+ */
+@Component
+@ConditionalOnProperty(value = ["kafka.enabled"], havingValue = "true")
+class PaymentKafkaListener(
+    private val objectMapper: ObjectMapper,
+    private val paymentOrderInfoService: PaymentOrderInfoService,
+    private val tossPaymentCoroutineService: TossPaymentCoroutineService,
+    private val paymentEventPublisher: BasePaymentEventPublisherImpl,
+    private val kafkaIdempotencyService: KafkaIdempotencyService
+) {
+    private val log = LoggerFactory.getLogger(PaymentKafkaListener::class.java)
+    private val eventScope = CoroutineScope(Dispatchers.Default)
+
+    /**
+     * Payment Events 토픽 구독
+     * - 결제 관련 이벤트 모니터링
+     * - 자체 이벤트 포함
+     */
+    @KafkaListener(
+        topics = ["payment-events"],
+        groupId = EventConstants.ConsumerGroups.PAYMENT_SERVICE_GROUP,
+        concurrency = "6"
+    )
+    fun handlePaymentEvents(
+        @Payload eventData: Map<String, Any>,
+        @Header(KafkaHeaders.RECEIVED_TOPIC) topic: String,
+        @Header(KafkaHeaders.RECEIVED_PARTITION) partition: Int,
+        @Header(KafkaHeaders.OFFSET) offset: Long,
+        @Header(KafkaHeaders.RECEIVED_KEY, required = false) key: String?,
+        acknowledgment: Acknowledgment
+    ) {
+        val startTime = System.currentTimeMillis()
+        try {
+            val eventType = eventData["eventType"] as? String
+            val eventId = eventData["eventId"] as? String
+
+            log.info("🔔 [PAYMENT] Kafka 이벤트 수신 - topic: {}, partition: {}, offset: {}, key: {}, eventType: {}, eventId: {}",
+                topic, partition, offset, key, eventType, eventId)
+
+            // Redis 기반 멱등성 체크 (eventId 기반)
+            if (eventId != null && kafkaIdempotencyService.isDuplicateEvent(eventId)) {
+                log.info("⏭️  [PAYMENT] 중복 이벤트 스킵 - eventId: {}, eventType: {}", eventId, eventType)
+                acknowledgment.acknowledge()
+                return
+            }
+
+            // 이벤트 타입별 처리
+            handlePaymentEvent(eventType, eventData)
+
+            val processingTime = System.currentTimeMillis() - startTime
+            log.debug("✅ [PAYMENT] Payment 이벤트 처리 완료 - eventType: {}, eventId: {}, 처리시간: {}ms",
+                eventType, eventId, processingTime)
+
+            // 성능 모니터링
+            if (processingTime > 100) {
+                log.warn("⚠️ [PAYMENT] Payment 이벤트 처리 지연 - eventType: {}, 처리시간: {}ms",
+                    eventType, processingTime)
+            }
+
+            // Redis에 성공적으로 처리된 이벤트 기록
+            if (eventId != null) {
+                kafkaIdempotencyService.recordProcessedEvent(
+                    eventId = eventId,
+                    eventType = eventType,
+                    topic = topic,
+                    partition = partition,
+                    offset = offset,
+                    processingTimeMs = processingTime
+                )
+            }
+            acknowledgment.acknowledge()
+
+        } catch (e: Exception) {
+            val processingTime = System.currentTimeMillis() - startTime
+            log.error("🚨 [PAYMENT] Payment 이벤트 처리 실패 - topic: {}, partition: {}, offset: {}, 처리시간: {}ms, error: {}",
+                topic, partition, offset, processingTime, e.message, e)
+
+            // TODO: 실패한 메시지를 DLQ로 이동하거나 재시도 로직 구현
+            // 일단 ACK해서 무한 재시도 방지
+            acknowledgment.acknowledge()
+        }
+    }
+
+    /**
+     * Payment Requests 토픽 구독
+     * - Order 서비스로부터의 결제 요청 처리
+     */
+    @KafkaListener(
+        topics = ["payment-requests"],
+        groupId = EventConstants.ConsumerGroups.PAYMENT_SERVICE_GROUP,
+        concurrency = "6"
+    )
+    fun handlePaymentRequests(
+        @Payload eventData: Map<String, Any>,
+        @Header(KafkaHeaders.RECEIVED_TOPIC) topic: String,
+        @Header(KafkaHeaders.RECEIVED_PARTITION) partition: Int,
+        @Header(KafkaHeaders.OFFSET) offset: Long,
+        @Header(KafkaHeaders.RECEIVED_KEY, required = false) key: String?,
+        acknowledgment: Acknowledgment
+    ) {
+        val startTime = System.currentTimeMillis()
+        try {
+            val eventType = eventData["eventType"] as? String
+            val eventId = eventData["eventId"] as? String
+
+            log.info("📥 [PAYMENT] Payment 요청 수신 - topic: {}, partition: {}, offset: {}, key: {}, eventType: {}, eventId: {}",
+                topic, partition, offset, key, eventType, eventId)
+
+            // Redis 기반 멱등성 체크
+            if (eventId != null && kafkaIdempotencyService.isDuplicateEvent(eventId)) {
+                log.info("⏭️  [PAYMENT] 중복 요청 스킵 - eventId: {}, eventType: {}", eventId, eventType)
+                acknowledgment.acknowledge()
+                return
+            }
+
+            // 요청 타입별 처리
+            handlePaymentRequest(eventType, eventData)
+
+            val processingTime = System.currentTimeMillis() - startTime
+            log.debug("✅ [PAYMENT] Payment 요청 처리 완료 - eventType: {}, eventId: {}, 처리시간: {}ms",
+                eventType, eventId, processingTime)
+
+            // 성공적으로 처리된 이벤트 기록
+            // Redis에 성공적으로 처리된 이벤트 기록
+            if (eventId != null) {
+                kafkaIdempotencyService.recordProcessedEvent(
+                    eventId = eventId,
+                    eventType = eventType,
+                    topic = topic,
+                    partition = partition,
+                    offset = offset,
+                    processingTimeMs = processingTime
+                )
+            }
+            acknowledgment.acknowledge()
+
+        } catch (e: Exception) {
+            val processingTime = System.currentTimeMillis() - startTime
+            log.error("🚨 [PAYMENT] Payment 요청 처리 실패 - topic: {}, partition: {}, offset: {}, 처리시간: {}ms, error: {}",
+                topic, partition, offset, processingTime, e.message, e)
+
+            acknowledgment.acknowledge()
+        }
+    }
+
+    /**
+     * Order Requests 토픽 구독
+     * - Order 서비스로부터의 주문 정보 응답 수신
+     */
+    @KafkaListener(
+        topics = ["order-requests"],
+        groupId = EventConstants.ConsumerGroups.PAYMENT_SERVICE_GROUP,
+        concurrency = "6"
+    )
+    fun handleOrderRequests(
+        @Payload eventData: Map<String, Any>,
+        @Header(KafkaHeaders.RECEIVED_TOPIC) topic: String,
+        @Header(KafkaHeaders.RECEIVED_PARTITION) partition: Int,
+        @Header(KafkaHeaders.OFFSET) offset: Long,
+        @Header(KafkaHeaders.RECEIVED_KEY, required = false) key: String?,
+        acknowledgment: Acknowledgment
+    ) {
+        val startTime = System.currentTimeMillis()
+        try {
+            val eventType = eventData["eventType"] as? String
+            val eventId = eventData["eventId"] as? String
+
+            log.info("📞 [PAYMENT] Order 요청 수신 - topic: {}, partition: {}, offset: {}, key: {}, eventType: {}, eventId: {}",
+                topic, partition, offset, key, eventType, eventId)
+
+            // Redis 기반 멱등성 체크
+            if (eventId != null && kafkaIdempotencyService.isDuplicateEvent(eventId)) {
+                log.info("⏭️  [PAYMENT] 중복 Order 요청 스킵 - eventId: {}, eventType: {}", eventId, eventType)
+                acknowledgment.acknowledge()
+                return
+            }
+
+            // Order 정보 응답 처리
+            when (eventType) {
+                "ORDER_INFO_RESPONSE" -> handleOrderInfoResponse(eventData)
+                else -> log.info("🔔 [PAYMENT] 기타 Order 요청 - eventType: {}", eventType)
+            }
+
+            val processingTime = System.currentTimeMillis() - startTime
+            log.debug("✅ [PAYMENT] Order 요청 처리 완료 - eventType: {}, eventId: {}, 처리시간: {}ms",
+                eventType, eventId, processingTime)
+
+            // Redis에 성공적으로 처리된 이벤트 기록
+            if (eventId != null) {
+                kafkaIdempotencyService.recordProcessedEvent(
+                    eventId = eventId,
+                    eventType = eventType,
+                    topic = topic,
+                    partition = partition,
+                    offset = offset,
+                    processingTimeMs = processingTime
+                )
+            }
+            acknowledgment.acknowledge()
+
+        } catch (e: Exception) {
+            val processingTime = System.currentTimeMillis() - startTime
+            log.error("🚨 [PAYMENT] Order 요청 처리 실패 - topic: {}, partition: {}, offset: {}, 처리시간: {}ms, error: {}",
+                topic, partition, offset, processingTime, e.message, e)
+
+            acknowledgment.acknowledge()
+        }
+    }
+
+    /**
+     * Payment 이벤트 타입별 처리
+     */
+    private fun handlePaymentEvent(eventType: String?, eventData: Map<String, Any>) {
+        try {
+            when (eventType) {
+                // 주문 관련 이벤트
+                "ORDER_CREATED" -> {
+                    log.info("📦 [PAYMENT] 주문 생성 이벤트 수신 - orderId: {}", eventData["orderId"])
+                }
+                "ORDER_PAID" -> {
+                    log.info("💳 [PAYMENT] 주문 결제 완료 이벤트 수신 - orderId: {}", eventData["orderId"])
+                }
+
+                // 결제 관련 이벤트 (자체 모니터링)
+                "PAYMENT_CREATED" -> {
+                    log.info("🧾 [PAYMENT] 결제 생성 이벤트 수신 - paymentId: {}", eventData["paymentId"])
+                }
+                "PAYMENT_APPROVED" -> {
+                    log.info("✅ [PAYMENT] 결제 승인 이벤트 수신 - paymentId: {}", eventData["paymentId"])
+                    handlePaymentApproved(eventData)
+                }
+                "PAYMENT_FAILED" -> {
+                    log.warn("❌ [PAYMENT] 결제 실패 이벤트 수신 - paymentId: {}", eventData["paymentId"])
+                    handlePaymentFailed(eventData)
+                }
+                "PAYMENT_USER_CANCELLED" -> {
+                    log.info("↩️ [PAYMENT] 결제 취소 이벤트 수신 - paymentId: {}", eventData["paymentId"])
+                }
+                "PAYMENT_COMPLETED" -> {
+                    log.info("✅ [PAYMENT] 결제 완료 이벤트 수신 - paymentId: {}", eventData["paymentId"])
+                }
+
+                else -> {
+                    log.info("🔔 [PAYMENT] 기타 Payment 이벤트 수신 - eventType: {}", eventType)
+                }
+            }
+        } catch (e: Exception) {
+            log.error("🚨 [PAYMENT] Payment 이벤트 처리 실패 - eventType: {}, error: {}", eventType, e.message, e)
+        }
+    }
+
+    /**
+     * Payment 요청 타입별 처리
+     */
+    private fun handlePaymentRequest(eventType: String?, eventData: Map<String, Any>) {
+        try {
+            when (eventType) {
+                "PAYMENT_CREATE_REQUESTED" -> {
+                    log.info("🧾 [PAYMENT] 결제 생성 요청 수신 - orderId: {}", eventData["orderId"])
+                    handlePaymentCreateRequested(eventData)
+                }
+                "PAYMENT_CANCEL_REQUESTED" -> {
+                    log.info("↩️ [PAYMENT] 결제 취소 요청 수신 - orderId: {}", eventData["orderId"])
+                    handlePaymentCancelRequested(eventData)
+                }
+
+                else -> {
+                    log.info("🔔 [PAYMENT] 기타 Payment 요청 수신 - eventType: {}", eventType)
+                }
+            }
+        } catch (e: Exception) {
+            log.error("🚨 [PAYMENT] Payment 요청 처리 실패 - eventType: {}, error: {}", eventType, e.message, e)
+        }
+    }
+
+    /**
+     * 결제 승인 이벤트 처리
+     */
+    private fun handlePaymentApproved(eventData: Map<String, Any>) {
+        try {
+            val paymentId = eventData["paymentId"] as? String
+            val amount = eventData["amount"] as? String
+
+            log.info("💰 [PAYMENT] 결제 승인 처리 - paymentId: {}, amount: {}", paymentId, amount)
+            // 결제 승인 후속 처리 로직 (알림, 통계 등)
+
+        } catch (e: Exception) {
+            log.error("🚨 [PAYMENT] 결제 승인 처리 실패 - eventData: {}, error: {}", eventData, e.message, e)
+        }
+    }
+
+    /**
+     * 결제 실패 이벤트 처리
+     */
+    private fun handlePaymentFailed(eventData: Map<String, Any>) {
+        try {
+            val paymentId = eventData["paymentId"] as? String
+            val reason = eventData["reason"] as? String
+
+            log.warn("❌ [PAYMENT] 결제 실패 처리 - paymentId: {}, reason: {}", paymentId, reason)
+            // 결제 실패 후속 처리 로직 (알림, 재시도 등)
+
+        } catch (e: Exception) {
+            log.error("🚨 [PAYMENT] 결제 실패 처리 실패 - eventData: {}, error: {}", eventData, e.message, e)
+        }
+    }
+
+    /**
+     * 결제 취소 요청 이벤트 처리 (기존 Redis 로직과 동일)
+     */
+    private fun handlePaymentCancelRequested(eventData: Map<String, Any>) {
+        val orderIdRaw = eventData["orderId"]?.toString()?.trim()?.trim('"')
+        val reason = eventData["reason"]?.toString()?.trim()?.trim('"') ?: "주문 취소"
+        val orderNo = eventData["orderNo"]?.toString()?.trim()?.trim('"') ?: orderIdRaw
+        val customerIdRaw = eventData["customerId"]?.toString()?.trim()?.trim('"')
+        val customerId = customerIdRaw?.toLongOrNull()
+
+        if (orderIdRaw.isNullOrBlank()) {
+            log.warn("⚠️ [PAYMENT] 결제 취소 요청 필수 데이터 누락 - eventData: {}", eventData)
+            return
+        }
+
+        val orderId = java.util.UUID.fromString(orderIdRaw)
+
+        eventScope.launch {
+            try {
+                val result = tossPaymentCoroutineService.cancelPayment(orderId, reason)
+
+                paymentEventPublisher.publishPaymentCancelled(
+                    paymentId = result.paymentId,
+                    orderId = orderId,
+                    orderNo = orderNo ?: orderId.toString(),
+                    cancelAmount = result.cancelAmount,
+                    cancelReason = result.cancelReason,
+                    customerId = customerId
+                )
+
+                log.info("✅ [PAYMENT] 결제 취소 처리 완료 - orderId={}, paymentId={}", orderId, result.paymentId)
+
+            } catch (e: Exception) {
+                log.error("🚨 [PAYMENT] 결제 취소 처리 실패 - orderId={}, error={}", orderId, e.message, e)
+                paymentEventPublisher.publishAsync(
+                    PaymentCancelFailedEvent(
+                        _paymentId = java.util.UUID(0, 0),
+                        orderId = orderId,
+                        orderNo = orderNo ?: orderId.toString(),
+                        cancelReason = reason,
+                        failureReason = e.message ?: "결제 취소 실패",
+                        retryCount = 0,
+                        customerId = customerId
+                    )
+                )
+            }
+        }
+    }
+
+    /**
+     * 결제 생성 요청 이벤트 처리 (기존 Redis 로직과 동일)
+     */
+    private fun handlePaymentCreateRequested(eventData: Map<String, Any>) {
+        try {
+            val orderIdRaw = eventData["orderId"]?.toString()?.trim()?.trim('"')
+            val orderNo = eventData["orderNo"]?.toString()?.trim()?.trim('"')
+            val amountRaw = eventData["amount"]?.toString()?.trim()?.trim('"')
+            val paymentMethod = eventData["paymentMethod"]?.toString()?.trim()?.trim('"') ?: "CARD"
+            val customerIdRaw = eventData["customerId"]?.toString()?.trim()?.trim('"')
+
+            if (orderIdRaw.isNullOrBlank() || amountRaw.isNullOrBlank()) {
+                log.warn("⚠️ [PAYMENT] 결제 생성 요청 필수 데이터 누락 - eventData: {}", eventData)
+                return
+            }
+
+            log.info("📝 [PAYMENT] 결제 생성 요청 수신(대기) - orderId={}, method={}, amount={}원, orderNo={}, customerId={}",
+                orderIdRaw, paymentMethod, amountRaw, orderNo, customerIdRaw)
+            log.info("🕒 [PAYMENT] 결제 기록 생성은 승인 시점에 처리됩니다 - orderId={}", orderIdRaw)
+
+        } catch (e: Exception) {
+            log.error("🚨 [PAYMENT] 결제 생성 요청 처리 실패 - eventData: {}, error: {}", eventData, e.message, e)
+        }
+    }
+
+    /**
+     * Order 정보 응답 이벤트 처리 (기존 Redis 로직과 동일)
+     */
+    private fun handleOrderInfoResponse(eventData: Map<String, Any>) {
+        try {
+            log.info("📞 [PAYMENT] Order 정보 응답 처리 시작 - requestId: {}, success: {}",
+                eventData["requestId"], eventData["success"])
+
+            // Map을 OrderInfoResponseEvent로 변환
+            val customerIdValue = normalizeString(eventData["customerId"])
+                ?: normalizeString(eventData["actualUserId"])
+            val orderStatusValue = normalizeString(eventData["orderStatus"])
+                ?: normalizeString(eventData["status"])
+            val totalAmountValue = normalizeString(eventData["totalAmount"])
+                ?: normalizeString(eventData["amount"])
+
+            val response = OrderInfoResponseEvent(
+                requestId = normalizeString(eventData["requestId"]),
+                success = normalizeString(eventData["success"])?.toBoolean() ?: false,
+                errorMessage = normalizeString(eventData["errorMessage"])
+                    ?: normalizeString(eventData["message"]),
+                actualLines = parseOrderLineInfos(eventData["actualLines"]),
+                customerId = customerIdValue?.toLongOrNull(),
+                orderStatus = orderStatusValue,
+                totalAmount = totalAmountValue?.toIntOrNull(),
+                actualOrderNo = normalizeString(eventData["actualOrderNo"]),
+                actualUserId = normalizeString(eventData["actualUserId"])?.toLongOrNull(),
+                actualPopupId = normalizeString(eventData["actualPopupId"]),
+                actualHasReservation = normalizeString(eventData["actualHasReservation"])?.toBoolean(),
+                actualHasGoods = normalizeString(eventData["actualHasGoods"])?.toBoolean()
+            )
+
+            // PaymentOrderInfoService에 응답 전달
+            paymentOrderInfoService.handleOrderInfoResponse(response)
+
+            log.info("✅ [PAYMENT] Order 정보 응답 처리 완료 - requestId: {}, success: {}",
+                response.requestId, response.success)
+
+        } catch (e: Exception) {
+            log.error("🚨 [PAYMENT] Order 정보 응답 처리 실패 - eventData: {}, error: {}", eventData, e.message, e)
+        }
+    }
+
+    // === 유틸리티 메서드들 (기존 Redis 로직과 동일) ===
+
+    private fun normalizeString(value: Any?): String? {
+        val raw = value as? String ?: return null
+        val trimmed = raw.trim()
+        return trimmed.trim('"')
+    }
+
+    private fun parseOrderLineInfos(rawLines: Any?): List<EventLineItem> {
+        log.info("🔍 [DEBUG] parseOrderLineInfos 시작 - rawLines type: {}, value: {}",
+            rawLines?.javaClass?.simpleName, rawLines)
+
+        if (rawLines == null) {
+            log.info("🔍 [DEBUG] rawLines is null, returning empty list")
+            return emptyList()
+        }
+
+        return try {
+            when (rawLines) {
+                is List<*> -> {
+                    log.info("🔍 [DEBUG] rawLines is List, size: {}", rawLines.size)
+                    rawLines.mapNotNull { item ->
+                        log.info("🔍 [DEBUG] Processing list item type: {}, value: {}",
+                            item?.javaClass?.simpleName, item)
+                        when (item) {
+                            is Map<*, *> -> {
+                                val result = objectMapper.convertValue(item, EventLineItem::class.java)
+                                log.info("🔍 [DEBUG] Converted map to EventLineItem: {}", result)
+                                result
+                            }
+                            else -> {
+                                log.warn("🔍 [DEBUG] Unexpected list item type: {}", item?.javaClass?.simpleName)
+                                null
+                            }
+                        }
+                    }
+                }
+                is String -> {
+                    log.info("🔍 [DEBUG] rawLines is String: '{}'", rawLines)
+                    var trimmed = rawLines.trim().trim('"')
+                    log.info("🔍 [DEBUG] After basic trimming: '{}'", trimmed)
+
+                    // 이중 이스케이프 처리
+                    if (trimmed.startsWith("[{\\\"") || trimmed.startsWith("{\\\"")) {
+                        log.info("🔍 [DEBUG] Detected escaped JSON, unescaping...")
+                        trimmed = trimmed.replace("\\\"", "\"").replace("\\\\", "\\")
+                        log.info("🔍 [DEBUG] After unescaping: '{}'", trimmed)
+                    }
+
+                    if (trimmed.isBlank() || trimmed == "[]") {
+                        log.info("🔍 [DEBUG] Empty or blank string, returning empty list")
+                        emptyList()
+                    } else {
+                        log.info("🔍 [DEBUG] Attempting to parse JSON string: '{}'", trimmed)
+                        val typeRef = object : com.fasterxml.jackson.core.type.TypeReference<List<EventLineItem>>() {}
+                        val result = objectMapper.readValue(trimmed, typeRef)
+                        log.info("🔍 [DEBUG] JSON parsing successful, result count: {}", result.size)
+                        result.forEachIndexed { index, item ->
+                            log.info("🔍 [DEBUG] Parsed item[{}]: itemType={}, qty={}, unitPrice={}, linePrice={}",
+                                index, item.itemType, item.qty, item.unitPrice, item.linePrice)
+                        }
+                        result
+                    }
+                }
+                else -> {
+                    log.info("🔍 [DEBUG] rawLines is other type: {}, attempting direct conversion", rawLines.javaClass.simpleName)
+                    val typeRef = object : com.fasterxml.jackson.core.type.TypeReference<List<EventLineItem>>() {}
+                    val result = objectMapper.convertValue(rawLines, typeRef)
+                    log.info("🔍 [DEBUG] Direct conversion successful, result count: {}", result.size)
+                    result
+                }
+            }
+        } catch (e: Exception) {
+            log.error("❌ [DEBUG] EventLineItem JSON 파싱 실패 - rawLines: {}, error: {}", rawLines, e.message, e)
+            emptyList()
+        }
+    }
+
+}

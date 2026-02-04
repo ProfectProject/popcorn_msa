@@ -84,6 +84,14 @@ redis:
   events:
     enabled: true
 
+# Kafka 설정 (점진적 전환용)
+kafka:
+  enabled: true  # Kafka 활성화
+  bootstrap-servers: ${KAFKA_BOOTSTRAP_SERVERS:localhost:9092}
+  consumer:
+    group-id: payment-service-group  # Redis Stream과 동일한 Consumer Group
+    concurrency: 6  # payment-events 파티션 수에 맞춤
+
 jwt:
   secret: ${JWT_SECRET:dGVzdC1qd3Qtc2VjcmV0LWtleS1mb3ItbG9jYWwtZGV2ZWxvcG1lbnQtb25seS1kb25vdC11c2UtaW4tcHJvZHVjdGlvbg==}
   expiration: 3600000

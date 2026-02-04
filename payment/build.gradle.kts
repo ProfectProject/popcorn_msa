@@ -93,6 +93,10 @@ dependencies {
     implementation("org.springframework.boot:spring-boot-starter-data-redis")
     implementation("org.springframework.boot:spring-boot-starter-cache")
 
+    // === Kafka ===
+    implementation("org.springframework.kafka:spring-kafka")
+    testImplementation("org.springframework.kafka:spring-kafka-test")
+
     // === Environment Variables ===
     implementation("io.github.cdimascio:dotenv-java:3.0.0")
 
