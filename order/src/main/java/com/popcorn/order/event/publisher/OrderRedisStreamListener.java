@@ -1,6 +1,7 @@
 package com.popcorn.order.event.publisher;
 
 import com.fasterxml.jackson.databind.ObjectMapper;
+import com.popcorn.order.constants.EventConstants;
 import com.popcorn.order.entity.OrderStatus;
 import com.popcorn.order.repository.OrderRepository;
 import com.popcorn.order.event.payment.PaymentCompletedEvent;
@@ -10,7 +11,6 @@ import com.popcorn.order.service.core.OrderCommandService;
 import com.popcorn.order.service.util.OrderInfoResponseService;
 import com.popcorn.order.service.cache.PaymentCacheService;
 import com.popcorn.order.service.cache.OrderCacheService;
-import com.popcorn.order.service.lookup.OrderPriceLookupService;
 import com.popcorn.order.service.lookup.OrderPopupLookupService;
 import com.popcorn.order.service.util.OrderReservationAwaiter;
 import com.popcorn.order.service.util.OrderIdempotencyService;
@@ -30,7 +30,6 @@ import java.util.ArrayList;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
-import java.util.Optional;
 import java.util.UUID;
 import java.util.concurrent.Executors;
 import java.util.concurrent.ScheduledExecutorService;
@@ -47,7 +46,6 @@ public class OrderRedisStreamListener implements StreamListener<String, MapRecor
 
     private static final Logger log = LoggerFactory.getLogger(OrderRedisStreamListener.class);
 
-    private final Optional<OrderPriceLookupService> orderPriceLookupService;
     private final OrderCommandService orderCommandService;
     private final OrderRepository orderRepository;
     private final OrderPopupLookupService orderPopupLookupService;
@@ -200,55 +198,51 @@ public class OrderRedisStreamListener implements StreamListener<String, MapRecor
             switch (eventType) {
                 // 가격 조회, 사용자 주소 조회 응답 이벤트 처리 제거됨 (HTTP 동기 방식으로 변경)
                 // 팝업 정보 조회 응답 처리 제거됨 (HTTP 동기 방식으로 변경)
-                case "payment-approved":
+                case EventConstants.EventTypes.PAYMENT_APPROVED:
                     log.info("💳 [ORDER] 결제 승인 이벤트 수신");
                     handlePaymentApproved(values);
                     break;
-                case "payment-failed":
+                case EventConstants.EventTypes.PAYMENT_FAILED:
                     log.info("❌ [ORDER] 결제 실패 이벤트 수신");
                     handlePaymentFailed(values);
                     break;
-                case "payment-cancelled":
+                case EventConstants.EventTypes.PAYMENT_CANCELLED:
                     log.info("↩️ [ORDER] 결제 취소 이벤트 수신");
                     handlePaymentCancelled(values);
                     break;
-                case "order-paid":
+                case EventConstants.EventTypes.ORDER_PAID:
                     log.info("💳✅ [ORDER] 주문 결제 완료 이벤트 수신 - 재고 차감 시작");
                     handleOrderPaid(values);
                     break;
-                case "schedule-reservation-requested":
-                    log.info("📅🔄 [ORDER] 스케줄 예약 요청 이벤트 수신");
-                    handleScheduleReservationRequested(values);
-                    break;
-                case "schedule-reservation-success":
+                case EventConstants.EventTypes.SCHEDULE_RESERVATION_SUCCEEDED:
                     log.info("📅✅ [ORDER] 스케줄 예약 성공 이벤트 수신");
                     handleScheduleReservationSuccess(values);
                     break;
-                case "schedule-reservation-failed":
+                case EventConstants.EventTypes.SCHEDULE_RESERVATION_FAILED:
                     log.info("📅❌ [ORDER] 스케줄 예약 실패 이벤트 수신");
                     handleScheduleReservationFailed(values);
                     break;
-                case "stock-deduction-success":
+                case EventConstants.EventTypes.STOCK_DEDUCTION_SUCCEEDED:
                     log.info("📦✅ [ORDER] 재고 차감 성공 이벤트 수신");
                     handleStockDeductionSuccess(values);
                     break;
-                case "stock-deduction-failed":
+                case EventConstants.EventTypes.STOCK_DEDUCTION_FAILED:
                     log.info("📦❌ [ORDER] 재고 차감 실패 이벤트 수신");
                     handleStockDeductionFailed(values);
                     break;
-                case "goods-reserved":
+                case EventConstants.EventTypes.GOODS_RESERVATION_SUCCEEDED:
                     log.info("📦✅ [ORDER] 굿즈 예약 성공 이벤트 수신");
                     handleGoodsReserved(values);
                     break;
-                case "goods-reservation-failed":
+                case EventConstants.EventTypes.GOODS_RESERVATION_FAILED:
                     log.info("📦❌ [ORDER] 굿즈 예약 실패 이벤트 수신");
                     handleGoodsReservationFailed(values);
                     break;
-                case "mixed-reservation-success":
+                case EventConstants.EventTypes.MIXED_RESERVATION_SUCCEEDED:
                     log.info("🔗✅ [ORDER] 복합형 예약 성공 이벤트 수신");
                     handleMixedReservationSuccess(values);
                     break;
-                case "mixed-reservation-failed":
+                case EventConstants.EventTypes.MIXED_RESERVATION_FAILED:
                     log.info("🔗❌ [ORDER] 복합형 예약 실패 이벤트 수신");
                     handleMixedReservationFailed(values);
                     break;
@@ -258,40 +252,6 @@ public class OrderRedisStreamListener implements StreamListener<String, MapRecor
             }
         } catch (Exception e) {
             log.error("🚨 [ORDER] 이벤트 처리 실패 - eventType: {}, error: {}", eventType, e.getMessage(), e);
-        }
-    }
-
-    /**
-     * 스케줄 예약 요청 이벤트 처리
-     */
-    private void handleScheduleReservationRequested(Map<String, Object> values) {
-        try {
-            String orderId = (String) values.get("orderId");
-            String orderNo = (String) values.get("orderNo");
-            String sessionId = (String) values.get("sessionId");
-            String customerInfo = (String) values.get("customerInfo");
-
-            // 따옴표 제거
-            if (orderId != null) orderId = orderId.trim().replaceAll("^\"|\"$", "");
-            if (orderNo != null) orderNo = orderNo.trim().replaceAll("^\"|\"$", "");
-            if (sessionId != null) sessionId = sessionId.trim().replaceAll("^\"|\"$", "");
-            if (customerInfo != null) customerInfo = customerInfo.trim().replaceAll("^\"|\"$", "");
-
-            log.info("📅🔄 [ORDER] 스케줄 예약 요청 처리 - orderId: {}, orderNo: {}, sessionId: {}",
-                    orderId, orderNo, sessionId);
-
-            if (orderId != null && !orderId.isEmpty()) {
-                UUID orderUuid = UUID.fromString(orderId);
-
-                // 주문 상태를 REQUESTED로 유지하고 로그만 남김 (실제 예약 결과를 기다림)
-                log.info("📅🔄 [ORDER] 스케줄 예약 요청 진행 중 - orderId: {}, sessionId: {}", orderUuid, sessionId);
-
-                log.info("✅ [ORDER] 스케줄 예약 요청 처리 완료 - orderId: {}, 예약 결과 대기 중", orderId);
-            }
-
-        } catch (Exception e) {
-            log.error("🚨 [ORDER] 스케줄 예약 요청 이벤트 처리 실패 - values: {}, error: {}",
-                    values, e.getMessage(), e);
         }
     }
 
@@ -996,14 +956,14 @@ public class OrderRedisStreamListener implements StreamListener<String, MapRecor
             throw new IllegalArgumentException("eventType은 필수 항목입니다: " + streamName);
         }
 
-        // eventType 형식 검증 (kebab-case)
-        if (!eventType.matches("^[a-z0-9]+(-[a-z0-9]+)*$")) {
+        // eventType 형식 검증 (UPPER_SNAKE_CASE)
+        if (!eventType.matches("^[A-Z0-9]+(_[A-Z0-9]+)*$")) {
             String errorMessage = String.format(
-                "[CRITICAL] eventType 형식 오류! eventType=%s, stream=%s, recordId=%s (kebab-case 형식 필요)",
+                "[CRITICAL] eventType 형식 오류! eventType=%s, stream=%s, recordId=%s (UPPER_SNAKE_CASE 형식 필요)",
                 eventType, streamName, recordId
             );
             log.error(errorMessage);
-            throw new IllegalArgumentException("eventType은 kebab-case 형식이어야 합니다: " + eventType);
+            throw new IllegalArgumentException("eventType은 UPPER_SNAKE_CASE 형식이어야 합니다: " + eventType);
         }
 
         log.debug("✅ [ORDER] eventType 검증 통과: {} (stream: {}, recordId: {})",

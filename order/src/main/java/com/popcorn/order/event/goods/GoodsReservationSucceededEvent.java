@@ -5,6 +5,7 @@ import java.util.HashMap;
 import java.util.Map;
 import java.util.UUID;
 
+import com.popcorn.order.constants.EventConstants;
 import com.popcorn.order.event.order.BaseOrderEvent;
 import lombok.Getter;
 import lombok.ToString;
@@ -44,7 +45,7 @@ public class GoodsReservationSucceededEvent extends BaseOrderEvent {
 
     private GoodsReservationSucceededEvent(UUID orderId, UUID goodsId, Integer quantity,
                                          LocalDateTime expiresAt, LocalDateTime succeededAt, Long userId) {
-        super(orderId, "goods-reservation-succeeded", userId);
+        super(orderId, EventConstants.EventTypes.GOODS_RESERVATION_SUCCEEDED, userId);
         this.goodsId = goodsId;
         this.quantity = quantity;
         this.expiresAt = expiresAt;

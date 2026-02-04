@@ -6,6 +6,7 @@ import java.util.List;
 import java.util.Map;
 import java.util.UUID;
 
+import com.popcorn.order.constants.EventConstants;
 import com.popcorn.order.event.order.BaseOrderEvent;
 import lombok.AllArgsConstructor;
 import lombok.Builder;
@@ -40,7 +41,7 @@ public class StockDeductionRequestedEvent extends BaseOrderEvent {
 
     private StockDeductionRequestedEvent(UUID orderId, String orderNo, UUID popupId,
                                        List<DeductionItem> deductionItems, LocalDateTime requestedAt, Long userId) {
-        super(orderId, "stock-deduction-requested", userId);
+        super(orderId, EventConstants.EventTypes.STOCK_DEDUCTION_REQUESTED, userId);
         this.orderNo = orderNo;
         this.popupId = popupId;
         this.deductionItems = deductionItems;

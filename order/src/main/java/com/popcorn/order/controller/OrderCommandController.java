@@ -369,7 +369,6 @@ public class OrderCommandController {
         }
 
         if (request.requiresShippingAddress()) {
-            log.debug("배송지 필요 주문 - 기본 배송지 확인은 서비스에서 처리합니다.");
         }
     }
 

@@ -48,6 +48,14 @@ spring:
     user: ${PAYMENT_DB_MIGRATION_USERNAME:${PAYMENT_FLYWAY_USERNAME:${PAYMENT_DB_USERNAME}}}
     password: ${PAYMENT_DB_MIGRATION_PASSWORD:${PAYMENT_FLYWAY_PASSWORD:${PAYMENT_DB_PASSWORD}}}
 
+# 외부 서비스 URL 설정 (Order service에서 이전)
+external:
+  services:
+    users:
+      base-url: ${USERS_SERVICE_BASE_URL}
+    stores:
+      base-url: ${STORES_SERVICE_BASE_URL}
+
   # Redis 설정 (프로덕션)
   data:
     redis:

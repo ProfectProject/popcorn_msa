@@ -6,6 +6,7 @@ import java.util.List;
 import java.util.Map;
 import java.util.UUID;
 
+import com.popcorn.order.constants.EventConstants;
 import com.popcorn.order.event.order.BaseOrderEvent;
 import lombok.AllArgsConstructor;
 import lombok.Builder;
@@ -40,7 +41,7 @@ public class ScheduleConfirmationSucceededEvent extends BaseOrderEvent {
 
     private ScheduleConfirmationSucceededEvent(UUID orderId, List<ScheduleDetail> scheduleDetails,
                                              LocalDateTime confirmedAt, Long userId) {
-        super(orderId, "schedule-confirmation-succeeded", userId);
+        super(orderId, EventConstants.EventTypes.SCHEDULE_CONFIRMATION_SUCCEEDED, userId);
         this.scheduleDetails = scheduleDetails;
         this.confirmedAt = confirmedAt;
     }

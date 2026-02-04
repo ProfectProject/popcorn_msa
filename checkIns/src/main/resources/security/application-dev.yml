@@ -1,53 +1,91 @@
 server:
   port: ${SERVER_PORT:8080}
   shutdown: immediate
-  tomcat:
-    uri-encoding: UTF-8
 
 spring:
   config:
     activate:
       on-profile: dev
+
+  # 데이터베이스 설정 (개발 환경)
   datasource:
-    url: jdbc:postgresql://${DB_HOST:localhost}:${DB_PORT:5432}/${DB_NAME:popcorn_db}
-    username: ${QR_DB_USERNAME:qr_app}
-    password: ${QR_DB_PASSWORD}
+    url: jdbc:postgresql://${DB_HOST:localhost}:${DB_PORT:5430}/${DB_NAME:popcorn_db}
     driver-class-name: org.postgresql.Driver
+    username: ${QR_DB_USERNAME}
+    password: ${QR_DB_PASSWORD}
     hikari:
       maximum-pool-size: 3
       minimum-idle: 1
+      idle-timeout: 300000
+      connection-timeout: 10000
+      max-lifetime: 600000
 
+  # JPA 설정 (개발 환경)
   jpa:
-    open-in-view: false
-    show-sql: false
     hibernate:
       ddl-auto: validate
     properties:
       hibernate:
-        type:
-          preferred_enum_jdbc_type: NAMED_ENUM
+        format_sql: true
+        show_sql: true
+        dialect: org.hibernate.dialect.PostgreSQLDialect
+        default_schema: checkIns
+    show-sql: true
 
+  # Flyway 설정 (개발 환경)
   flyway:
     enabled: true
     locations: classpath:db/migration/schema
     baseline-on-migrate: true
-    validate-on-migrate: true
-    out-of-order: false
-    clean-disabled: true
-    placeholders:
-      QR_MIGRATOR_PASSWORD: ${QR_FLYWAY_PASSWORD}
-      QR_APP_PASSWORD: ${QR_DB_PASSWORD}
+    validate-on-migrate: false
+    out-of-order: true
+    url: jdbc:postgresql://${DB_HOST:localhost}:${DB_PORT:5430}/${DB_NAME:popcorn_db}
+    user: ${QR_DB_MIGRATION_USERNAME:${QR_FLYWAY_USERNAME:${QR_DB_USERNAME}}}
+    password: ${QR_DB_MIGRATION_PASSWORD:${QR_FLYWAY_PASSWORD:${QR_DB_PASSWORD}}}
+    schemas: checkIns
+    default-schema: checkIns
 
+  # Redis 설정 (개발 환경)
+  data:
+    redis:
+      host: ${REDIS_HOST:localhost}
+      port: ${REDIS_PORT:6379}
+      password: ${REDIS_PASSWORD:}
+      database: 1  # CheckIns 서비스 전용 DB
+      timeout: 3000ms
+      lettuce:
+        pool:
+          max-active: 15
+          max-idle: 8
+          min-idle: 2
+
+# 로깅 설정 (개발 환경용)
 logging:
   level:
-    root: INFO
-    com.popcorn.checkIns: INFO
-    org.springframework.web: WARN
-    org.springframework.boot.web: WARN
-    org.hibernate.SQL: WARN
+    com.popcorn.checkIns: DEBUG
+    org.springframework.web: INFO
+    org.hibernate.SQL: DEBUG
+    org.hibernate.type.descriptor.sql.BasicBinder: TRACE
+
 
 springdoc:
   server-url: ${GATEWAY_SERVICE_URL:https://dev.goormpopcorn.shop}
+
+# 헬스체크 (개발 환경)
+management:
+  health:
+    redis:
+      enabled: false
+
+# CheckIns 서비스 비즈니스 설정 (개발용)
+checkIns:
+  qr:
+    timeout: ${QR_TIMEOUT:30000}
+  validation:
+    max-entries: ${MAX_ENTRIES:1000}
+  notification:
+    enabled: ${QR_NOTIFICATION_ENABLED:true}
+    retry-count: ${QR_NOTIFICATION_RETRY:3}
 
 passport:
   secret: ${PASSPORT_SECRET:passport-shared-secret}

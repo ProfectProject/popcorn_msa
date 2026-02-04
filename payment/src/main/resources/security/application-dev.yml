@@ -75,6 +75,14 @@ toss:
     client-key: ${TOSS_PAYMENTS_CLIENT_KEY:}
     test-mode: ${TOSS_PAYMENTS_TEST_MODE:true}  # 개발에서는 테스트 모드
 
+# 외부 서비스 URL 설정 (Order service에서 이전)
+external:
+  services:
+    users:
+      base-url: ${USERS_SERVICE_BASE_URL:http://users-service:8081}
+    stores:
+      base-url: ${STORES_SERVICE_BASE_URL:http://stores-service:8082}
+
 # 이벤트 기반 아키텍처 - HTTP 통신 제거
 # microservices 통신은 Redis Stream 이벤트로 대체
 

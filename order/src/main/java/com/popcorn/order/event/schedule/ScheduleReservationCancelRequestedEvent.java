@@ -5,6 +5,7 @@ import java.util.HashMap;
 import java.util.Map;
 import java.util.UUID;
 
+import com.popcorn.order.constants.EventConstants;
 import com.popcorn.order.event.order.BaseOrderEvent;
 import lombok.Getter;
 import lombok.ToString;
@@ -48,7 +49,7 @@ public class ScheduleReservationCancelRequestedEvent extends BaseOrderEvent {
                                                    UUID sessionId, Integer quantity, String reason,
                                                    String reservationToken, LocalDateTime requestedAt,
                                                    Long userId) {
-        super(orderId, "schedule-reservation-cancel-requested", userId);
+        super(orderId, EventConstants.EventTypes.SCHEDULE_RESERVATION_CANCEL_REQUESTED, userId);
         this.orderNo = orderNo;
         this.popupId = popupId;
         this.sessionId = sessionId;

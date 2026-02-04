@@ -5,6 +5,7 @@ import java.util.HashMap;
 import java.util.Map;
 import java.util.UUID;
 
+import com.popcorn.order.constants.EventConstants;
 import com.popcorn.order.event.order.BaseOrderEvent;
 import lombok.Getter;
 import lombok.ToString;
@@ -32,7 +33,7 @@ public class StockReleasedEvent extends BaseOrderEvent {
     private final LocalDateTime releasedAt;
 
     private StockReleasedEvent(UUID orderId, LocalDateTime releasedAt, Long userId) {
-        super(orderId, "stock-released", userId);
+        super(orderId, EventConstants.EventTypes.STOCK_RELEASED, userId);
         this.releasedAt = releasedAt;
     }
 

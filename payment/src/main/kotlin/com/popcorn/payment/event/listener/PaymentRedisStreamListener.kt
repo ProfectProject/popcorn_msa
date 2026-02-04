@@ -69,48 +69,48 @@ class PaymentRedisStreamListener(
         try {
             when (eventType) {
                 // 주문 관련 이벤트
-                "order-created" -> {
+                "ORDER_CREATED" -> {
                     log.info("📦 [PAYMENT] 주문 생성 이벤트 수신 - orderId: {}", values["orderId"])
                     // 결제 준비 로직 등
                 }
-                "order-paid" -> {
+                "ORDER_PAID" -> {
                     log.info("💳 [PAYMENT] 주문 결제 완료 이벤트 수신 - orderId: {}", values["orderId"])
                     // 결제 완료 후속 처리 등
                 }
 
                 // 결제 관련 이벤트 (자체 모니터링)
-                "payment-created" -> {
+                "PAYMENT_CREATED" -> {
                     log.info("🧾 [PAYMENT] 결제 생성 이벤트 수신 - paymentId: {}", values["paymentId"])
                 }
-                "payment-create-requested" -> {
+                "PAYMENT_CREATE_REQUESTED" -> {
                     log.info("🧾 [PAYMENT] 결제 생성 요청 이벤트 수신 - orderId: {}", values["orderId"])
                     handlePaymentCreateRequested(values)
                 }
-                "payment-approved" -> {
+                "PAYMENT_APPROVED" -> {
                     log.info("✅ [PAYMENT] 결제 승인 이벤트 수신 - paymentId: {}", values["paymentId"])
                     handlePaymentApproved(values)
                 }
-                "payment-cancel-requested" -> {
+                "PAYMENT_CANCEL_REQUESTED" -> {
                     log.info("↩️ [PAYMENT] 결제 취소 요청 이벤트 수신 - orderId: {}", values["orderId"])
                     handlePaymentCancelRequested(values)
                 }
-                "payment-failed" -> {
+                "PAYMENT_FAILED" -> {
                     log.warn("❌ [PAYMENT] 결제 실패 이벤트 수신 - paymentId: {}", values["paymentId"])
                     handlePaymentFailed(values)
                 }
-                "payment-cancelled" -> {
+                "PAYMENT_USER_CANCELLED" -> {
                     log.info("↩️ [PAYMENT] 결제 취소 이벤트 수신 - paymentId: {}", values["paymentId"])
                 }
-                "payment-completed" -> {
+                "PAYMENT_COMPLETED" -> {
                     log.info("✅ [PAYMENT] 결제 완료 이벤트 수신 - paymentId: {}", values["paymentId"])
                 }
 
                 // 재고 관련 이벤트
-                "inventory-confirmation-requested" -> {
+                "INVENTORY_CONFIRMATION_REQUESTED" -> {
                     log.info("📦 [PAYMENT] 재고 확정 요청 이벤트 수신 - orderId: {}", values["orderId"])
                     // 재고 확정 관련 로직
                 }
-                "inventory-restore-requested" -> {
+                "INVENTORY_RESTORE_REQUESTED" -> {
                     log.info("🔄 [PAYMENT] 재고 복구 요청 이벤트 수신 - orderId: {}", values["orderId"])
                     // 재고 복구 관련 로직
                 }

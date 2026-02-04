@@ -1,6 +1,7 @@
 package com.popcorn.order.event.publisher;
 
 import com.fasterxml.jackson.databind.ObjectMapper;
+import com.popcorn.order.constants.EventConstants;
 import com.popcorn.order.event.order.OrderPaidEvent;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
@@ -48,7 +49,7 @@ public class RedisEventPublisher {
                     event.getOrderId(), event.getEventId());
 
             java.util.Map<String, String> eventData = new java.util.HashMap<>();
-            eventData.put("eventType", "order-paid");
+            eventData.put("eventType", EventConstants.EventTypes.ORDER_PAID);
             eventData.put("orderId", event.getOrderId().toString());
             eventData.put("eventId", event.getEventId().toString());
             eventData.put("orderNo", event.getOrderNo());
@@ -87,7 +88,7 @@ public class RedisEventPublisher {
                     orderId, eventId);
 
             Map<String, String> eventData = Map.of(
-                "eventType", "goods-reservation-cancel-requested",
+                "eventType", EventConstants.EventTypes.GOODS_RESERVATION_CANCEL_REQUESTED,
                 "eventId", eventId,
                 "orderId", orderId.toString(),
                 "popupId", popupId != null ? popupId.toString() : "",
@@ -125,7 +126,7 @@ public class RedisEventPublisher {
                     orderId, eventId);
 
             Map<String, String> eventData = Map.of(
-                "eventType", "payment-create-requested",
+                "eventType", EventConstants.EventTypes.PAYMENT_CREATE_REQUESTED,
                 "eventId", eventId,
                 "orderId", orderId.toString(),
                 "orderNo", orderNo != null ? orderNo : "",
@@ -164,7 +165,7 @@ public class RedisEventPublisher {
                     orderId, eventId);
 
             Map<String, String> eventData = Map.of(
-                "eventType", "payment-cancel-requested",
+                "eventType", EventConstants.EventTypes.PAYMENT_CANCEL_REQUESTED,
                 "eventId", eventId,
                 "orderId", orderId.toString(),
                 "orderNo", orderNo != null ? orderNo : "",
@@ -227,7 +228,7 @@ public class RedisEventPublisher {
 
             // Stream 이벤트 데이터 구성
             java.util.Map<String, Object> eventData = new java.util.HashMap<>();
-            eventData.put("eventType", "schedule-confirmation-requested");
+            eventData.put("eventType", EventConstants.EventTypes.SCHEDULE_CONFIRMATION_REQUESTED);
             eventData.put("eventId", eventId);
             eventData.put("orderId", orderId.toString());
             eventData.put("orderNo", orderNo);
@@ -280,14 +281,14 @@ public class RedisEventPublisher {
             throw new IllegalArgumentException("eventType은 필수 항목입니다: " + methodName);
         }
 
-        // eventType 형식 검증 (kebab-case)
-        if (!eventType.matches("^[a-z0-9]+(-[a-z0-9]+)*$")) {
+        // eventType 형식 검증 (UPPER_SNAKE_CASE)
+        if (!eventType.matches("^[A-Z0-9]+(_[A-Z0-9]+)*$")) {
             String errorMessage = String.format(
-                "[CRITICAL] eventType 형식이 잘못되었습니다! eventType=%s, method=%s (kebab-case 형식 필요)",
+                "[CRITICAL] eventType 형식이 잘못되었습니다! eventType=%s, method=%s (UPPER_SNAKE_CASE 형식 필요)",
                 eventType, methodName
             );
             log.error(errorMessage);
-            throw new IllegalArgumentException("eventType은 kebab-case 형식이어야 합니다: " + eventType);
+            throw new IllegalArgumentException("eventType은 UPPER_SNAKE_CASE 형식이어야 합니다: " + eventType);
         }
 
         log.debug("✅ eventType 검증 통과: {} (method: {})", eventType, methodName);
@@ -335,7 +336,7 @@ public class RedisEventPublisher {
                     event.getOrderId(), event.getEventId());
 
             java.util.Map<String, String> eventData = new java.util.HashMap<>();
-            eventData.put("eventType", "stock-deduction-requested");
+            eventData.put("eventType", EventConstants.EventTypes.STOCK_DEDUCTION_REQUESTED);
             eventData.put("orderId", event.getOrderId().toString());
             eventData.put("eventId", event.getEventId().toString());
             eventData.put("orderNo", event.getOrderNo() != null ? event.getOrderNo() : "");
@@ -364,7 +365,7 @@ public class RedisEventPublisher {
                     event.getOrderId(), event.getEventId());
 
             java.util.Map<String, String> eventData = new java.util.HashMap<>();
-            eventData.put("eventType", "goods-reservation-requested");
+            eventData.put("eventType", EventConstants.EventTypes.GOODS_RESERVATION_REQUESTED);
             eventData.put("orderId", event.getOrderId().toString());
             eventData.put("eventId", event.getEventId().toString());
             eventData.put("orderNo", event.getOrderNo() != null ? event.getOrderNo() : "");
@@ -392,7 +393,7 @@ public class RedisEventPublisher {
                     event.getOrderId(), event.getEventId());
 
             java.util.Map<String, String> eventData = new java.util.HashMap<>();
-            eventData.put("eventType", "schedule-reservation-requested");
+            eventData.put("eventType", EventConstants.EventTypes.SCHEDULE_RESERVATION_REQUESTED);
             eventData.put("orderId", event.getOrderId().toString());
             eventData.put("eventId", event.getEventId().toString());
             eventData.put("orderNo", event.getOrderNo() != null ? event.getOrderNo() : "");

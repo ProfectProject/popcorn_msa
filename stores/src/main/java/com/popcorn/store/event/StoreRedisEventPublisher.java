@@ -1,6 +1,7 @@
 package com.popcorn.store.event;
 
 import com.fasterxml.jackson.databind.ObjectMapper;
+import com.popcorn.store.constants.EventConstants;
 import com.popcorn.store.event.order.StockDeductionFailedEvent;
 import com.popcorn.store.event.order.StockDeductionSuccessEvent;
 import com.popcorn.store.inventory.redis.InventoryRedisHoldService.GoodsHoldItem;
@@ -44,7 +45,7 @@ public class StoreRedisEventPublisher {
                     event.getOrderId(), event.getEventId());
 
             Map<String, Object> eventData = Map.of(
-                "eventType", "stock-deduction-success",
+                "eventType", EventConstants.EventTypes.STOCK_DEDUCTION_SUCCEEDED,
                 "eventId", event.getEventId(),
                 "orderId", event.getOrderId().toString(),
                 "orderNo", event.getOrderNo(),
@@ -83,7 +84,7 @@ public class StoreRedisEventPublisher {
                     event.getOrderId(), event.getEventId());
 
             Map<String, Object> eventData = Map.of(
-                "eventType", "stock-deduction-failed",
+                "eventType", EventConstants.EventTypes.STOCK_DEDUCTION_FAILED,
                 "eventId", event.getEventId(),
                 "orderId", event.getOrderId().toString(),
                 "orderNo", event.getOrderNo(),
@@ -125,7 +126,7 @@ public class StoreRedisEventPublisher {
 
             String eventId = java.util.UUID.randomUUID().toString();
             Map<String, Object> eventData = Map.of(
-                "eventType", "goods-reserved",
+                "eventType", EventConstants.EventTypes.GOODS_RESERVATION_SUCCEEDED,
                 "eventId", eventId,
                 "orderId", orderId.toString(),
                 "orderNo", orderNo != null ? orderNo : "",
@@ -168,7 +169,7 @@ public class StoreRedisEventPublisher {
 
             String eventId = java.util.UUID.randomUUID().toString();
             Map<String, Object> eventData = Map.of(
-                "eventType", "goods-reservation-failed",
+                "eventType", EventConstants.EventTypes.GOODS_RESERVATION_FAILED,
                 "eventId", eventId,
                 "orderId", orderId.toString(),
                 "popupId", popupId != null ? popupId.toString() : "",
@@ -207,7 +208,7 @@ public class StoreRedisEventPublisher {
                     event.getCorrelationId(), event.getRequestType());
 
             Map<String, Object> eventData = new java.util.HashMap<>();
-            eventData.put("eventType", "price-lookup-response");
+            eventData.put("eventType", EventConstants.EventTypes.PRICE_LOOKUP_RESPONSE);
             eventData.put("eventId", event.getEventId());
             eventData.put("correlationId", event.getCorrelationId());
             eventData.put("requestType", event.getRequestType());
@@ -277,7 +278,7 @@ public class StoreRedisEventPublisher {
 
             String eventId = java.util.UUID.randomUUID().toString();
             Map<String, Object> eventData = Map.of(
-                "eventType", "mixed-reservation-success",
+                "eventType", EventConstants.EventTypes.MIXED_RESERVATION_SUCCEEDED,
                 "eventId", eventId,
                 "orderId", orderId.toString(),
                 "popupId", popupId != null ? popupId.toString() : "",
@@ -315,7 +316,7 @@ public class StoreRedisEventPublisher {
 
             String eventId = java.util.UUID.randomUUID().toString();
             Map<String, Object> eventData = Map.of(
-                "eventType", "mixed-reservation-failed",
+                "eventType", EventConstants.EventTypes.MIXED_RESERVATION_FAILED,
                 "eventId", eventId,
                 "orderId", orderId.toString(),
                 "popupId", popupId != null ? popupId.toString() : "",
@@ -352,7 +353,7 @@ public class StoreRedisEventPublisher {
         try {
             String eventId = java.util.UUID.randomUUID().toString();
             Map<String, Object> eventData = Map.of(
-                "eventType", "schedule-reservation-success",
+                "eventType", EventConstants.EventTypes.SCHEDULE_RESERVATION_SUCCEEDED,
                 "eventId", eventId,
                 "orderId", orderId.toString(),
                 "orderNo", orderNo,
@@ -390,7 +391,7 @@ public class StoreRedisEventPublisher {
         try {
             String eventId = java.util.UUID.randomUUID().toString();
             Map<String, Object> eventData = Map.of(
-                "eventType", "schedule-reservation-failed",
+                "eventType", EventConstants.EventTypes.SCHEDULE_RESERVATION_FAILED,
                 "eventId", eventId,
                 "orderId", orderId.toString(),
                 "orderNo", orderNo,

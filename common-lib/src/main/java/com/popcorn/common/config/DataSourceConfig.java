@@ -22,6 +22,7 @@ public class DataSourceConfig {
 	}
 
 	@Bean
+	@Primary
 	public DataSource dataSource(DataSourceProperties properties) {
 		return properties.initializeDataSourceBuilder().build();
 	}

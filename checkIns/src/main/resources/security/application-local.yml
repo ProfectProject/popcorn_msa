@@ -1,5 +1,5 @@
 server:
-  port: 8086
+  port: ${SERVER_PORT:8086}
   shutdown: immediate
   tomcat:
     uri-encoding: UTF-8
@@ -9,45 +9,91 @@ spring:
     activate:
       on-profile: local
   datasource:
-    url: jdbc:postgresql://localhost:5430/popcorn_db
-    username: qr_app
-    password: qr123
+    url: jdbc:postgresql://${DB_HOST:localhost}:${DB_PORT:5430}/${DB_NAME:popcorn_db}
+    username: ${QR_DB_USERNAME}
+    password: ${QR_DB_PASSWORD}
     driver-class-name: org.postgresql.Driver
+    hikari:
+      maximum-pool-size: 20
+      minimum-idle: 5
+      connection-timeout: 20000
+      validation-timeout: 3000
+      idle-timeout: 300000
+      max-lifetime: 1200000
 
   jpa:
     open-in-view: false
-    show-sql: true
+    database-platform: org.hibernate.dialect.PostgreSQLDialect
+    show-sql: false
+    generate-ddl: false
     hibernate:
       ddl-auto: none
+      naming:
+        physical-strategy: org.hibernate.boot.model.naming.PhysicalNamingStrategyStandardImpl
+        implicit-strategy: org.hibernate.boot.model.naming.ImplicitNamingStrategyLegacyJpaImpl
     properties:
       hibernate:
         type:
           preferred_enum_jdbc_type: NAMED_ENUM
+        format_sql: false
+        show_sql: false
+        default_schema: checkIns
+        jdbc:
+          batch_size: 20
+        order_inserts: true
+        order_updates: true
+
+  cache:
+    type: simple
+    cache-names: qrCodes,sessions
+    caffeine:
+      spec: maximumSize=1000,expireAfterWrite=5m
+
+  # Redis 설정
+  data:
+    redis:
+      host: ${REDIS_HOST:localhost}
+      port: ${REDIS_PORT:6379}
+      password: ${REDIS_PASSWORD:}
+      timeout: 2000ms
+      database: 1  # CheckIns 서비스 전용 DB
+      connection-timeout: 2000ms
+      jedis:
+        pool:
+          max-active: 20
+          max-idle: 16
+          min-idle: 8
+          max-wait: 2000ms
 
   flyway:
     enabled: true
+    user: ${QR_FLYWAY_USERNAME}
+    password: ${QR_FLYWAY_PASSWORD}
+    default-schema: checkIns
+    schemas: checkIns
     locations: classpath:db/migration/schema
     baseline-on-migrate: true
-    validate-on-migrate: false
-    out-of-order: true
+    validate-on-migrate: true
     clean-disabled: false
+    out-of-order: true
     placeholders:
-      QR_MIGRATOR_PASSWORD: qr321
-      QR_APP_PASSWORD: qr123
+      QR_MIGRATOR_PASSWORD: ${QR_FLYWAY_PASSWORD}
+      QR_APP_PASSWORD: ${QR_DB_PASSWORD}
 
+# 인증 설정
 passport:
-  secret: ${PASSPORT_SECRET:passport-shared-secret}
+  secret: ${PASSPORT_SECRET:my-super-secret-key-for-popcorn-msa-development-only-do-not-use-in-production}
   ttl-seconds: 60
-
-jwt:
-  secret: ${JWT_SECRET:dGVzdC1qd3Qtc2VjcmV0LWtleS1mb3ItbG9jYWwtZGV2ZWxvcG1lbnQtb25seS1kb25vdC11c2UtaW4tcHJvZHVjdGlvbg==}
-  expiration: 3600000
-  refresh-expiration-ms: 1209600000
 
 # Redis 이벤트 설정
 redis:
   events:
     enabled: true
+
+jwt:
+  secret: ${JWT_SECRET:dGVzdC1qd3Qtc2VjcmV0LWtleS1mb3ItbG9jYWwtZGV2ZWxvcG1lbnQtb25seS1kb25vdC11c2UtaW4tcHJvZHVjdGlvbg==}
+  expiration: 3600000
+  refresh-expiration-ms: 1209600000
 
 springdoc:
   api-docs:
@@ -57,9 +103,12 @@ springdoc:
     enabled: true
     path: /swagger-ui.html
 
+
 logging:
   level:
-    com.popcorn.checkIns: DEBUG
-    org.springframework.web: DEBUG
-    org.springframework.boot.web: DEBUG
-    org.hibernate.SQL: DEBUG
+    root: WARN
+    com.popcorn.checkIns: INFO
+    org.springframework.web: WARN
+    org.springframework.boot.web: WARN
+    org.hibernate.SQL: INFO
+    org.springframework.security: WARN

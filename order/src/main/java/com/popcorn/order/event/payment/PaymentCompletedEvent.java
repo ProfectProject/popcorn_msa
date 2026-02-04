@@ -7,6 +7,7 @@ import java.util.HashMap;
 import java.util.Map;
 import java.util.UUID;
 
+import com.popcorn.order.constants.EventConstants;
 import com.popcorn.order.event.order.BaseOrderEvent;
 
 /**
@@ -52,7 +53,7 @@ public class PaymentCompletedEvent extends BaseOrderEvent {
     private PaymentCompletedEvent(UUID orderId, UUID paymentId, String paymentKey,
                                 Integer amount, String paymentMethod, LocalDateTime completedAt,
                                 LocalDateTime eventTime, String pgResponse, Long userId) {
-        super(orderId, "payment-completed", userId);
+        super(orderId, EventConstants.EventTypes.PAYMENT_COMPLETED, userId);
         this.paymentId = paymentId;
         this.paymentKey = paymentKey;
         this.amount = amount;

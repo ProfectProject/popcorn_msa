@@ -21,37 +21,56 @@ public class CheckInsApplication {
 
     private static void loadDotEnvFile() {
         try {
-            // 현재 디렉터리에서 .env 파일을 먼저 찾음
-            Dotenv dotenv = Dotenv.configure()
-                .filename(".env")
-                .ignoreIfMissing()
-                .load();
+            String currentDir = System.getProperty("user.dir");
+            Dotenv dotenv = null;
 
-            // 현재 디렉터리에서 찾지 못하면 checkIns 디렉터리에서 찾음
-            if (dotenv.entries().isEmpty()) {
+            // 1순위: checkIns 모듈 디렉터리의 .env 파일
+            try {
+                String checkInsDir = currentDir.endsWith("checkIns") ? currentDir : currentDir + "/checkIns";
                 dotenv = Dotenv.configure()
-                    .directory("./checkIns")
+                    .directory(checkInsDir)
+                    .filename(".env")
+                    .ignoreIfMissing()
+                    .load();
+            } catch (Exception e) {
+                // checkIns/.env 로드 실패시 상위 디렉터리 시도
+            }
+
+            // 2순위: 현재 디렉터리의 .env 파일 (상위 프로젝트 .env)
+            if (dotenv == null || dotenv.entries().isEmpty()) {
+                dotenv = Dotenv.configure()
+                    .directory(currentDir)
                     .filename(".env")
                     .ignoreIfMissing()
                     .load();
             }
 
             // .env 값들을 시스템 프로퍼티로 설정
-            log.info("=== .env 파일 로드 확인 ===");
-            log.info("현재 작업 디렉터리: {}", System.getProperty("user.dir"));
+            log.info("=== checkIns .env 파일 로드 확인 ===");
+            log.info("현재 작업 디렉터리: {}", currentDir);
+
+            String checkInsDir = currentDir.endsWith("checkIns") ? currentDir : currentDir + "/checkIns";
+            log.info("checkIns 모듈 디렉터리: {}", checkInsDir);
 
             if (!dotenv.entries().isEmpty()) {
+                log.info("로드된 .env 파일 위치: {}", dotenv.entries().size() > 0 ? "checkIns 모듈 또는 상위 디렉터리" : "없음");
+
+                // checkIns 관련 환경변수만 로그에 표시
                 dotenv.entries().forEach(entry -> {
-                    // 이미 시스템 프로퍼티에 설정되어 있지 않은 경우만 설정
                     if (System.getProperty(entry.getKey()) == null) {
                         System.setProperty(entry.getKey(), entry.getValue());
-                        log.info("로드됨: {}={}", entry.getKey(), entry.getValue());
+                        // checkIns 관련 환경변수만 로그 출력
+                        if (entry.getKey().startsWith("QR_") || entry.getKey().equals("DB_HOST") ||
+                            entry.getKey().equals("DB_PORT") || entry.getKey().equals("DB_NAME") ||
+                            entry.getKey().equals("PASSPORT_SECRET") || entry.getKey().equals("JWT_SECRET")) {
+                            log.info("✅ 로드됨: {}={}", entry.getKey(), entry.getValue());
+                        }
                     }
                 });
             } else {
-                log.info(".env 파일을 찾을 수 없거나 비어있습니다.");
+                log.info("❌ checkIns .env 파일을 찾을 수 없거나 비어있습니다.");
             }
-            log.info("=========================");
+            log.info("=====================================");
 
         } catch (Exception e) {
             log.error("=== .env 파일 로드 실패: {} ===", e.getMessage());

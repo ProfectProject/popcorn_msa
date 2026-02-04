@@ -66,6 +66,8 @@ public class CreateOrderCommand {
         /** 수량 */
         private final Integer qty;
 
+        /** 단가 - 개당 가격 (원) */
+        private final Integer unitPrice;
 
     }
 
@@ -103,6 +105,7 @@ public class CreateOrderCommand {
                 .sessionId(itemRequest.getSessionId())
                 .goodsId(itemRequest.getGoodsId())
                 .qty(itemRequest.getQty())
+                .unitPrice(itemRequest.getUnitPrice())
                 .build();
     }
 

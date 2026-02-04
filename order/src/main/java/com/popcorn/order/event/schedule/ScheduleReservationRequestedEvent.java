@@ -6,6 +6,7 @@ import java.util.List;
 import java.util.Map;
 import java.util.UUID;
 
+import com.popcorn.order.constants.EventConstants;
 import com.popcorn.order.event.order.BaseOrderEvent;
 import lombok.AllArgsConstructor;
 import lombok.Builder;
@@ -48,7 +49,7 @@ public class ScheduleReservationRequestedEvent extends BaseOrderEvent {
     private ScheduleReservationRequestedEvent(UUID orderId, String orderNo, UUID popupId,
                                             List<ReservedSession> reservedSessions,
                                             LocalDateTime requestedAt, Long userId) {
-        super(orderId, "schedule-reservation-requested", userId);
+        super(orderId, EventConstants.EventTypes.SCHEDULE_RESERVATION_REQUESTED, userId);
         this.orderNo = orderNo;
         this.popupId = popupId;
         this.reservedSessions = reservedSessions;

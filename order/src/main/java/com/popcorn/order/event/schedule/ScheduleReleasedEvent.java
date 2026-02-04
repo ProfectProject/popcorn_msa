@@ -5,6 +5,7 @@ import java.util.HashMap;
 import java.util.Map;
 import java.util.UUID;
 
+import com.popcorn.order.constants.EventConstants;
 import com.popcorn.order.event.order.BaseOrderEvent;
 import lombok.Getter;
 import lombok.ToString;
@@ -32,7 +33,7 @@ public class ScheduleReleasedEvent extends BaseOrderEvent {
     private final LocalDateTime releasedAt;
 
     private ScheduleReleasedEvent(UUID orderId, LocalDateTime releasedAt, Long userId) {
-        super(orderId, "schedule-released", userId);
+        super(orderId, EventConstants.EventTypes.SCHEDULE_RELEASED, userId);
         this.releasedAt = releasedAt;
     }
 

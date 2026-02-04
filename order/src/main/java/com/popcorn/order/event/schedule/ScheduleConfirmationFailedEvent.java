@@ -5,6 +5,7 @@ import java.util.HashMap;
 import java.util.Map;
 import java.util.UUID;
 
+import com.popcorn.order.constants.EventConstants;
 import com.popcorn.order.event.order.BaseOrderEvent;
 import lombok.Getter;
 import lombok.ToString;
@@ -41,7 +42,7 @@ public class ScheduleConfirmationFailedEvent extends BaseOrderEvent {
 
     private ScheduleConfirmationFailedEvent(UUID orderId, String reason, Boolean retryable,
                                           LocalDateTime failedAt, Long userId) {
-        super(orderId, "schedule-confirmation-failed", userId);
+        super(orderId, EventConstants.EventTypes.SCHEDULE_CONFIRMATION_FAILED, userId);
         this.reason = reason;
         this.retryable = retryable;
         this.failedAt = failedAt;

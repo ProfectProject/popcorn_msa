@@ -10,6 +10,7 @@ import org.springframework.data.redis.core.RedisTemplate;
 import org.springframework.data.redis.stream.StreamListener;
 import org.springframework.stereotype.Component;
 
+import com.popcorn.store.constants.EventConstants;
 import com.popcorn.store.domain.goods.entity.ReservationType;
 import com.popcorn.store.domain.goods.entity.GoodsVariant;
 import com.popcorn.store.domain.goods.service.GoodsService;
@@ -102,47 +103,47 @@ public class StoreRedisStreamListener implements StreamListener<String, MapRecor
     private void handleStreamEvent(String eventType, Map<String, Object> values) {
         try {
             switch (eventType) {
-                case "order-paid":
+                case EventConstants.EventTypes.ORDER_PAID:
                     log.info("💳 [STORES] 주문 결제 완료 이벤트 수신");
                     publishOrderPaidEvent(values);
                     break;
-                case "goods-reservation-requested":
+                case EventConstants.EventTypes.GOODS_RESERVATION_REQUESTED:
                     log.info("📋 [STORES] 굿즈 재고 예약 요청 이벤트 수신");
                     publishGoodsReservationRequestedEvent(values);
                     break;
-                case "mixed-reservation-requested":
+                case EventConstants.EventTypes.MIXED_RESERVATION_REQUESTED:
                     log.info("🔗 [STORES] 복합형 예약 요청 이벤트 수신 (스케줄+굿즈)");
                     handleMixedReservationRequested(values);
                     break;
-                case "goods-reservation-cancel-requested":
+                case EventConstants.EventTypes.GOODS_RESERVATION_CANCEL_REQUESTED:
                     log.info("↩️ [STORES] 굿즈 예약 취소 요청 이벤트 수신");
                     handleGoodsReservationCancelRequested(values);
                     break;
-                case "schedule-reservation-requested":
+                case EventConstants.EventTypes.SCHEDULE_RESERVATION_REQUESTED:
                     log.info("📅 [STORES] 스케줄 예약 요청 이벤트 수신");
                     handleScheduleReservationRequested(values);
                     break;
-                case "schedule-reservation-cancel-requested":
+                case EventConstants.EventTypes.SCHEDULE_RESERVATION_CANCEL_REQUESTED:
                     log.info("↩️ [STORES] 스케줄 예약 취소 요청 이벤트 수신");
                     handleScheduleReservationCancelRequested(values);
                     break;
-                case "stock-deduction-requested":
+                case EventConstants.EventTypes.STOCK_DEDUCTION_REQUESTED:
                     log.info("📦 [STORES] 재고 차감 요청 이벤트 수신 - orderId: {}", values.get("orderId"));
                     handleStockDeductionRequest(values);
                     break;
-                case "price-lookup-requested":
+                case EventConstants.EventTypes.PRICE_LOOKUP_REQUESTED:
                     log.info("💰 [STORES] 가격 조회 요청 이벤트 수신");
                     publishPriceLookupResponseEvent(values);
                     break;
-                case "popup-info-lookup-requested":
+                case EventConstants.EventTypes.POPUP_INFO_LOOKUP_REQUESTED:
                     log.info("🏬 [STORES] 팝업 정보 조회 요청 이벤트 수신");
                     handlePopupInfoLookupRequested(values);
                     break;
-                case "schedule-confirmation-requested":
+                case EventConstants.EventTypes.SCHEDULE_CONFIRMATION_REQUESTED:
                     log.info("📅🔒 [STORES] 스케줄 확정 요청 이벤트 수신");
                     handleScheduleConfirmationRequested(values);
                     break;
-                case "inventory-confirmation-requested":
+                case EventConstants.EventTypes.INVENTORY_CONFIRMATION_REQUESTED:
                     log.info("📦🔒 [STORES] 재고 확정/복구 요청 이벤트 수신");
                     handleInventoryConfirmationRequested(values);
                     break;
@@ -1265,14 +1266,14 @@ public class StoreRedisStreamListener implements StreamListener<String, MapRecor
         // 기존 따옴표 제거 로직 유지하면서 검증
         eventType = normalizeQuotedString(eventType);
 
-        // eventType 형식 검증 (kebab-case)
-        if (!eventType.matches("^[a-z0-9]+(-[a-z0-9]+)*$")) {
+        // eventType 기본 검증 (영문자, 숫자, 언더스코어, 하이픈만 허용)
+        if (!eventType.matches("^[A-Za-z0-9_-]+$")) {
             String errorMessage = String.format(
-                "[CRITICAL] eventType 형식 오류! eventType=%s, stream=%s, recordId=%s (kebab-case 형식 필요)",
+                "[CRITICAL] eventType 형식 오류! eventType=%s, stream=%s, recordId=%s (영문자, 숫자, 언더스코어, 하이픈만 허용)",
                 eventType, streamName, recordId
             );
             log.error(errorMessage);
-            throw new IllegalArgumentException("eventType은 kebab-case 형식이어야 합니다: " + eventType);
+            throw new IllegalArgumentException("eventType은 올바른 형식이어야 합니다: " + eventType);
         }
 
         log.debug("✅ [STORES] eventType 검증 통과: {} (stream: {}, recordId: {})",

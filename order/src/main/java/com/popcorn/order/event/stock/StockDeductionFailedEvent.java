@@ -5,6 +5,7 @@ import java.util.HashMap;
 import java.util.Map;
 import java.util.UUID;
 
+import com.popcorn.order.constants.EventConstants;
 import com.popcorn.order.event.order.BaseOrderEvent;
 import lombok.Getter;
 import lombok.ToString;
@@ -41,7 +42,7 @@ public class StockDeductionFailedEvent extends BaseOrderEvent {
 
     private StockDeductionFailedEvent(UUID orderId, String reason, Boolean retryable,
                                     LocalDateTime failedAt, Long userId) {
-        super(orderId, "stock-deduction-failed", userId);
+        super(orderId, EventConstants.EventTypes.STOCK_DEDUCTION_FAILED, userId);
         this.reason = reason;
         this.retryable = retryable;
         this.failedAt = failedAt;

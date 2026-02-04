@@ -1,12 +1,9 @@
 package com.popcorn.order.service.core;
 
-import java.time.Duration;
 import java.time.LocalDateTime;
 import java.util.List;
-import java.util.Optional;
 import java.util.UUID;
 import java.util.concurrent.CompletableFuture;
-import java.util.concurrent.TimeoutException;
 import java.util.concurrent.atomic.AtomicLong;
 
 import org.springframework.cloud.client.circuitbreaker.CircuitBreaker;
@@ -17,8 +14,6 @@ import org.springframework.transaction.annotation.Transactional;
 import org.springframework.transaction.support.TransactionSynchronization;
 import org.springframework.transaction.support.TransactionSynchronizationManager;
 import org.springframework.transaction.support.TransactionTemplate;
-import org.springframework.web.context.request.RequestContextHolder;
-import org.springframework.web.context.request.ServletRequestAttributes;
 
 import com.popcorn.common.annotation.Idempotent;
 import com.popcorn.order.util.PerformanceLogger;
@@ -42,9 +37,7 @@ import com.popcorn.order.dto.payment.CreatePaymentResponse;
 import com.popcorn.order.dto.payment.PaymentUrlResponse;
 import com.popcorn.common.cache.IdempotencyService;
 import com.popcorn.order.service.cache.OrderCacheService;
-import com.popcorn.order.service.cache.OrderPriceCacheService;
 import com.popcorn.order.service.cache.PaymentCacheService;
-import com.popcorn.order.service.lookup.OrderPriceLookupService;
 import com.popcorn.order.service.util.OrderReservationAwaiter;
 import com.popcorn.order.service.monitor.OrderPerformanceMonitor;
 import com.popcorn.order.service.monitor.PaymentPerformanceMonitor;
@@ -52,9 +45,6 @@ import com.popcorn.order.service.monitor.PaymentPerformanceMonitor;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import com.popcorn.order.util.PaymentTokenUtil;
-import org.springframework.web.reactive.function.client.WebClient;
-import org.springframework.beans.factory.annotation.Value;
-import java.time.Duration;
 
 /**
  * 주문 명령(Command) 처리 서비스
@@ -75,18 +65,10 @@ public class OrderCommandService {
     private final OrderEventPublisher orderEventPublisher;
     private final PaymentTokenUtil paymentTokenUtil;
     private final OrderCacheService orderCacheService;
-    private final OrderPriceLookupService orderPriceLookupService;
     private final TransactionTemplate transactionTemplate;
     private final OrderReservationAwaiter orderReservationAwaiter;
     private final IdempotencyService idempotencyService;
     private final CircuitBreakerFactory circuitBreakerFactory;
-    private final WebClient defaultWebClient;
-
-    // 성능 최적화 서비스들
-    private final OrderPriceCacheService orderPriceCacheService;
-
-    @Value("${external.services.users.base-url}")
-    private String usersServiceBaseUrl;
 
     // 🚀 극한 성능 최적화 서비스들 (목표: 1초 미만)
     private final OrderPerformanceMonitor performanceMonitor;
@@ -137,17 +119,14 @@ public class OrderCommandService {
     }
 
     /**
-     * 실제 주문 생성 로직 실행 (극한 성능 최적화 버전)
+     * 실제 주문 생성 로직 실행 (극한 성능 최적화 버전 v2)
      *
      * 🚀 극한 성능 개선 사항:
-     * - 가격 조회: 캐시 적용 (2000ms → 10ms)
-     * - 주소 조회: 캐시 적용 (1000ms → 10ms)
      * - 재고 예약 타임아웃: 5000ms → 800ms (84% 단축)
      * - Redis 타임아웃: 2000ms → 300ms (85% 단축)
-     * - 병렬 검증: 순차 → 동시 (50% 단축)
      * - 성능 모니터링 추가
      *
-     * 🎯 목표 성능: < 1초 (기존 5300ms → 900ms, 83% 단축)
+     * 🎯 목표 성능: < 600ms
      */
     private OrderCreateResponse executeOrderCreation(CreateOrderCommand command) {
         // 성능 모니터링 시작
@@ -240,9 +219,12 @@ public class OrderCommandService {
         boolean isUltraFast = totalElapsed < 1000;
         String performanceEmoji = isUltraFast ? "🚀" : totalElapsed < 2000 ? "⚡" : "🐌";
 
-        log.info("{} 주문 생성 완료 (극한 성능 최적화) - 주문번호: {}, 상태: {}, 총 처리시간: {}ms (목표: <1000ms) {}",
-                performanceEmoji, response.getOrderNo(), response.getStatus(), totalElapsed,
-                isUltraFast ? "✅ ULTRA-FAST 달성!" : totalElapsed < 2000 ? "⚠️ 목표 미달성" : "❌ 성능 문제");
+        boolean isNewUltraFast = totalElapsed < 600; // 새로운 목표: 600ms
+        String newPerformanceEmoji = isNewUltraFast ? "🚀" : totalElapsed < 1000 ? "⚡" : "🐌";
+
+        log.info("{} 주문 생성 완료 (극한 성능 최적화 v2) - 주문번호: {}, 상태: {}, 총 처리시간: {}ms (목표: <600ms) {}",
+                newPerformanceEmoji, response.getOrderNo(), response.getStatus(), totalElapsed,
+                isNewUltraFast ? "✅ ULTRA-FAST v2 달성!" : totalElapsed < 1000 ? "⚠️ 목표 미달성" : "❌ 성능 문제");
 
         // 주문 생성 이벤트 발행 (중복 제거 완료)
         eventPublisher.publishEvent(new OrderCreatedEvent(latestOrder, null));
@@ -273,10 +255,18 @@ public class OrderCommandService {
 
     @Transactional
     protected OrderCreationResult createOrderInTransaction(CreateOrderCommand command) {
+        return createOrderInTransactionSequential(command);
+    }
+
+    /**
+     * 주문 생성 - 기존 순차 처리 버전 (fallback)
+     */
+    @Transactional
+    protected OrderCreationResult createOrderInTransactionSequential(CreateOrderCommand command) {
+        log.info("🔄 [SEQUENTIAL] 주문 생성 시작 - userId: {}", command.getUserId());
+
         List<OrderItem> orderItems = convertToOrderItems(command.getItems());
         ItemType orderType = ItemType.valueOf(command.getOrderType());
-
-        validateDefaultAddressIfNeeded(command);
 
         Order order = orderDomainService.createOrder(
                 command.getUserId(),
@@ -338,21 +328,6 @@ public class OrderCommandService {
         public boolean hasGoodsItems() {
             return hasGoodsItems;
         }
-    }
-
-    private void validateDefaultAddressIfNeeded(CreateOrderCommand command) {
-        if (command == null || command.getItems() == null) {
-            return;
-        }
-
-        boolean requiresShipping = command.getItems().stream()
-            .anyMatch(item -> ItemType.GOODS.equals(item.getOrderItemType()));
-        if (!requiresShipping) {
-            return;
-        }
-
-        // 사용자 기본 주소 검증 (HTTP 동기 호출)
-        validateUserAddress(command.getUserId());
     }
 
     /**
@@ -490,8 +465,7 @@ public class OrderCommandService {
      * 개별 주문 항목 변환
      */
     private OrderItem convertToOrderItem(CreateOrderCommand.OrderItemCommand itemCommand) {
-        // 단가 결정 (실제로는 가격 서비스에서 조회)
-        Integer unitPrice = determineUnitPrice(itemCommand);
+        Integer unitPrice = itemCommand.getUnitPrice() != null ? itemCommand.getUnitPrice() : 0;
         Integer lineAmount = unitPrice * itemCommand.getQty();
 
         return OrderItem.builder()
@@ -503,87 +477,6 @@ public class OrderCommandService {
                 .goodsId(itemCommand.getGoodsId())
                 .build();
     }
-
-    /**
-     * 상품 단가 결정하기
-     * 실제 가격 서비스와 연동하여 정확한 가격 조회
-     */
-    private Integer determineUnitPrice(CreateOrderCommand.OrderItemCommand itemCommand) {
-        ItemType itemType = itemCommand.getOrderItemType();
-
-        if (ItemType.RESERVATION.equals(itemType)) {
-            // 예약형: 세션 가격 조회
-            UUID sessionId = itemCommand.getSessionId();
-            if (sessionId == null) {
-                throw new RuntimeException("예약형 상품은 세션 정보가 필요해요");
-            }
-            return getSessionPrice(sessionId);
-
-        } else if (ItemType.GOODS.equals(itemType)) {
-            // 구매형: 굿즈 가격 조회
-            UUID goodsId = itemCommand.getGoodsId();
-            if (goodsId == null) {
-                throw new RuntimeException("구매형 상품은 굿즈 정보가 필요해요");
-            }
-            return getGoodsVariantPrice(goodsId);
-
-        } else {
-            throw new RuntimeException("알 수 없는 상품 타입이에요: " + itemType);
-        }
-    }
-
-    /**
-     * 세션 가격 조회 (캐시 최적화)
-     * 캐시 히트: ~10ms, 캐시 미스: ~2000ms
-     */
-    private Integer getSessionPrice(UUID sessionId) {
-        try {
-            long startTime = System.currentTimeMillis();
-
-            // 캐시 우선 조회
-            Integer price = orderPriceCacheService.getSessionPrice(sessionId);
-
-            long elapsed = System.currentTimeMillis() - startTime;
-            if (price != null) {
-                log.info("⚡ 세션 가격 조회 성공 - sessionId: {}, price: {}원, 처리시간: {}ms",
-                        sessionId, price, elapsed);
-                return price;
-            } else {
-                log.warn("세션 가격 정보가 비어있습니다 - sessionId: {}, 기본값 사용, 처리시간: {}ms", sessionId, elapsed);
-                return 15000; // 기본 가격
-            }
-        } catch (Exception e) {
-            log.error("세션 가격 조회 실패 - sessionId: {}, 기본값 사용, 에러: {}", sessionId, e.getMessage(), e);
-            return 15000; // 기본 가격
-        }
-    }
-
-    /**
-     * 굿즈 상품 변형 가격 조회 (캐시 최적화)
-     * 캐시 히트: ~10ms, 캐시 미스: ~1500ms
-     */
-    private Integer getGoodsVariantPrice(UUID goodsId) {
-        try {
-            long startTime = System.currentTimeMillis();
-
-            // 캐시 우선 조회
-            Integer price = orderPriceCacheService.getGoodsPrice(goodsId);
-
-            long elapsed = System.currentTimeMillis() - startTime;
-            if (price != null) {
-                log.info("⚡ 굿즈 가격 조회 성공 - goodsId: {}, price: {}원, 처리시간: {}ms",
-                        goodsId, price, elapsed);
-                return price;
-            } else {
-                log.warn("굿즈 가격 정보가 비어있습니다 - goodsId: {}, 기본값 사용, 처리시간: {}ms", goodsId, elapsed);
-                return 5000; // Store DB에 넣은 실제 가격과 동일한 기본값
-            }
-        } catch (Exception e) {
-            log.error("굿즈 가격 조회 실패 - goodsId: {}, 기본값 사용, 에러: {}", goodsId, e.getMessage(), e);
-            return 5000; // Store DB에 넣은 실제 가격과 동일한 기본값
-        }
-    }
-
 
     /**
      * 결제 방법 결정 - Toss Payment로 고정
@@ -1295,105 +1188,6 @@ public class OrderCommandService {
                 return "굿즈";
             default:
                 return "기본";
-        }
-    }
-
-    /**
-     * 사용자 기본 주소 검증 (HTTP 동기 호출, Circuit Breaker 적용)
-     * 외부 서비스 장애 시 graceful degradation 적용
-     */
-    private void validateUserAddress(Long userId) {
-        CircuitBreaker userCircuitBreaker = circuitBreakerFactory.create("user-service");
-
-        try {
-            userCircuitBreaker.run(
-                () -> validateUserAddressInternal(userId),
-                throwable -> {
-                    log.warn("🔄 [FALLBACK] 사용자 주소 검증 서비스 사용불가 - userId: {}, 주문 진행 허용 (degraded mode)", userId);
-                    // fallback: 사용자 서비스 장애 시 주소 검증을 생략하고 주문 진행
-                    return null;
-                }
-            );
-        } catch (Exception e) {
-            if (e instanceof IllegalArgumentException) {
-                throw e;  // 비즈니스 로직 예외는 그대로 전파
-            }
-            // Circuit Breaker fallback에서도 예외가 발생한 경우 (드문 경우)
-            log.warn("⚠️ [DEGRADED] 사용자 주소 검증 불가 - 주문 진행 (degraded mode), userId: {}", userId);
-        }
-    }
-
-    /**
-     * 사용자 주소 검증 내부 구현 (Circuit Breaker에서 호출)
-     */
-    private Void validateUserAddressInternal(Long userId) {
-        try {
-            log.debug("🏠 [HTTP] 사용자 기본 주소 검증 시작 - userId: {}", userId);
-
-            // Users 서비스에서 주소 목록 조회
-            var addressList = defaultWebClient
-                    .get()
-                    .uri(usersServiceBaseUrl + "/api/users/v1/users/{userId}/addresses", userId)
-                    .headers(headers -> {
-                        // 현재 요청의 Authorization 헤더 전달
-                        try {
-                            ServletRequestAttributes attributes = (ServletRequestAttributes) RequestContextHolder.currentRequestAttributes();
-                            String authHeader = attributes.getRequest().getHeader("Authorization");
-                            if (authHeader != null) {
-                                headers.set("Authorization", authHeader);
-                            }
-                            String passportHeader = attributes.getRequest().getHeader("X-Passport");
-                            if (passportHeader != null) {
-                                headers.set("X-Passport", passportHeader);
-                            }
-                        } catch (Exception e) {
-                            log.debug("인증 헤더 추출 실패: {}", e.getMessage());
-                        }
-                        headers.set("X-Internal-Service", "order-service");
-                        headers.set("X-Internal-Call", "true");
-                    })
-                    .retrieve()
-                    .onStatus(httpStatus -> httpStatus.is5xxServerError(), clientResponse -> {
-                        log.error("🚨 [HTTP] 사용자 서비스 서버 오류 - userId: {}, status: {}", userId, clientResponse.statusCode());
-                        return clientResponse.createException();
-                    })
-                    .bodyToMono(new org.springframework.core.ParameterizedTypeReference<java.util.List<java.util.Map<String, Object>>>() {})
-                    .timeout(Duration.ofSeconds(3))
-                    .block();
-
-            if (addressList != null && !addressList.isEmpty()) {
-                // isDefault = true인 기본 주소가 있는지 확인
-                boolean hasDefaultAddress = addressList.stream()
-                        .anyMatch(addr -> Boolean.TRUE.equals(addr.get("isDefault")));
-
-                if (hasDefaultAddress) {
-                    log.debug("✅ [HTTP] 사용자 기본 주소 검증 성공 - userId: {}", userId);
-                    return null;
-                } else {
-                    log.warn("⚠️ [HTTP] 기본 주소가 설정되지 않음 - userId: {}", userId);
-                }
-            } else {
-                log.warn("⚠️ [HTTP] 사용자 주소 목록이 비어있음 - userId: {}", userId);
-            }
-
-            // 기본 주소가 없으면 예외 발생
-            throw new IllegalArgumentException("기본 배송지가 필요합니다.");
-
-        } catch (org.springframework.web.reactive.function.client.WebClientResponseException e) {
-            if (e.getStatusCode().is5xxServerError()) {
-                log.error("🚨 [HTTP] 사용자 서비스 서버 오류 (5xx) - userId: {}, status: {}", userId, e.getStatusCode());
-                throw e; // Circuit Breaker가 감지할 수 있도록 예외 재발생
-            } else {
-                log.error("❌ [HTTP] 사용자 주소 조회 실패 - userId: {}, status: {}, error: {}",
-                         userId, e.getStatusCode(), e.getMessage());
-                throw e; // Circuit Breaker가 감지할 수 있도록 예외 재발생
-            }
-        } catch (Exception e) {
-            if (e instanceof IllegalArgumentException) {
-                throw e;  // 비즈니스 로직 예외는 그대로 전파
-            }
-            log.error("❌ [HTTP] 사용자 주소 검증 예외 - userId: {}, error: {}", userId, e.getMessage());
-            throw e; // Circuit Breaker가 감지할 수 있도록 예외 재발생
         }
     }
 

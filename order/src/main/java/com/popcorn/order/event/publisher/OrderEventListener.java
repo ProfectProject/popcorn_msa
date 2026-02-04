@@ -25,6 +25,7 @@ import com.popcorn.order.enums.ProductType;
 import com.popcorn.order.service.core.OrderCommandService;
 import com.popcorn.order.service.util.OrderReservationAwaiter;
 import com.popcorn.order.dto.payment.PaymentUrlResponse;
+import com.popcorn.order.event.compensation.PaymentCompensationRequestedEvent;
 
 import java.time.LocalDateTime;
 import java.util.ArrayList;
@@ -590,6 +591,237 @@ public class OrderEventListener {
         } catch (Exception e) {
             // 이것마저 실패하면... 🤯
             log.error("💀💥 데드레터큐 전송도 실패 - orderId: {}, 수동 처리 필요!", orderId, e);
+        }
+    }
+
+    // ================ 🔄 Payment 보상 트랜잭션 이벤트 리스너 ================
+
+    /**
+     * Payment 서비스로부터 보상 요청 이벤트 수신
+     *
+     * 결제 검증 실패나 결제 처리 실패 시 Payment 서비스가 보상 처리를 요청하는 이벤트입니다.
+     * Order 서비스는 이 요청을 받아 예약 취소, 재고 해제, 주문 상태 업데이트 등의 보상 액션을 수행합니다.
+     */
+    @EventListener
+    @Transactional
+    public void handlePaymentCompensationRequested(PaymentCompensationRequestedEvent event) {
+        try {
+            log.info("🔄 Payment 보상 요청 이벤트 수신 - compensationId: {}, orderId: {}, type: {}, reason: {}",
+                    event.getCompensationId(), event.getOrderId(), event.getCompensationType(), event.getCompensationReason());
+
+            // 주문 정보 조회
+            Order order = orderRepository.findById(event.getOrderId())
+                    .orElseThrow(() -> new IllegalArgumentException("주문을 찾을 수 없습니다: " + event.getOrderId()));
+
+            // 이미 취소된 주문인지 확인
+            if (order.getOrderStatus() == OrderStatus.CANCELLED) {
+                log.warn("이미 취소된 주문에 대한 보상 요청 - orderId: {}, 현재 상태: {}",
+                        event.getOrderId(), order.getOrderStatus());
+                // 보상 완료 이벤트 발행 (이미 처리됨)
+                publishCompensationCompletedEvent(event, "SUCCESS",
+                        List.of("ORDER_ALREADY_CANCELLED"), "주문이 이미 취소된 상태입니다");
+                return;
+            }
+
+            List<String> completedActions = new ArrayList<>();
+            List<String> failedActions = new ArrayList<>();
+
+            // 요청된 보상 액션들을 순차적으로 실행
+            for (PaymentCompensationRequestedEvent.CompensationAction action : event.getRequestedActions()) {
+                try {
+                    boolean success = executeCompensationAction(order, action, event);
+                    if (success) {
+                        completedActions.add(action.getActionType());
+                        log.info("✅ 보상 액션 실행 성공 - orderId: {}, action: {}",
+                                event.getOrderId(), action.getActionType());
+                    } else {
+                        failedActions.add(action.getActionType());
+                        log.error("❌ 보상 액션 실행 실패 - orderId: {}, action: {}",
+                                event.getOrderId(), action.getActionType());
+                    }
+                } catch (Exception e) {
+                    failedActions.add(action.getActionType());
+                    log.error("💥 보상 액션 실행 중 예외 - orderId: {}, action: {}, error: {}",
+                            event.getOrderId(), action.getActionType(), e.getMessage(), e);
+                }
+            }
+
+            // 보상 결과에 따른 응답 이벤트 발행
+            String result;
+            String notes;
+            if (failedActions.isEmpty()) {
+                result = "SUCCESS";
+                notes = "모든 보상 액션이 성공적으로 완료되었습니다";
+            } else if (completedActions.isEmpty()) {
+                result = "FAILED";
+                notes = String.format("모든 보상 액션이 실패했습니다. 실패한 액션: %s", String.join(", ", failedActions));
+            } else {
+                result = "PARTIAL_SUCCESS";
+                notes = String.format("일부 보상 액션만 성공했습니다. 성공: %s, 실패: %s",
+                        String.join(", ", completedActions), String.join(", ", failedActions));
+            }
+
+            // Payment 서비스로 보상 완료 결과 전송
+            publishCompensationCompletedEvent(event, result, completedActions, notes);
+
+            log.info("🔄✅ Payment 보상 요청 처리 완료 - compensationId: {}, orderId: {}, result: {}",
+                    event.getCompensationId(), event.getOrderId(), result);
+
+        } catch (Exception e) {
+            log.error("🔄💥 Payment 보상 요청 처리 실패 - compensationId: {}, orderId: {}, error: {}",
+                    event.getCompensationId(), event.getOrderId(), e.getMessage(), e);
+
+            // 보상 실패 이벤트 발행
+            publishCompensationFailedEvent(event, e.getMessage());
+            throw new RuntimeException("Payment 보상 요청 처리 실패", e);
+        }
+    }
+
+    /**
+     * 개별 보상 액션 실행
+     */
+    private boolean executeCompensationAction(Order order, PaymentCompensationRequestedEvent.CompensationAction action,
+                                             PaymentCompensationRequestedEvent event) {
+        try {
+            switch (action.getActionType()) {
+                case "CANCEL_RESERVATION":
+                    return executeCancelReservationAction(order, action, event);
+
+                case "UPDATE_ORDER_STATUS":
+                    return executeUpdateOrderStatusAction(order, action, event);
+
+                case "RELEASE_STOCK":
+                    return executeReleaseStockAction(order, action, event);
+
+                default:
+                    log.warn("알 수 없는 보상 액션 타입 - orderId: {}, actionType: {}",
+                            order.getId(), action.getActionType());
+                    return false;
+            }
+        } catch (Exception e) {
+            log.error("보상 액션 실행 중 예외 발생 - orderId: {}, actionType: {}, error: {}",
+                    order.getId(), action.getActionType(), e.getMessage(), e);
+            return false;
+        }
+    }
+
+    /**
+     * 예약 취소 액션 실행
+     */
+    private boolean executeCancelReservationAction(Order order, PaymentCompensationRequestedEvent.CompensationAction action,
+                                                  PaymentCompensationRequestedEvent event) {
+        try {
+            log.info("🔄 예약 취소 액션 실행 - orderId: {}, reason: {}",
+                    order.getId(), action.getParameters().get("reason"));
+
+            // 스케줄 예약 취소
+            cancelScheduleReservations(order, "Payment compensation: " + event.getCompensationReason());
+
+            // 굿즈 재고 예약 취소
+            cancelStockReservationsForOrder(order);
+
+            return true;
+        } catch (Exception e) {
+            log.error("예약 취소 액션 실행 실패 - orderId: {}, error: {}", order.getId(), e.getMessage(), e);
+            return false;
+        }
+    }
+
+    /**
+     * 주문 상태 업데이트 액션 실행
+     */
+    private boolean executeUpdateOrderStatusAction(Order order, PaymentCompensationRequestedEvent.CompensationAction action,
+                                                  PaymentCompensationRequestedEvent event) {
+        try {
+            String newStatus = (String) action.getParameters().get("newStatus");
+            String reason = (String) action.getParameters().get("reason");
+
+            log.info("🔄 주문 상태 업데이트 액션 실행 - orderId: {}, newStatus: {}, reason: {}",
+                    order.getId(), newStatus, reason);
+
+            // 주문 상태 업데이트
+            OrderStatus orderStatus = OrderStatus.valueOf(newStatus);
+            OrderStatus previousStatus = order.getStatus();
+            order.updateStatus(orderStatus);
+
+            if ("CANCELLED".equals(newStatus)) {
+                order.setCancellationReason(String.format("Payment compensation: %s", reason));
+            }
+
+            orderRepository.save(order);
+
+            // 주문 상태 이력 저장
+            OrderStatusHistory statusHistory = OrderStatusHistory.builder()
+                    .orderId(order.getId())
+                    .fromStatus(previousStatus)
+                    .toStatus(orderStatus)
+                    .reason(String.format("Payment compensation: %s", reason))
+                    .changedAt(LocalDateTime.now())
+                    .build();
+            orderStatusHistoryRepository.save(statusHistory);
+
+            return true;
+        } catch (Exception e) {
+            log.error("주문 상태 업데이트 액션 실행 실패 - orderId: {}, error: {}", order.getId(), e.getMessage(), e);
+            return false;
+        }
+    }
+
+    /**
+     * 재고 해제 액션 실행
+     */
+    private boolean executeReleaseStockAction(Order order, PaymentCompensationRequestedEvent.CompensationAction action,
+                                             PaymentCompensationRequestedEvent event) {
+        try {
+            log.info("🔄 재고 해제 액션 실행 - orderId: {}, reason: {}",
+                    order.getId(), action.getParameters().get("reason"));
+
+            // 굿즈 재고 해제
+            cancelStockReservationsForOrder(order);
+
+            return true;
+        } catch (Exception e) {
+            log.error("재고 해제 액션 실행 실패 - orderId: {}, error: {}", order.getId(), e.getMessage(), e);
+            return false;
+        }
+    }
+
+    /**
+     * Payment 서비스로 보상 완료 이벤트 발행
+     */
+    private void publishCompensationCompletedEvent(PaymentCompensationRequestedEvent event, String result,
+                                                  List<String> completedActions, String notes) {
+        try {
+            // TODO: Payment 서비스로 보상 완료 이벤트 발행
+            // PaymentCompensationCompletedEvent 생성 및 발행
+            log.info("📨 Payment 서비스로 보상 완료 이벤트 발행 - compensationId: {}, result: {}",
+                    event.getCompensationId(), result);
+
+            // Redis Stream이나 Kafka를 통해 Payment 서비스로 이벤트 전송
+            // redisEventPublisher.publishCompensationCompleted(event, result, completedActions, notes);
+
+        } catch (Exception e) {
+            log.error("보상 완료 이벤트 발행 실패 - compensationId: {}, error: {}",
+                    event.getCompensationId(), e.getMessage(), e);
+        }
+    }
+
+    /**
+     * Payment 서비스로 보상 실패 이벤트 발행
+     */
+    private void publishCompensationFailedEvent(PaymentCompensationRequestedEvent event, String failureReason) {
+        try {
+            // TODO: Payment 서비스로 보상 실패 이벤트 발행
+            // PaymentCompensationFailedEvent 생성 및 발행
+            log.error("📨 Payment 서비스로 보상 실패 이벤트 발행 - compensationId: {}, reason: {}",
+                    event.getCompensationId(), failureReason);
+
+            // Redis Stream이나 Kafka를 통해 Payment 서비스로 이벤트 전송
+            // redisEventPublisher.publishCompensationFailed(event, failureReason);
+
+        } catch (Exception e) {
+            log.error("보상 실패 이벤트 발행 실패 - compensationId: {}, error: {}",
+                    event.getCompensationId(), e.getMessage(), e);
         }
     }
 

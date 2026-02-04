@@ -11,19 +11,19 @@ public final class EventConstants {
     }
 
     /**
-     * 체크인 관련 이벤트 타입들 (kebab-case)
+     * 체크인 관련 이벤트 타입들 (UPPERCASE)
      */
     public static final class EventTypes {
 
         // ================ QR Code Events ================
-        public static final String QR_GENERATION_REQUESTED = "qr-generation-requested";
-        public static final String QR_GENERATED = "qr-generated";
-        public static final String QR_INVALIDATION_REQUESTED = "qr-invalidation-requested";
+        public static final String QR_GENERATION_REQUESTED = "QR_GENERATION_REQUESTED";
+        public static final String QR_GENERATED = "QR_GENERATED";
+        public static final String QR_INVALIDATION_REQUESTED = "QR_INVALIDATION_REQUESTED";
 
         // ================ CheckIn Events ================
-        public static final String CHECKIN_CREATED = "checkin-created";
-        public static final String QR_CHECKIN_REQUESTED = "qr-checkin-requested";
-        public static final String QR_CHECKIN_COMPLETED = "qr-checkin-completed";
+        public static final String CHECKIN_CREATED = "CHECKIN_CREATED";
+        public static final String QR_CHECKIN_REQUESTED = "QR_CHECKIN_REQUESTED";
+        public static final String QR_CHECKIN_COMPLETED = "QR_CHECKIN_COMPLETED";
 
         private EventTypes() {}
     }

@@ -94,14 +94,14 @@ public abstract class BaseEvent {
 
     /**
      * 이벤트 타입이 유효한지 검증합니다.
-     * kebab-case 형식인지 확인합니다.
+     * UPPER_SNAKE_CASE 형식인지 확인합니다.
      */
     protected final void validateEventType(String eventType) {
         if (eventType == null || eventType.trim().isEmpty()) {
             throw new IllegalArgumentException("이벤트 타입은 필수입니다.");
         }
-        if (!eventType.matches("^[a-z0-9]+(-[a-z0-9]+)*$")) {
-            throw new IllegalArgumentException("이벤트 타입은 kebab-case 형식이어야 합니다: " + eventType);
+        if (!eventType.matches("^[A-Z0-9]+(_[A-Z0-9]+)*$")) {
+            throw new IllegalArgumentException("이벤트 타입은 UPPER_SNAKE_CASE 형식이어야 합니다: " + eventType);
         }
     }
 

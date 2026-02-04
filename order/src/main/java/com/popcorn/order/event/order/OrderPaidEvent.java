@@ -6,6 +6,8 @@ import java.util.Map;
 import java.util.Optional;
 import java.util.UUID;
 
+import com.popcorn.order.constants.EventConstants;
+
 import lombok.*;
 
 import java.util.HashMap;
@@ -55,7 +57,7 @@ public class OrderPaidEvent extends BaseOrderEvent {
     public OrderPaidEvent(UUID orderId, Long customerId, String orderNo, UUID popupId,
                          String orderType, Integer totalAmount, List<OrderItemInfo> orderItems,
                          LocalDateTime paidAt) {
-        super(orderId, "order-paid", customerId);
+        super(orderId, EventConstants.EventTypes.ORDER_PAID, customerId);
         this.orderNo = orderNo;
         this.popupId = popupId;
         this.orderType = orderType;

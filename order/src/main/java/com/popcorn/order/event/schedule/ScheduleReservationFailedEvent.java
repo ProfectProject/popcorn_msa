@@ -6,6 +6,7 @@ import java.util.List;
 import java.util.Map;
 import java.util.UUID;
 
+import com.popcorn.order.constants.EventConstants;
 import com.popcorn.order.event.order.BaseOrderEvent;
 import lombok.AllArgsConstructor;
 import lombok.Builder;
@@ -43,7 +44,7 @@ public class ScheduleReservationFailedEvent extends BaseOrderEvent {
 
     private ScheduleReservationFailedEvent(UUID orderId, List<FailedSession> failedSessions,
                                          String reason, LocalDateTime failedAt, Long userId) {
-        super(orderId, "schedule-reservation-failed", userId);
+        super(orderId, EventConstants.EventTypes.SCHEDULE_RESERVATION_FAILED, userId);
         this.failedSessions = failedSessions;
         this.reason = reason;
         this.failedAt = failedAt;

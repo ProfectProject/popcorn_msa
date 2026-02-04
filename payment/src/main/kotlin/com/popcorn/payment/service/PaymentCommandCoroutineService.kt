@@ -297,7 +297,7 @@ class PaymentCommandCoroutineService(
             log.info("🚀 [PAYMENT] PAYMENT_APPROVED 이벤트 발행 시작 - paymentId: {}", payment.id)
 
             // Order 정보 비동기 조회 시도
-            val orderInfoFuture = paymentOrderInfoService.requestOrderInfo(payment.orderId!!)
+            val orderInfoFuture = paymentOrderInfoService.requestOrderInfo(payment.orderId)
 
             orderInfoFuture.thenAccept { orderInfo ->
                 val event = if (orderInfo?.success == true) {
@@ -307,7 +307,7 @@ class PaymentCommandCoroutineService(
                     PaymentApprovedEvent.create(
                         paymentId = payment.id,
                         orderId = payment.orderId,
-                        orderNo = orderInfo.actualOrderNo ?: generateTempOrderNo(payment.orderId!!), // 실제 주문번호 사용
+                        orderNo = orderInfo.actualOrderNo ?: generateTempOrderNo(payment.orderId), // 실제 주문번호 사용
                         amount = payment.amount,
                         paymentMethod = payment.paymentMethod.name,
                         paymentKey = payment.paymentKey,
@@ -325,7 +325,7 @@ class PaymentCommandCoroutineService(
                     PaymentApprovedEvent.create(
                         paymentId = payment.id,
                         orderId = payment.orderId,
-                        orderNo = generateTempOrderNo(payment.orderId!!),
+                        orderNo = generateTempOrderNo(payment.orderId),
                         amount = payment.amount,
                         paymentMethod = payment.paymentMethod.name,
                         paymentKey = payment.paymentKey,

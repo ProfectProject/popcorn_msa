@@ -16,12 +16,19 @@ class PaymentApplication
 fun main(args: Array<String>) {
     // Load .env file from project root
     try {
-        val dotenv = Dotenv.configure()
-            .directory("../../")  // Go up to project root
-            .ignoreIfMissing()
-            .load()
+        val currentDir = System.getProperty("user.dir")
+        val dotenv = try {
+            Dotenv.configure()
+                .directory(currentDir)
+                .ignoreIfMissing()
+                .load()
+        } catch (_: Exception) {
+            Dotenv.configure()
+                .directory("$currentDir/..")
+                .ignoreIfMissing()
+                .load()
+        }
 
-        // Set system properties from .env
         dotenv.entries().forEach { entry ->
             System.setProperty(entry.key, entry.value)
         }

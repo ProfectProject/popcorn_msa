@@ -8,7 +8,7 @@ import java.util.UUID;
 /**
  * 팝업 도메인 공통 이벤트 베이스
  * - aggregateType: "Popup"
- * - eventType: kebab-case 검증
+ * - eventType: UPPER_SNAKE_CASE 검증
  */
 public abstract class BasePopupEvent extends BaseEvent {
 

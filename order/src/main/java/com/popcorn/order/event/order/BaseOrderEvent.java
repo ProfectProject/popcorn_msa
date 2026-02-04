@@ -33,7 +33,7 @@ import lombok.Getter;
     @JsonSubTypes.Type(value = OrderStatusChangedEvent.class, name = EventConstants.EventTypes.ORDER_STATUS_CHANGED),
     @JsonSubTypes.Type(value = OrderCancelledEvent.class, name = EventConstants.EventTypes.ORDER_CANCELLED),
     @JsonSubTypes.Type(value = OrderCompletedEvent.class, name = EventConstants.EventTypes.ORDER_COMPLETED),
-    @JsonSubTypes.Type(value = OrderPaidEvent.class, name = "order-paid")
+    @JsonSubTypes.Type(value = OrderPaidEvent.class, name = EventConstants.EventTypes.ORDER_PAID)
 })
 @Getter
 public abstract class BaseOrderEvent extends BaseEvent {

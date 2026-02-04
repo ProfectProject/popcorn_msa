@@ -12,6 +12,7 @@ import org.springframework.data.redis.connection.stream.MapRecord
 import org.springframework.data.redis.connection.stream.ReadOffset
 import org.springframework.data.redis.connection.stream.StreamOffset
 import org.springframework.data.redis.core.RedisTemplate
+import org.springframework.data.redis.stream.StreamListener
 import org.springframework.data.redis.stream.StreamMessageListenerContainer
 import jakarta.annotation.PostConstruct
 import java.time.Duration
@@ -68,9 +69,8 @@ class PaymentRedisStreamConfig(
     @Bean
     fun paymentStreamListenerContainer(
         connectionFactory: RedisConnectionFactory
-    ): StreamMessageListenerContainer<*, *> {
+    ): StreamMessageListenerContainer<String, MapRecord<String, String, Any>> {
 
-        @Suppress("UNCHECKED_CAST")
         val options = StreamMessageListenerContainer.StreamMessageListenerContainerOptions
             .builder()
             .batchSize(50)  // 배치 처리량 2.5배 증가 - 더 효율적 처리
@@ -83,37 +83,33 @@ class PaymentRedisStreamConfig(
         container.receive(
             Consumer.from(PAYMENT_CONSUMER_GROUP, PAYMENT_CONSUMER_NAME),
             StreamOffset.create(ORDER_EVENTS_STREAM, ReadOffset.lastConsumed()),
-            @Suppress("UNCHECKED_CAST")
-            paymentRedisStreamListener as org.springframework.data.redis.stream.StreamListener<String, MapRecord<String, String, String>>
+            paymentRedisStreamListener as StreamListener<String, MapRecord<String, String, String>>
         )
 
         // 결제 이벤트 Stream 구독 (자체 모니터링)
         container.receive(
             Consumer.from(PAYMENT_CONSUMER_GROUP, PAYMENT_CONSUMER_NAME),
             StreamOffset.create(PAYMENT_EVENTS_STREAM, ReadOffset.lastConsumed()),
-            @Suppress("UNCHECKED_CAST")
-            paymentRedisStreamListener as org.springframework.data.redis.stream.StreamListener<String, MapRecord<String, String, String>>
+            paymentRedisStreamListener as StreamListener<String, MapRecord<String, String, String>>
         )
 
         // 재고 이벤트 Stream 구독
         container.receive(
             Consumer.from(PAYMENT_CONSUMER_GROUP, PAYMENT_CONSUMER_NAME),
             StreamOffset.create(INVENTORY_EVENTS_STREAM, ReadOffset.lastConsumed()),
-            @Suppress("UNCHECKED_CAST")
-            paymentRedisStreamListener as org.springframework.data.redis.stream.StreamListener<String, MapRecord<String, String, String>>
+            paymentRedisStreamListener as StreamListener<String, MapRecord<String, String, String>>
         )
 
         // Order 정보 응답 Stream 구독 (Payment에서 요청한 Order 정보 응답 수신)
         container.receive(
             Consumer.from(PAYMENT_CONSUMER_GROUP, PAYMENT_CONSUMER_NAME),
             StreamOffset.create("order-info-responses", ReadOffset.lastConsumed()),
-            @Suppress("UNCHECKED_CAST")
-            paymentRedisStreamListener as org.springframework.data.redis.stream.StreamListener<String, MapRecord<String, String, String>>
+            paymentRedisStreamListener as StreamListener<String, MapRecord<String, String, String>>
         )
 
         container.start()
         log.info("🚀 Payment Redis Stream Listener Container 시작됨")
 
-        return container
+        return container as StreamMessageListenerContainer<String, MapRecord<String, String, Any>>
     }
 }

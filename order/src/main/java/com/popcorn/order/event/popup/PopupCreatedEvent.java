@@ -5,6 +5,7 @@ import java.util.HashMap;
 import java.util.Map;
 import java.util.UUID;
 
+import com.popcorn.order.constants.EventConstants;
 import com.popcorn.order.event.popup.BasePopupEvent;
 import lombok.Getter;
 import lombok.ToString;
@@ -38,7 +39,7 @@ public class PopupCreatedEvent extends BasePopupEvent {
     private final LocalDateTime createdAt;
 
     private PopupCreatedEvent(UUID popupId, UUID storeId, LocalDateTime createdAt) {
-        super(popupId, "popup-created");
+        super(popupId, EventConstants.EventTypes.POPUP_CREATED);
         this.popupId = popupId;
         this.storeId = storeId;
         this.createdAt = createdAt;

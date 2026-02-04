@@ -6,6 +6,7 @@ import java.util.List;
 import java.util.Map;
 import java.util.UUID;
 
+import com.popcorn.order.constants.EventConstants;
 import com.popcorn.order.event.order.BaseOrderEvent;
 import lombok.AllArgsConstructor;
 import lombok.Builder;
@@ -44,7 +45,7 @@ public class StockReleaseRequestedEvent extends BaseOrderEvent {
     private StockReleaseRequestedEvent(UUID orderId, String orderNo, UUID popupId,
                                      List<ReleaseItem> releaseItems, String reason,
                                      LocalDateTime requestedAt, Long userId) {
-        super(orderId, "stock-release-requested", userId);
+        super(orderId, EventConstants.EventTypes.STOCK_RELEASE_REQUESTED, userId);
         this.orderNo = orderNo;
         this.popupId = popupId;
         this.releaseItems = releaseItems;

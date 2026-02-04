@@ -86,6 +86,39 @@ sealed class PaymentException(
         }
     }
 
+    /**
+     * 검증 실패 (주소, 가격 등)
+     */
+    class ValidationFailed(
+        message: String = "검증에 실패했습니다."
+    ) : PaymentException(message) {
+        companion object {
+            fun create(message: String): ValidationFailed = ValidationFailed(message)
+        }
+    }
+
+    /**
+     * 외부 서비스 오류
+     */
+    class ExternalServiceError(
+        message: String = "외부 서비스 연동 중 오류가 발생했습니다."
+    ) : PaymentException(message) {
+        companion object {
+            fun create(message: String): ExternalServiceError = ExternalServiceError(message)
+        }
+    }
+
+    /**
+     * 보상 트랜잭션 실패
+     */
+    class CompensationFailed(
+        message: String = "보상 트랜잭션 처리에 실패했습니다."
+    ) : PaymentException(message) {
+        companion object {
+            fun create(message: String): CompensationFailed = CompensationFailed(message)
+        }
+    }
+
     companion object {
         // 정적 팩토리 메서드들 (기존 Java 코드와의 호환성을 위해)
         fun paymentNotFound(): PaymentNotFound = PaymentNotFound.create()
@@ -99,5 +132,8 @@ sealed class PaymentException(
         fun amountMismatch(): AmountMismatch = AmountMismatch.create()
         fun amountMismatch(message: String): AmountMismatch = AmountMismatch.create(message)
         fun paymentExpired(): PaymentExpired = PaymentExpired.create()
+        fun validationFailed(message: String): ValidationFailed = ValidationFailed.create(message)
+        fun externalServiceError(message: String): ExternalServiceError = ExternalServiceError.create(message)
+        fun compensationFailed(message: String): CompensationFailed = CompensationFailed.create(message)
     }
 }

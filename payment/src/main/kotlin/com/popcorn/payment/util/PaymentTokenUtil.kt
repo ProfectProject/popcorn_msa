@@ -1,6 +1,7 @@
+@file:Suppress("DEPRECATION")
+
 package com.popcorn.payment.util
 
-import io.jsonwebtoken.Claims
 import io.jsonwebtoken.Jwts
 import io.jsonwebtoken.SignatureAlgorithm
 import org.slf4j.LoggerFactory
@@ -15,7 +16,6 @@ import java.util.*
  * Order 서비스의 PaymentTokenUtil과 동일한 방식 사용
  */
 @Component
-@Suppress("DEPRECATION")
 class PaymentTokenUtil {
 
     @Value("\${payment.token.secret:\${jwt.secret}}")
@@ -38,14 +38,7 @@ class PaymentTokenUtil {
 
             // 축약된 필드명에서 원본 필드명으로 변환
             val orderIdValue = claims.get("i", String::class.java)
-            val orderId = if (!orderIdValue.isNullOrBlank()) {
-                UUID.fromString(orderIdValue)
-            } else null
-
             val paymentIdValue = claims.get("p", String::class.java)
-            val paymentId = if (!paymentIdValue.isNullOrBlank()) {
-                UUID.fromString(paymentIdValue)
-            } else null
 
             val paymentData = mutableMapOf<String, Any>()
             paymentData["orderId"] = orderIdValue ?: ""

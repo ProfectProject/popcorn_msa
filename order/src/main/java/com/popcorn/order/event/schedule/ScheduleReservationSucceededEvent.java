@@ -6,6 +6,7 @@ import java.util.List;
 import java.util.Map;
 import java.util.UUID;
 
+import com.popcorn.order.constants.EventConstants;
 import com.popcorn.order.event.order.BaseOrderEvent;
 import lombok.AllArgsConstructor;
 import lombok.Builder;
@@ -48,7 +49,7 @@ public class ScheduleReservationSucceededEvent extends BaseOrderEvent {
     private ScheduleReservationSucceededEvent(UUID orderId, List<ReservedSession> reservedSessions,
                                             String token, LocalDateTime expiresAt,
                                             LocalDateTime succeededAt, Long userId) {
-        super(orderId, "schedule-reservation-succeeded", userId);
+        super(orderId, EventConstants.EventTypes.SCHEDULE_RESERVATION_SUCCEEDED, userId);
         this.reservedSessions = reservedSessions;
         this.token = token;
         this.expiresAt = expiresAt;

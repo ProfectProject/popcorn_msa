@@ -6,6 +6,7 @@ import java.util.List;
 import java.util.Map;
 import java.util.UUID;
 
+import com.popcorn.order.constants.EventConstants;
 import com.popcorn.order.event.order.BaseOrderEvent;
 import lombok.Getter;
 import lombok.ToString;
@@ -46,7 +47,7 @@ public class ReservationExpiredEvent extends BaseOrderEvent {
 
     private ReservationExpiredEvent(UUID orderId, UUID popupId, String reservationType,
                                   List<String> reservationIds, LocalDateTime expiredAt, Long userId) {
-        super(orderId, "reservation-expired", userId);
+        super(orderId, EventConstants.EventTypes.RESERVATION_EXPIRED, userId);
         this.popupId = popupId;
         this.reservationType = reservationType;
         this.reservationIds = reservationIds;
