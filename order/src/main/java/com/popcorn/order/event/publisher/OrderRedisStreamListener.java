@@ -216,6 +216,10 @@ public class OrderRedisStreamListener implements StreamListener<String, MapRecor
                     log.info("💳✅ [ORDER] 주문 결제 완료 이벤트 수신 - 재고 차감 시작");
                     handleOrderPaid(values);
                     break;
+                case "schedule-reservation-requested":
+                    log.info("📅🔄 [ORDER] 스케줄 예약 요청 이벤트 수신");
+                    handleScheduleReservationRequested(values);
+                    break;
                 case "schedule-reservation-success":
                     log.info("📅✅ [ORDER] 스케줄 예약 성공 이벤트 수신");
                     handleScheduleReservationSuccess(values);
@@ -254,6 +258,40 @@ public class OrderRedisStreamListener implements StreamListener<String, MapRecor
             }
         } catch (Exception e) {
             log.error("🚨 [ORDER] 이벤트 처리 실패 - eventType: {}, error: {}", eventType, e.getMessage(), e);
+        }
+    }
+
+    /**
+     * 스케줄 예약 요청 이벤트 처리
+     */
+    private void handleScheduleReservationRequested(Map<String, Object> values) {
+        try {
+            String orderId = (String) values.get("orderId");
+            String orderNo = (String) values.get("orderNo");
+            String sessionId = (String) values.get("sessionId");
+            String customerInfo = (String) values.get("customerInfo");
+
+            // 따옴표 제거
+            if (orderId != null) orderId = orderId.trim().replaceAll("^\"|\"$", "");
+            if (orderNo != null) orderNo = orderNo.trim().replaceAll("^\"|\"$", "");
+            if (sessionId != null) sessionId = sessionId.trim().replaceAll("^\"|\"$", "");
+            if (customerInfo != null) customerInfo = customerInfo.trim().replaceAll("^\"|\"$", "");
+
+            log.info("📅🔄 [ORDER] 스케줄 예약 요청 처리 - orderId: {}, orderNo: {}, sessionId: {}",
+                    orderId, orderNo, sessionId);
+
+            if (orderId != null && !orderId.isEmpty()) {
+                UUID orderUuid = UUID.fromString(orderId);
+
+                // 주문 상태를 REQUESTED로 유지하고 로그만 남김 (실제 예약 결과를 기다림)
+                log.info("📅🔄 [ORDER] 스케줄 예약 요청 진행 중 - orderId: {}, sessionId: {}", orderUuid, sessionId);
+
+                log.info("✅ [ORDER] 스케줄 예약 요청 처리 완료 - orderId: {}, 예약 결과 대기 중", orderId);
+            }
+
+        } catch (Exception e) {
+            log.error("🚨 [ORDER] 스케줄 예약 요청 이벤트 처리 실패 - values: {}, error: {}",
+                    values, e.getMessage(), e);
         }
     }
 

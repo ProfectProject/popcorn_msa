@@ -4,6 +4,7 @@ import java.time.LocalDateTime;
 import java.util.Map;
 import java.util.UUID;
 
+import com.popcorn.order.constants.EventConstants;
 import lombok.Getter;
 
 /**
@@ -46,7 +47,7 @@ public class OrderCompletedEvent extends BaseOrderEvent {
                              String completedBy, Integer finalAmount, Integer itemCount) {
         super(
             orderId,
-            "order_completed",
+            EventConstants.EventTypes.ORDER_COMPLETED,
             userId,
             createEventMetadata(orderDate, completedBy, finalAmount, itemCount)
         );

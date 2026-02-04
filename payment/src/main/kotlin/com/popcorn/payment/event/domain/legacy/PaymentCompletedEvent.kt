@@ -1,4 +1,4 @@
-package com.popcorn.payment.event
+package com.popcorn.payment.event.domain.legacy
 
 import java.time.LocalDateTime
 import java.util.*

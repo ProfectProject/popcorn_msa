@@ -4,6 +4,7 @@ import java.time.LocalDateTime;
 import java.util.Map;
 import java.util.UUID;
 
+import com.popcorn.order.constants.EventConstants;
 import com.popcorn.order.entity.OrderStatus;
 
 import lombok.Builder;
@@ -49,7 +50,7 @@ public class OrderCancelledEvent extends BaseOrderEvent {
                              String cancelReason, String cancelledBy, Integer refundAmount) {
         super(
             orderId,
-            "order_cancelled",
+            EventConstants.EventTypes.ORDER_CANCELLED,
             userId,
             createEventMetadata(previousStatus, cancelReason, cancelledBy, refundAmount)
         );

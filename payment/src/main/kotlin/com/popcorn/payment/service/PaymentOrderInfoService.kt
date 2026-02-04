@@ -1,8 +1,8 @@
 package com.popcorn.payment.service
 
-import com.popcorn.payment.event.OrderInfoRequestPaymentEvent
-import com.popcorn.payment.event.OrderInfoResponseEvent
-import com.popcorn.payment.event.BasePaymentEventPublisher
+import com.popcorn.payment.event.domain.payment.OrderInfoRequestPaymentEvent
+import com.popcorn.payment.event.domain.payment.OrderInfoResponseEvent
+import com.popcorn.payment.event.base.BasePaymentEventPublisher
 import org.slf4j.LoggerFactory
 import org.springframework.stereotype.Service
 import java.util.UUID

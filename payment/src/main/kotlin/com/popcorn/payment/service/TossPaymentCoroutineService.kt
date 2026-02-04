@@ -2,10 +2,9 @@ package com.popcorn.payment.service
 
 import com.fasterxml.jackson.databind.ObjectMapper
 import com.popcorn.payment.client.TossPaymentsCoroutineClient
-import com.popcorn.payment.config.CoroutineTransactionManager
 import com.popcorn.payment.dto.TossPaymentCancelRequest
 import com.popcorn.payment.dto.TossPaymentConfirmRequest
-import com.popcorn.payment.event.BasePaymentEventPublisherImpl
+import com.popcorn.payment.event.publisher.BasePaymentEventPublisherImpl
 import com.popcorn.payment.exception.PaymentException
 import io.github.resilience4j.circuitbreaker.annotation.CircuitBreaker
 import kotlinx.coroutines.async
@@ -26,7 +25,6 @@ import kotlin.coroutines.Continuation
 @Service
 class TossPaymentCoroutineService(
     private val tossClient: TossPaymentsCoroutineClient,
-    private val transactionManager: CoroutineTransactionManager,
     private val paymentCommandService: PaymentCommandCoroutineService,
     private val orderQueryService: OrderQueryCoroutineService,
     private val objectMapper: ObjectMapper,
@@ -126,24 +124,20 @@ class TossPaymentCoroutineService(
 
                 // 4. Payment 서비스 내부 결제 기록 생성/업데이트
                 log.info("결제 기록 생성: orderId={}, amount={}", orderId, amount)
-                val paymentResult = transactionManager.executeInTransactionSuspend {
-                    val createdPayment = paymentCommandService.createPaymentBlocking(
-                        orderId = UUID.fromString(orderId),
-                        paymentMethod = "CARD",
-                        amount = amount,
-                        paymentKey = paymentKey,
-                        rawPayload = rawPayload
-                    )
+                val createdPayment = paymentCommandService.createPaymentBlocking(
+                    orderId = UUID.fromString(orderId),
+                    paymentMethod = "CARD",
+                    amount = amount,
+                    paymentKey = paymentKey,
+                    rawPayload = rawPayload
+                )
 
-                    paymentCommandService.updatePaymentStatusBlocking(
-                        paymentId = createdPayment.paymentId,
-                        status = "PAID",
-                        approvedAt = approvedAt,
-                        rawPayload = rawPayload
-                    )
-
-                    createdPayment
-                }
+                val paymentResult = paymentCommandService.updatePaymentStatusBlocking(
+                    paymentId = createdPayment.paymentId,
+                    status = "PAID",
+                    approvedAt = approvedAt,
+                    rawPayload = rawPayload
+                )
 
                 // 5. 결제 승인 이벤트 발행 (Order 서비스가 구독하여 주문 상태 업데이트)
                 try {

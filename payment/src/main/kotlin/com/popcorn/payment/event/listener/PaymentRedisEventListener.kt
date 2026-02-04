@@ -1,8 +1,9 @@
-package com.popcorn.payment.event
+package com.popcorn.payment.event.listener
 
 import com.popcorn.payment.common.exception.PaymentExceptionHandler
 import com.popcorn.payment.common.exception.PaymentExceptionHandler.safeError
 import com.popcorn.payment.common.exception.PaymentExceptionHandler.safeInfo
+import com.popcorn.payment.event.domain.legacy.PaymentCompletedEvent
 import org.slf4j.LoggerFactory
 import org.springframework.context.event.EventListener
 import org.springframework.data.redis.connection.Message

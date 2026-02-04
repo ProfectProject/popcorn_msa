@@ -1,5 +1,7 @@
-package com.popcorn.payment.event
+package com.popcorn.payment.event.integration.request
 
+import com.popcorn.payment.constants.EventConstants
+import com.popcorn.payment.event.base.BasePaymentEvent
 import java.time.LocalDateTime
 import java.util.*
 
@@ -39,7 +41,7 @@ data class OrderStatusUpdateRequestedEvent(
     val relatedPaymentId: UUID
 ) : BasePaymentEvent(
     paymentId = relatedPaymentId,
-    eventType = "order-status-update-requested"
+    eventType = EventConstants.EventTypes.ORDER_STATUS_UPDATE_REQUESTED
 ) {
 
     override fun getEventPayload(): Map<String, Any> = mapOf(

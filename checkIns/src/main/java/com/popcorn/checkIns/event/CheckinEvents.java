@@ -1,6 +1,6 @@
 package com.popcorn.checkIns.event;
 
-import com.popcorn.common.constants.EventConstants;
+import com.popcorn.checkIns.constants.EventConstants;
 import java.time.LocalDateTime;
 import java.util.Map;
 import java.util.UUID;

@@ -1,6 +1,7 @@
 package com.popcorn.payment.config
 
-import com.popcorn.payment.event.PaymentRedisStreamListener
+import com.popcorn.payment.constants.EventConstants
+import com.popcorn.payment.event.listener.PaymentRedisStreamListener
 import org.slf4j.LoggerFactory
 import org.springframework.boot.autoconfigure.condition.ConditionalOnProperty
 import org.springframework.context.annotation.Bean
@@ -31,12 +32,12 @@ class PaymentRedisStreamConfig(
     // Stream 이름 상수
     companion object {
         private const val ORDER_EVENTS_STREAM = "order-events"
-        private const val PAYMENT_EVENTS_STREAM = "payment-events"
+        private val PAYMENT_EVENTS_STREAM = EventConstants.Streams.PAYMENT_EVENTS
         private const val INVENTORY_EVENTS_STREAM = "inventory-events"
 
         // Consumer Group 이름
-        private const val PAYMENT_CONSUMER_GROUP = "payment-service-group"
-        private const val PAYMENT_CONSUMER_NAME = "payment-consumer-1"
+        private val PAYMENT_CONSUMER_GROUP = EventConstants.ConsumerGroups.PAYMENT_SERVICE_GROUP
+        private val PAYMENT_CONSUMER_NAME = EventConstants.Consumers.PAYMENT_EVENTS_CONSUMER
     }
 
     @PostConstruct

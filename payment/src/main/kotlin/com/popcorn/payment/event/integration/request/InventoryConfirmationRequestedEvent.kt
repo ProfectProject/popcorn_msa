@@ -1,5 +1,7 @@
-package com.popcorn.payment.event
+package com.popcorn.payment.event.integration.request
 
+import com.popcorn.payment.constants.EventConstants
+import com.popcorn.payment.event.base.BasePaymentEvent
 import java.time.LocalDateTime
 import java.util.*
 
@@ -35,10 +37,13 @@ data class InventoryConfirmationRequestedEvent(
     val occurredAt: LocalDateTime = LocalDateTime.now(),
 
     /** 이벤트 ID (추적용) */
-    val eventId: String = UUID.randomUUID().toString()
+    val eventId: String = UUID.randomUUID().toString(),
+
+    /** 관련 결제 ID */
+    val relatedPaymentId: UUID
 ) : BasePaymentEvent(
-    paymentId = UUID.randomUUID(), // 재고 확인 요청의 경우 임시 ID
-    eventType = "inventory-confirmation-requested"
+    paymentId = relatedPaymentId,
+    eventType = EventConstants.EventTypes.INVENTORY_CONFIRMATION_REQUESTED
 ) {
 
     override fun getEventPayload(): Map<String, Any> = mapOf(
@@ -64,7 +69,8 @@ data class InventoryConfirmationRequestedEvent(
                 actionType = "CONFIRM",
                 reason = "결제 승인 완료",
                 requestedAt = LocalDateTime.now(),
-                occurredAt = LocalDateTime.now()
+                occurredAt = LocalDateTime.now(),
+                relatedPaymentId = paymentId
             )
         }
 
@@ -81,7 +87,8 @@ data class InventoryConfirmationRequestedEvent(
                 actionType = "RESTORE",
                 reason = reason,
                 requestedAt = LocalDateTime.now(),
-                occurredAt = LocalDateTime.now()
+                occurredAt = LocalDateTime.now(),
+                relatedPaymentId = paymentId
             )
         }
     }

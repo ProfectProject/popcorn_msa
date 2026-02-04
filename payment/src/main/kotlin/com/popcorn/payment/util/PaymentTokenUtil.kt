@@ -15,6 +15,7 @@ import java.util.*
  * Order 서비스의 PaymentTokenUtil과 동일한 방식 사용
  */
 @Component
+@Suppress("DEPRECATION")
 class PaymentTokenUtil {
 
     @Value("\${payment.token.secret:\${jwt.secret}}")

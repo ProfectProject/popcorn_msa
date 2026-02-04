@@ -77,6 +77,7 @@ dependencies {
     implementation("org.jetbrains.kotlinx:kotlinx-coroutines-core:${property("coroutinesVersion")}")
     implementation("org.jetbrains.kotlinx:kotlinx-coroutines-jdk8:${property("coroutinesVersion")}")
     implementation("org.jetbrains.kotlinx:kotlinx-coroutines-reactor:${property("coroutinesVersion")}")
+    implementation("org.springframework:spring-tx") // 트랜잭션 지원
 
     // === Resilience4j ===
     implementation("io.github.resilience4j:resilience4j-spring-boot3:${property("resilience4jVersion")}")

@@ -1,7 +1,7 @@
 package com.popcorn.checkIns.config;
 
 import com.popcorn.checkIns.event.CheckInRedisStreamListener;
-import com.popcorn.common.constants.EventConstants;
+import com.popcorn.checkIns.constants.EventConstants;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.boot.autoconfigure.condition.ConditionalOnProperty;

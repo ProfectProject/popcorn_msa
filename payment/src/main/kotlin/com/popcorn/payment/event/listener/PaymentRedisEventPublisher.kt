@@ -1,6 +1,12 @@
-package com.popcorn.payment.event
+package com.popcorn.payment.event.listener
 
 import com.fasterxml.jackson.databind.ObjectMapper
+import com.popcorn.payment.constants.EventConstants
+import com.popcorn.payment.event.base.BasePaymentEvent
+import com.popcorn.payment.event.domain.payment.*
+import com.popcorn.payment.event.domain.cancellation.*
+import com.popcorn.payment.event.domain.legacy.PaymentCompletedEvent
+import com.popcorn.payment.event.integration.request.*
 import org.slf4j.LoggerFactory
 import org.springframework.data.redis.core.RedisTemplate
 import org.springframework.data.redis.connection.stream.StreamRecords
@@ -17,8 +23,8 @@ class PaymentRedisEventPublisher(
 
     // Stream 이름 상수
     companion object {
-        private const val PAYMENT_EVENTS_STREAM = "payment-events"
-        private const val PAYMENT_REQUESTS_STREAM = "payment-requests"
+        private val PAYMENT_EVENTS_STREAM = EventConstants.Streams.PAYMENT_EVENTS
+        private val PAYMENT_REQUESTS_STREAM = EventConstants.Streams.PAYMENT_REQUESTS
         private const val QR_EVENTS_STREAM = "qr-events"
         private const val ORDER_EVENTS_STREAM = "order-events"
         private const val INVENTORY_EVENTS_STREAM = "inventory-events"
@@ -102,17 +108,17 @@ class PaymentRedisEventPublisher(
             is PaymentCancelRequestedEvent -> PAYMENT_REQUESTS_STREAM to event.eventType
 
             // 기존 외부 도메인 이벤트들
-            is PaymentCompletedEvent -> PAYMENT_EVENTS_STREAM to "payment-completed"
-            is QrCodeGenerationRequestedEvent -> QR_EVENTS_STREAM to "qr-generation-requested"
-            is QrCodeInvalidationRequestedEvent -> QR_EVENTS_STREAM to "qr-invalidation-requested"
-            is InventoryConfirmationRequestedEvent -> INVENTORY_EVENTS_STREAM to "inventory-confirmation-requested"
-            is OrderStatusUpdateRequestedEvent -> ORDER_EVENTS_STREAM to "order-status-update-requested"
-            is PaymentCancelRetryEvent -> PAYMENT_EVENTS_STREAM to "payment-cancel-retry"
-            is PaymentCancelFinalFailureEvent -> PAYMENT_EVENTS_STREAM to "payment-cancel-final-failure"
+            is PaymentCompletedEvent -> PAYMENT_EVENTS_STREAM to EventConstants.EventTypes.PAYMENT_COMPLETED
+            is QrCodeGenerationRequestedEvent -> QR_EVENTS_STREAM to event.eventType
+            is QrCodeInvalidationRequestedEvent -> QR_EVENTS_STREAM to event.eventType
+            is InventoryConfirmationRequestedEvent -> INVENTORY_EVENTS_STREAM to event.eventType
+            is OrderStatusUpdateRequestedEvent -> ORDER_EVENTS_STREAM to event.eventType
+            is PaymentCancelRetryEvent -> PAYMENT_EVENTS_STREAM to event.eventType
+            is PaymentCancelFinalFailureEvent -> PAYMENT_EVENTS_STREAM to event.eventType
 
             // BasePaymentEvent 기반 이벤트 처리 (제네릭)
             is BasePaymentEvent -> when (event.eventType) {
-                "payment-create-requested", "payment-cancel-requested" -> PAYMENT_REQUESTS_STREAM to event.eventType
+                EventConstants.EventTypes.PAYMENT_CREATE_REQUESTED, EventConstants.EventTypes.PAYMENT_CANCEL_REQUESTED -> PAYMENT_REQUESTS_STREAM to event.eventType
                 else -> PAYMENT_EVENTS_STREAM to event.eventType
             }
 

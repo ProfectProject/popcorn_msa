@@ -1,5 +1,6 @@
-package com.popcorn.payment.event
+package com.popcorn.payment.event.common
 
+import com.popcorn.payment.event.domain.payment.PaymentSuccessEvent
 import com.popcorn.payment.event.integration.PaymentSuccessIntegrationEvent
 
 /**

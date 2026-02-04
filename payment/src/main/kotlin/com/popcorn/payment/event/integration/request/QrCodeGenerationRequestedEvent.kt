@@ -1,5 +1,7 @@
-package com.popcorn.payment.event
+package com.popcorn.payment.event.integration.request
 
+import com.popcorn.payment.constants.EventConstants
+import com.popcorn.payment.event.base.BasePaymentEvent
 import java.time.LocalDateTime
 import java.util.*
 
@@ -41,7 +43,7 @@ data class QrCodeGenerationRequestedEvent(
     val relatedPaymentId: UUID
 ) : BasePaymentEvent(
     paymentId = relatedPaymentId,
-    eventType = "qr-generation-requested",
+    eventType = EventConstants.EventTypes.QR_GENERATION_REQUESTED,
     userId = customerId
 ) {
 

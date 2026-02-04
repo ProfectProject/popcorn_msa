@@ -92,6 +92,32 @@ public class OrderResilienceConfig {
     }
 
     /**
+     * 스토어 서비스 전용 서킷 브레이커 설정
+     *
+     * 가격 조회는 성능이 중요하므로 빠른 감지 및 복구:
+     * - 빠른 장애 감지 (5회 실패시)
+     * - 빠른 타임아웃 (2초)
+     * - 빠른 복구 시도 (30초)
+     */
+    @Bean
+    public Customizer<Resilience4JCircuitBreakerFactory> storeServiceCustomizer() {
+        return factory -> factory.configure(builder -> builder
+                .circuitBreakerConfig(CircuitBreakerConfig.custom()
+                    .slidingWindowSize(10)               // 최근 10회 요청 기준
+                    .failureRateThreshold(50.0f)         // 50% 실패시 OPEN
+                    .minimumNumberOfCalls(5)             // 최소 5회 호출 후 통계
+                    .waitDurationInOpenState(Duration.ofSeconds(30))  // 30초 후 HALF_OPEN
+                    .permittedNumberOfCallsInHalfOpenState(3)         // HALF_OPEN에서 3회 테스트
+                    .slowCallRateThreshold(70.0f)        // 70% 느린 호출시 OPEN
+                    .slowCallDurationThreshold(Duration.ofMillis(1500)) // 1.5초 이상이 느린 호출
+                    .build())
+                .timeLimiterConfig(TimeLimiterConfig.custom()
+                    .timeoutDuration(Duration.ofSeconds(2))  // 2초 타임아웃
+                    .build())
+                .build(), "store-service");
+    }
+
+    /**
      * 재고 서비스 전용 서킷 브레이커 설정
      *
      * 재고는 정확성이 중요하므로 신중한 설정:

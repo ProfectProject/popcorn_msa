@@ -3,6 +3,7 @@ package com.popcorn.order.event.order;
 import java.util.Map;
 import java.util.UUID;
 
+import com.popcorn.order.constants.EventConstants;
 import com.popcorn.order.entity.OrderStatus;
 
 import lombok.Getter;
@@ -47,7 +48,7 @@ public class OrderStatusChangedEvent extends BaseOrderEvent {
         // 부모 클래스에 기본 정보 전달
         super(
             orderId,
-            "order_status_changed",
+            EventConstants.EventTypes.ORDER_STATUS_CHANGED,
             userId,
             createEventMetadata(fromStatus, toStatus, changeReason, changedBy)
         );

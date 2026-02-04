@@ -1,4 +1,4 @@
-package com.popcorn.payment.event
+package com.popcorn.payment.event.base
 
 /**
  * Payment 이벤트 발행자 인터페이스

@@ -1,4 +1,4 @@
-package com.popcorn.payment.event
+package com.popcorn.payment.event.base
 
 import com.popcorn.common.event.BaseEvent
 import java.util.*

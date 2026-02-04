@@ -1,5 +1,7 @@
-package com.popcorn.payment.event
+package com.popcorn.payment.event.integration.request
 
+import com.popcorn.payment.constants.EventConstants
+import com.popcorn.payment.event.base.BasePaymentEvent
 import java.time.LocalDateTime
 import java.util.*
 
@@ -38,7 +40,7 @@ data class QrCodeInvalidationRequestedEvent(
     val relatedPaymentId: UUID
 ) : BasePaymentEvent(
     paymentId = relatedPaymentId,
-    eventType = "qr-invalidation-requested"
+    eventType = EventConstants.EventTypes.QR_INVALIDATION_REQUESTED
 ) {
 
     override fun getEventPayload(): Map<String, Any> = mapOf(

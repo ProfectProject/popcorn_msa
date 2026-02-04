@@ -101,6 +101,7 @@ public class OrderCommandService {
     @org.springframework.beans.factory.annotation.Value("${order.reservation.wait-timeout-ms:15000}")
     private long reservationWaitTimeoutMs;
 
+
     // 성능 통계 카운터
     private final AtomicLong totalOrders = new AtomicLong(0);
 
@@ -1298,9 +1299,34 @@ public class OrderCommandService {
     }
 
     /**
-     * 사용자 기본 주소 검증 (HTTP 동기 호출)
+     * 사용자 기본 주소 검증 (HTTP 동기 호출, Circuit Breaker 적용)
+     * 외부 서비스 장애 시 graceful degradation 적용
      */
     private void validateUserAddress(Long userId) {
+        CircuitBreaker userCircuitBreaker = circuitBreakerFactory.create("user-service");
+
+        try {
+            userCircuitBreaker.run(
+                () -> validateUserAddressInternal(userId),
+                throwable -> {
+                    log.warn("🔄 [FALLBACK] 사용자 주소 검증 서비스 사용불가 - userId: {}, 주문 진행 허용 (degraded mode)", userId);
+                    // fallback: 사용자 서비스 장애 시 주소 검증을 생략하고 주문 진행
+                    return null;
+                }
+            );
+        } catch (Exception e) {
+            if (e instanceof IllegalArgumentException) {
+                throw e;  // 비즈니스 로직 예외는 그대로 전파
+            }
+            // Circuit Breaker fallback에서도 예외가 발생한 경우 (드문 경우)
+            log.warn("⚠️ [DEGRADED] 사용자 주소 검증 불가 - 주문 진행 (degraded mode), userId: {}", userId);
+        }
+    }
+
+    /**
+     * 사용자 주소 검증 내부 구현 (Circuit Breaker에서 호출)
+     */
+    private Void validateUserAddressInternal(Long userId) {
         try {
             log.debug("🏠 [HTTP] 사용자 기본 주소 검증 시작 - userId: {}", userId);
 
@@ -1327,6 +1353,10 @@ public class OrderCommandService {
                         headers.set("X-Internal-Call", "true");
                     })
                     .retrieve()
+                    .onStatus(httpStatus -> httpStatus.is5xxServerError(), clientResponse -> {
+                        log.error("🚨 [HTTP] 사용자 서비스 서버 오류 - userId: {}, status: {}", userId, clientResponse.statusCode());
+                        return clientResponse.createException();
+                    })
                     .bodyToMono(new org.springframework.core.ParameterizedTypeReference<java.util.List<java.util.Map<String, Object>>>() {})
                     .timeout(Duration.ofSeconds(3))
                     .block();
@@ -1338,7 +1368,7 @@ public class OrderCommandService {
 
                 if (hasDefaultAddress) {
                     log.debug("✅ [HTTP] 사용자 기본 주소 검증 성공 - userId: {}", userId);
-                    return;
+                    return null;
                 } else {
                     log.warn("⚠️ [HTTP] 기본 주소가 설정되지 않음 - userId: {}", userId);
                 }
@@ -1349,12 +1379,21 @@ public class OrderCommandService {
             // 기본 주소가 없으면 예외 발생
             throw new IllegalArgumentException("기본 배송지가 필요합니다.");
 
+        } catch (org.springframework.web.reactive.function.client.WebClientResponseException e) {
+            if (e.getStatusCode().is5xxServerError()) {
+                log.error("🚨 [HTTP] 사용자 서비스 서버 오류 (5xx) - userId: {}, status: {}", userId, e.getStatusCode());
+                throw e; // Circuit Breaker가 감지할 수 있도록 예외 재발생
+            } else {
+                log.error("❌ [HTTP] 사용자 주소 조회 실패 - userId: {}, status: {}, error: {}",
+                         userId, e.getStatusCode(), e.getMessage());
+                throw e; // Circuit Breaker가 감지할 수 있도록 예외 재발생
+            }
         } catch (Exception e) {
             if (e instanceof IllegalArgumentException) {
                 throw e;  // 비즈니스 로직 예외는 그대로 전파
             }
-            log.error("❌ [HTTP] 사용자 주소 검증 실패 - userId: {}, error: {}", userId, e.getMessage());
-            throw new IllegalArgumentException("사용자 주소 조회 중 오류가 발생했습니다.");
+            log.error("❌ [HTTP] 사용자 주소 검증 예외 - userId: {}, error: {}", userId, e.getMessage());
+            throw e; // Circuit Breaker가 감지할 수 있도록 예외 재발생
         }
     }
 

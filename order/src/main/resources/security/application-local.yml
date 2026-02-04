@@ -157,9 +157,6 @@ order:
     status-cache-ttl: 300  # 결제 상태 캐시 TTL (5분)
   cancel:
     timeout: ${ORDER_CANCEL_TIMEOUT:600}   # ⚡ 취소 가능 시간: 30분 → 10분 (67% 단축)
-  validation:
-    max-quantity: ${ORDER_MAX_QUANTITY:100}  # 최대 주문 수량
-    min-quantity: ${ORDER_MIN_QUANTITY:1}    # 최소 주문 수량
   reservation:
     wait-timeout-ms: ${ORDER_RESERVATION_WAIT_TIMEOUT_MS:60000}  # 예약 응답 대기 시간 (60초로 증가)
   notification:
@@ -180,8 +177,8 @@ logging:
 external:
   services:
     users:
-      base-url: ${USERS_SERVICE_BASE_URL:http://localhost:8080}
+      base-url: ${USERS_SERVICE_BASE_URL:http://localhost:8082}
     store:
-      base-url: ${STORE_SERVICE_BASE_URL:http://localhost:8080}
+      base-url: ${STORE_SERVICE_BASE_URL:http://localhost:8083}
   http:
     enabled: true  # HTTP 기반 외부 서비스 호출 활성화 (개발환경)

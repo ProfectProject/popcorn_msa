@@ -32,12 +32,14 @@ public class OrderPriceCacheService {
     private static final Duration GOODS_PRICE_TTL = Duration.ofMinutes(30);  // 굿즈 가격: 30분 캐시
 
     /**
-     * 세션 가격 조회 (캐시 우선)
+     * 세션 가격 조회 (캐시 우선, 서비스 장애 시 stale cache 허용)
      * Cache Hit 시: ~10ms
      * Cache Miss 시: ~2000ms + 캐시 저장
+     * Service Unavailable 시: stale cache 또는 기본값 반환
      */
     public Integer getSessionPrice(UUID sessionId) {
         String cacheKey = "order:price:session:" + sessionId;
+        String staleCacheKey = cacheKey + ":stale";
 
         // 1. 캐시 조회 시도
         Integer cachedPrice = getCachedPrice(cacheKey);
@@ -53,20 +55,35 @@ public class OrderPriceCacheService {
         // 3. 조회 성공 시 캐시 저장
         if (price != null) {
             setCachedPrice(cacheKey, price, SESSION_PRICE_TTL);
+            // stale cache도 업데이트 (장기 보관용)
+            setCachedPrice(staleCacheKey, price, Duration.ofDays(7));
             log.info("💾 [CACHE-SET] 세션 가격 캐시 저장 - sessionId: {}, price: {}원, ttl: {}일",
                     sessionId, price, SESSION_PRICE_TTL.toDays());
+            return price;
         }
 
-        return price;
+        // 4. 원본 서비스 실패 시 stale cache 조회 시도
+        Integer stalePrice = getCachedPrice(staleCacheKey);
+        if (stalePrice != null) {
+            log.warn("🔄 [STALE-CACHE] 세션 가격 stale cache 사용 - sessionId: {}, price: {}원 (서비스 장애로 인한 fallback)",
+                    sessionId, stalePrice);
+            return stalePrice;
+        }
+
+        // 5. 모든 방법 실패 시 null 반환 (상위에서 처리)
+        log.warn("❌ [NO-CACHE] 세션 가격 조회 실패 - sessionId: {} (캐시 및 서비스 모두 실패)", sessionId);
+        return null;
     }
 
     /**
-     * 굿즈 가격 조회 (캐시 우선)
+     * 굿즈 가격 조회 (캐시 우선, 서비스 장애 시 stale cache 허용)
      * Cache Hit 시: ~10ms
      * Cache Miss 시: ~1500ms + 캐시 저장
+     * Service Unavailable 시: stale cache 또는 기본값 반환
      */
     public Integer getGoodsPrice(UUID goodsId) {
         String cacheKey = "order:price:goods:" + goodsId;
+        String staleCacheKey = cacheKey + ":stale";
 
         // 1. 캐시 조회 시도
         Integer cachedPrice = getCachedPrice(cacheKey);
@@ -82,11 +99,24 @@ public class OrderPriceCacheService {
         // 3. 조회 성공 시 캐시 저장
         if (price != null) {
             setCachedPrice(cacheKey, price, GOODS_PRICE_TTL);
+            // stale cache도 업데이트 (장기 보관용)
+            setCachedPrice(staleCacheKey, price, Duration.ofDays(7));
             log.info("💾 [CACHE-SET] 굿즈 가격 캐시 저장 - goodsId: {}, price: {}원, ttl: {}분",
                     goodsId, price, GOODS_PRICE_TTL.toMinutes());
+            return price;
         }
 
-        return price;
+        // 4. 원본 서비스 실패 시 stale cache 조회 시도
+        Integer stalePrice = getCachedPrice(staleCacheKey);
+        if (stalePrice != null) {
+            log.warn("🔄 [STALE-CACHE] 굿즈 가격 stale cache 사용 - goodsId: {}, price: {}원 (서비스 장애로 인한 fallback)",
+                    goodsId, stalePrice);
+            return stalePrice;
+        }
+
+        // 5. 모든 방법 실패 시 null 반환 (상위에서 처리)
+        log.warn("❌ [NO-CACHE] 굿즈 가격 조회 실패 - goodsId: {} (캐시 및 서비스 모두 실패)", goodsId);
+        return null;
     }
 
     /**
@@ -127,6 +157,42 @@ public class OrderPriceCacheService {
         String cacheKey = "order:price:goods:" + goodsId;
         redisTemplate.delete(cacheKey);
         log.info("🗑️ [CACHE-DEL] 굿즈 가격 캐시 무효화 - goodsId: {}", goodsId);
+    }
+
+    /**
+     * 가격 조회 with 안전한 기본값 (서비스 장애 시 임시 가격 제공)
+     * 주문 진행이 완전히 차단되는 것을 방지
+     */
+    public Integer getSessionPriceWithFallback(UUID sessionId, Integer fallbackPrice) {
+        Integer price = getSessionPrice(sessionId);
+        if (price != null) {
+            return price;
+        }
+
+        if (fallbackPrice != null) {
+            log.warn("🆘 [FALLBACK-PRICE] 세션 가격 fallback 적용 - sessionId: {}, fallback: {}원",
+                    sessionId, fallbackPrice);
+            return fallbackPrice;
+        }
+
+        log.error("❌ [PRICE-FAILURE] 세션 가격 조회 완전 실패 - sessionId: {}", sessionId);
+        throw new IllegalStateException("세션 가격 정보를 조회할 수 없습니다. 잠시 후 다시 시도해주세요.");
+    }
+
+    public Integer getGoodsPriceWithFallback(UUID goodsId, Integer fallbackPrice) {
+        Integer price = getGoodsPrice(goodsId);
+        if (price != null) {
+            return price;
+        }
+
+        if (fallbackPrice != null) {
+            log.warn("🆘 [FALLBACK-PRICE] 굿즈 가격 fallback 적용 - goodsId: {}, fallback: {}원",
+                    goodsId, fallbackPrice);
+            return fallbackPrice;
+        }
+
+        log.error("❌ [PRICE-FAILURE] 굿즈 가격 조회 완전 실패 - goodsId: {}", goodsId);
+        throw new IllegalStateException("굿즈 가격 정보를 조회할 수 없습니다. 잠시 후 다시 시도해주세요.");
     }
 
     /**

@@ -1,5 +1,7 @@
-package com.popcorn.payment.event
+package com.popcorn.payment.event.domain.cancellation
 
+import com.popcorn.payment.constants.EventConstants
+import com.popcorn.payment.event.base.BasePaymentEvent
 import java.time.LocalDateTime
 import java.util.*
 
@@ -49,7 +51,7 @@ data class PaymentCancelFinalFailureEvent(
     val relatedPaymentId: UUID
 ) : BasePaymentEvent(
     paymentId = relatedPaymentId,
-    eventType = "payment-cancel-final-failure",
+    eventType = EventConstants.EventTypes.PAYMENT_CANCEL_FINAL_FAILURE,
     userId = customerId
 ) {
 

@@ -1,10 +1,12 @@
-package com.popcorn.payment.event
+package com.popcorn.payment.event.listener
 
 import com.fasterxml.jackson.databind.ObjectMapper
 import com.popcorn.payment.service.PaymentOrderInfoService
-import com.popcorn.payment.event.OrderInfoResponseEvent
+import com.popcorn.payment.event.domain.payment.OrderInfoResponseEvent
 import com.popcorn.payment.service.TossPaymentCoroutineService
-import com.popcorn.payment.event.PaymentCancelFailedEvent
+import com.popcorn.payment.event.domain.payment.PaymentCancelFailedEvent
+import com.popcorn.payment.event.domain.payment.EventLineItem
+import com.popcorn.payment.event.publisher.BasePaymentEventPublisherImpl
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.launch
@@ -265,7 +267,7 @@ class PaymentRedisStreamListener(
         return trimmed.trim('"')
     }
 
-    private fun parseEventLineItems(rawLines: Any?): List<com.popcorn.payment.event.EventLineItem> {
+    private fun parseEventLineItems(rawLines: Any?): List<EventLineItem> {
         if (rawLines == null) {
             return emptyList()
         }
@@ -273,8 +275,8 @@ class PaymentRedisStreamListener(
             when (rawLines) {
                 is List<*> -> rawLines.mapNotNull { item ->
                     when (item) {
-                        is com.popcorn.payment.event.EventLineItem -> item
-                        is Map<*, *> -> objectMapper.convertValue(item, com.popcorn.payment.event.EventLineItem::class.java)
+                        is EventLineItem -> item
+                        is Map<*, *> -> objectMapper.convertValue(item, EventLineItem::class.java)
                         else -> null
                     }
                 }
@@ -283,12 +285,12 @@ class PaymentRedisStreamListener(
                     if (trimmed.isBlank() || trimmed == "[]") {
                         emptyList()
                     } else {
-                        val typeRef = object : com.fasterxml.jackson.core.type.TypeReference<List<com.popcorn.payment.event.EventLineItem>>() {}
+                        val typeRef = object : com.fasterxml.jackson.core.type.TypeReference<List<EventLineItem>>() {}
                         objectMapper.readValue(trimmed, typeRef)
                     }
                 }
                 else -> {
-                    val typeRef = object : com.fasterxml.jackson.core.type.TypeReference<List<com.popcorn.payment.event.EventLineItem>>() {}
+                    val typeRef = object : com.fasterxml.jackson.core.type.TypeReference<List<EventLineItem>>() {}
                     objectMapper.convertValue(rawLines, typeRef)
                 }
             }

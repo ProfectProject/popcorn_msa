@@ -19,10 +19,13 @@ import com.popcorn.order.client.dto.PriceResponse;
 import com.popcorn.order.client.dto.PriceResult;
 import com.popcorn.order.dto.store.PopupInfoResponse;
 import org.springframework.core.ParameterizedTypeReference;
+import org.springframework.cloud.client.circuitbreaker.CircuitBreaker;
+import org.springframework.cloud.client.circuitbreaker.CircuitBreakerFactory;
 
 /**
  * Store 서비스와의 동기 HTTP 통신 클라이언트
  * Redis Stream 기반 비동기 방식을 HTTP 동기 방식으로 변경
+ * Circuit Breaker 패턴으로 서비스 장애 격리 및 fallback 제공
  */
 @Service
 @RequiredArgsConstructor
@@ -30,6 +33,7 @@ import org.springframework.core.ParameterizedTypeReference;
 public class StoreServiceClient {
 
     private final WebClient defaultWebClient;
+    private final CircuitBreakerFactory circuitBreakerFactory;
 
     @Value("${external.services.store.base-url}")
     private String storeServiceBaseUrl;
@@ -45,10 +49,27 @@ public class StoreServiceClient {
             new ParameterizedTypeReference<StoreApiResponse<PopupInfoResponse>>() {};
 
     /**
-     * 세션 가격 조회 (동기식)
-     * Store 서비스의 실제 API 호출
+     * 세션 가격 조회 (동기식, Circuit Breaker 적용)
+     * Store 서비스의 실제 API 호출 with 장애 격리
      */
     public Integer getSessionPrice(UUID sessionId) {
+        CircuitBreaker storeCircuitBreaker = circuitBreakerFactory.create("store-service");
+
+        return storeCircuitBreaker.run(
+            () -> getSessionPriceInternal(sessionId),
+            throwable -> {
+                log.warn("🔄 [FALLBACK] 세션 가격 조회 fallback - sessionId: {}, reason: {}",
+                        sessionId, throwable.getMessage());
+                // fallback: 캐시에서 조회하거나 null 반환 (상위에서 처리)
+                return null;
+            }
+        );
+    }
+
+    /**
+     * 세션 가격 조회 내부 구현 (Circuit Breaker에서 호출)
+     */
+    private Integer getSessionPriceInternal(UUID sessionId) {
         try {
             log.info("💰 [HTTP] 세션 가격 조회 요청 - sessionId: {}", sessionId);
 
@@ -70,6 +91,10 @@ public class StoreServiceClient {
                         log.warn("💰 [HTTP] 세션 가격 정보 없음 - sessionId: {}", sessionId);
                         return clientResponse.createException();
                     })
+                    .onStatus(HttpStatus.SERVICE_UNAVAILABLE::equals, clientResponse -> {
+                        log.error("🚨 [HTTP] 스토어 서비스 사용불가 - sessionId: {}", sessionId);
+                        return clientResponse.createException();
+                    })
                     .bodyToMono(PRICE_RESPONSE_TYPE)
                     .timeout(Duration.ofMillis(timeoutMs))
                     .block();
@@ -86,22 +111,42 @@ public class StoreServiceClient {
             if (e.getStatusCode() == HttpStatus.NOT_FOUND) {
                 log.warn("💰 [HTTP] 세션 가격 정보 없음 - sessionId: {}", sessionId);
                 return null;
+            } else if (e.getStatusCode() == HttpStatus.SERVICE_UNAVAILABLE) {
+                log.error("🚨 [HTTP] 스토어 서비스 사용불가 (503) - sessionId: {}", sessionId);
+                throw e; // Circuit Breaker가 감지할 수 있도록 예외 재발생
             } else {
                 log.error("❌ [HTTP] 세션 가격 조회 실패 - sessionId: {}, status: {}, error: {}",
                         sessionId, e.getStatusCode(), e.getMessage());
-                return null;
+                throw e; // Circuit Breaker가 감지할 수 있도록 예외 재발생
             }
         } catch (Exception e) {
             log.error("❌ [HTTP] 세션 가격 조회 예외 - sessionId: {}, error: {}", sessionId, e.getMessage(), e);
-            return null;
+            throw e; // Circuit Breaker가 감지할 수 있도록 예외 재발생
         }
     }
 
     /**
-     * 굿즈 가격 조회 (동기식)
-     * Store 서비스의 실제 API 호출
+     * 굿즈 가격 조회 (동기식, Circuit Breaker 적용)
+     * Store 서비스의 실제 API 호출 with 장애 격리
      */
     public Integer getGoodsPrice(UUID goodsId) {
+        CircuitBreaker storeCircuitBreaker = circuitBreakerFactory.create("store-service");
+
+        return storeCircuitBreaker.run(
+            () -> getGoodsPriceInternal(goodsId),
+            throwable -> {
+                log.warn("🔄 [FALLBACK] 굿즈 가격 조회 fallback - goodsId: {}, reason: {}",
+                        goodsId, throwable.getMessage());
+                // fallback: 캐시에서 조회하거나 null 반환 (상위에서 처리)
+                return null;
+            }
+        );
+    }
+
+    /**
+     * 굿즈 가격 조회 내부 구현 (Circuit Breaker에서 호출)
+     */
+    private Integer getGoodsPriceInternal(UUID goodsId) {
         try {
             log.info("🎁 [HTTP] 굿즈 가격 조회 요청 - goodsId: {}", goodsId);
 
@@ -123,6 +168,10 @@ public class StoreServiceClient {
                         log.warn("🎁 [HTTP] 굿즈 가격 정보 없음 - goodsId: {}", goodsId);
                         return clientResponse.createException();
                     })
+                    .onStatus(HttpStatus.SERVICE_UNAVAILABLE::equals, clientResponse -> {
+                        log.error("🚨 [HTTP] 스토어 서비스 사용불가 - goodsId: {}", goodsId);
+                        return clientResponse.createException();
+                    })
                     .bodyToMono(PRICE_RESPONSE_TYPE)
                     .timeout(Duration.ofMillis(timeoutMs))
                     .block();
@@ -139,14 +188,17 @@ public class StoreServiceClient {
             if (e.getStatusCode() == HttpStatus.NOT_FOUND) {
                 log.warn("🎁 [HTTP] 굿즈 가격 정보 없음 - goodsId: {}", goodsId);
                 return null;
+            } else if (e.getStatusCode() == HttpStatus.SERVICE_UNAVAILABLE) {
+                log.error("🚨 [HTTP] 스토어 서비스 사용불가 (503) - goodsId: {}", goodsId);
+                throw e; // Circuit Breaker가 감지할 수 있도록 예외 재발생
             } else {
                 log.error("❌ [HTTP] 굿즈 가격 조회 실패 - goodsId: {}, status: {}, error: {}",
                         goodsId, e.getStatusCode(), e.getMessage());
-                return null;
+                throw e; // Circuit Breaker가 감지할 수 있도록 예외 재발생
             }
         } catch (Exception e) {
             log.error("❌ [HTTP] 굿즈 가격 조회 예외 - goodsId: {}, error: {}", goodsId, e.getMessage(), e);
-            return null;
+            throw e; // Circuit Breaker가 감지할 수 있도록 예외 재발생
         }
     }
 

@@ -2,7 +2,7 @@ package com.popcorn.checkIns.event;
 
 import com.fasterxml.jackson.databind.ObjectMapper;
 import com.popcorn.checkIns.event.CheckinEvents.*;
-import com.popcorn.common.constants.EventConstants;
+import com.popcorn.checkIns.constants.EventConstants;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.data.redis.connection.stream.StreamRecords;

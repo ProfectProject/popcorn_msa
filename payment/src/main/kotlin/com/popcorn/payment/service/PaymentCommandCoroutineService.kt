@@ -1,20 +1,22 @@
 package com.popcorn.payment.service
 
-import com.popcorn.payment.config.CoroutineTransactionManager
 import com.popcorn.payment.config.TransactionalOperation
 import com.popcorn.payment.entity.Payment
 import com.popcorn.payment.entity.PaymentMethod
 import com.popcorn.payment.entity.PaymentStatus
 import com.popcorn.payment.exception.PaymentException
 import com.popcorn.payment.repository.PaymentRepository
-import com.popcorn.payment.event.BasePaymentEventPublisher
-import com.popcorn.payment.event.PaymentCreatedEvent
-import com.popcorn.payment.event.PaymentApprovedEvent
-import com.popcorn.payment.event.EventLineItem
+import com.popcorn.payment.event.base.BasePaymentEventPublisher
+import com.popcorn.payment.event.domain.payment.PaymentCreatedEvent
+import com.popcorn.payment.event.domain.payment.PaymentApprovedEvent
+import com.popcorn.payment.event.domain.payment.EventLineItem
 import org.slf4j.LoggerFactory
 import org.springframework.stereotype.Service
+import org.springframework.transaction.annotation.Transactional
 import java.time.LocalDateTime
 import java.util.*
+import kotlinx.coroutines.CoroutineScope
+import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.GlobalScope
 import kotlinx.coroutines.launch
 
@@ -33,7 +35,6 @@ import kotlinx.coroutines.launch
  */
 @Service
 class PaymentCommandCoroutineService(
-    private val transactionManager: CoroutineTransactionManager,
     private val paymentRepository: PaymentRepository,
     private val paymentEventPublisher: BasePaymentEventPublisher,
     private val paymentOrderInfoService: PaymentOrderInfoService
@@ -61,7 +62,7 @@ class PaymentCommandCoroutineService(
      * - @Transactional이 클래스 레벨에 적용되어 자동 관리
      * - 코루틴에서도 동일한 트랜잭션 컨텍스트 유지
      */
-    @TransactionalOperation
+    @Transactional
     suspend fun createPayment(
         orderId: UUID,
         paymentMethod: String,
@@ -69,9 +70,7 @@ class PaymentCommandCoroutineService(
         paymentKey: String? = null,
         rawPayload: String
     ): PaymentCreationResult {
-        return transactionManager.executeInTransactionSuspend {
-            createPaymentBlocking(orderId, paymentMethod, amount, paymentKey, rawPayload)
-        }
+        return createPaymentBlocking(orderId, paymentMethod, amount, paymentKey, rawPayload)
     }
 
     internal fun createPaymentBlocking(
@@ -113,7 +112,7 @@ class PaymentCommandCoroutineService(
 
         // 🚀 표준 PAYMENT_CREATED 이벤트 발행
         // 이벤트 발행을 별도 코루틴에서 수행
-        GlobalScope.launch {
+        CoroutineScope(Dispatchers.Default).launch {
             publishPaymentCreatedEvent(savedPayment)
         }
 
@@ -133,16 +132,14 @@ class PaymentCommandCoroutineService(
      * @param approvedAt 승인 시간 (선택)
      * @param rawPayload 토스 응답 데이터 (선택)
      */
-    @TransactionalOperation
+    @Transactional
     suspend fun updatePaymentStatus(
         paymentId: UUID,
         status: String,
         approvedAt: LocalDateTime? = null,
         rawPayload: String? = null
     ): PaymentDetailResult {
-        return transactionManager.executeInTransactionSuspend {
-            updatePaymentStatusBlocking(paymentId, status, approvedAt, rawPayload)
-        }
+        return updatePaymentStatusBlocking(paymentId, status, approvedAt, rawPayload)
     }
 
     internal fun updatePaymentStatusBlocking(
@@ -181,7 +178,7 @@ class PaymentCommandCoroutineService(
         // 🚀 결제 승인 시 표준 PAYMENT_APPROVED 이벤트 발행
         if (savedPayment.status == PaymentStatus.PAID) {
             // 이벤트 발행을 별도 코루틴에서 수행
-            GlobalScope.launch {
+            CoroutineScope(Dispatchers.Default).launch {
                 publishPaymentApprovedEvent(savedPayment)
             }
         }
@@ -203,21 +200,20 @@ class PaymentCommandCoroutineService(
      * @param paymentKey 토스 결제 키
      * @return 기존 결제 목록
      */
+    @Transactional(readOnly = true)
     suspend fun findByPaymentKey(paymentKey: String): List<PaymentDetailResult> {
-        return transactionManager.executeInReadOnlyTransactionSuspend {
-            paymentRepository.findByPaymentKeyAndDeletedAtIsNullOrderByCreatedAtDesc(paymentKey)
-                .map { payment ->
-                    PaymentDetailResult(
-                        paymentId = payment.id,
-                        orderId = payment.orderId,
-                        paymentKey = payment.paymentKey,
-                        status = payment.status.name,
-                        amount = payment.amount,
-                        approvedAt = payment.approvedAt,
-                        rawPayload = payment.rawPayload
-                    )
-                }
-        }
+        return paymentRepository.findByPaymentKeyAndDeletedAtIsNullOrderByCreatedAtDesc(paymentKey)
+            .map { payment ->
+                PaymentDetailResult(
+                    paymentId = payment.id,
+                    orderId = payment.orderId,
+                    paymentKey = payment.paymentKey,
+                    status = payment.status.name,
+                    amount = payment.amount,
+                    approvedAt = payment.approvedAt,
+                    rawPayload = payment.rawPayload
+                )
+            }
     }
 
     /**
@@ -226,21 +222,20 @@ class PaymentCommandCoroutineService(
      * @param orderId 주문 ID
      * @return 최신 결제 정보
      */
+    @Transactional(readOnly = true)
     suspend fun getLatestPaymentByOrderId(orderId: UUID): PaymentDetailResult {
-        return transactionManager.executeInReadOnlyTransactionSuspend {
-            val payment = paymentRepository.findFirstByOrderIdAndDeletedAtIsNullOrderByCreatedAtDesc(orderId)
-                ?: throw PaymentException.paymentNotFound()
+        val payment = paymentRepository.findFirstByOrderIdAndDeletedAtIsNullOrderByCreatedAtDesc(orderId)
+            ?: throw PaymentException.paymentNotFound()
 
-            PaymentDetailResult(
-                paymentId = payment.id,
-                orderId = payment.orderId,
-                paymentKey = payment.paymentKey,
-                status = payment.status.name,
-                amount = payment.amount,
-                approvedAt = payment.approvedAt,
-                rawPayload = payment.rawPayload
-            )
-        }
+        return PaymentDetailResult(
+            paymentId = payment.id,
+            orderId = payment.orderId,
+            paymentKey = payment.paymentKey,
+            status = payment.status.name,
+            amount = payment.amount,
+            approvedAt = payment.approvedAt,
+            rawPayload = payment.rawPayload
+        )
     }
 
     /**
@@ -343,7 +338,7 @@ class PaymentCommandCoroutineService(
                     )
                 }
 
-                GlobalScope.launch {
+                CoroutineScope(Dispatchers.Default).launch {
                     paymentEventPublisher.publish(event)
                     log.info("✅ [PAYMENT] PAYMENT_APPROVED 이벤트 발행 완료 - paymentId: {}, eventId: {}",
                         payment.id, event.eventId)

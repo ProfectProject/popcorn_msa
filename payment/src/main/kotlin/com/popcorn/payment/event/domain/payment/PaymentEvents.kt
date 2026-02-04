@@ -1,5 +1,7 @@
-package com.popcorn.payment.event
+package com.popcorn.payment.event.domain.payment
 
+import com.popcorn.payment.constants.EventConstants
+import com.popcorn.payment.event.base.BasePaymentEvent
 import com.popcorn.payment.event.integration.PaymentSuccessIntegrationEvent
 import java.time.LocalDateTime
 import java.util.*
@@ -36,7 +38,7 @@ data class PaymentCreatedEvent(
     val occurredAt: LocalDateTime = LocalDateTime.now()
 ) : BasePaymentEvent(
     paymentId = _paymentId,
-    eventType = "payment-created",
+    eventType = EventConstants.EventTypes.PAYMENT_CREATED,
     userId = customerId
 ) {
     override fun getEventPayload(): Map<String, Any> = buildMap {
@@ -103,7 +105,7 @@ data class PaymentApprovedEvent(
     val occurredAt: LocalDateTime = LocalDateTime.now()
 ) : BasePaymentEvent(
     paymentId = _paymentId,
-    eventType = "payment-approved",
+    eventType = EventConstants.EventTypes.PAYMENT_APPROVED,
     userId = customerId
 ) {
     override fun getEventPayload(): Map<String, Any> = buildMap {
@@ -171,7 +173,7 @@ data class PaymentFailedEvent(
     val occurredAt: LocalDateTime = LocalDateTime.now()
 ) : BasePaymentEvent(
     paymentId = _paymentId,
-    eventType = "payment-failed",
+    eventType = EventConstants.EventTypes.PAYMENT_FAILED,
     userId = customerId
 ) {
     override fun getEventPayload(): Map<String, Any> = mapOf(
@@ -200,7 +202,7 @@ data class PaymentCancelledEvent(
     val occurredAt: LocalDateTime = LocalDateTime.now()
 ) : BasePaymentEvent(
     paymentId = _paymentId,
-    eventType = "payment-cancelled",
+    eventType = EventConstants.EventTypes.PAYMENT_CANCELLED,
     userId = customerId
 ) {
     override fun getEventPayload(): Map<String, Any> = mapOf(
@@ -229,7 +231,7 @@ data class PaymentCancelFailedEvent(
     val occurredAt: LocalDateTime = LocalDateTime.now()
 ) : BasePaymentEvent(
     paymentId = _paymentId,
-    eventType = "payment-cancel-failed",
+    eventType = EventConstants.EventTypes.PAYMENT_CANCEL_FAILED,
     userId = customerId
 ) {
     override fun getEventPayload(): Map<String, Any> = mapOf(
@@ -257,7 +259,7 @@ data class PaymentExpiredEvent(
     val occurredAt: LocalDateTime = LocalDateTime.now()
 ) : BasePaymentEvent(
     paymentId = _paymentId,
-    eventType = "payment-expired",
+    eventType = EventConstants.EventTypes.PAYMENT_EXPIRED,
     userId = null // 만료 이벤트는 사용자 정보가 없을 수 있음
 ) {
     override fun getEventPayload(): Map<String, Any> = mapOf(
@@ -287,7 +289,7 @@ data class PaymentSuccessEvent(
     val occurredAt: LocalDateTime = LocalDateTime.now()
 ) : BasePaymentEvent(
     paymentId = _paymentId,
-    eventType = "payment-success",
+    eventType = EventConstants.EventTypes.PAYMENT_SUCCESS,
     userId = null // userId는 orderItems나 별도 조회를 통해 확인
 ) {
     override fun getEventPayload(): Map<String, Any> = buildMap {
@@ -330,7 +332,7 @@ data class PaymentUserCancelledEvent(
     val occurredAt: LocalDateTime = LocalDateTime.now()
 ) : BasePaymentEvent(
     paymentId = _paymentId,
-    eventType = "payment-user-cancelled",
+    eventType = EventConstants.EventTypes.PAYMENT_USER_CANCELLED,
     userId = customerId
 ) {
     override fun getEventPayload(): Map<String, Any> = mapOf(
@@ -359,7 +361,7 @@ data class PaymentCancelSucceededEvent(
     val occurredAt: LocalDateTime = LocalDateTime.now()
 ) : BasePaymentEvent(
     paymentId = _paymentId,
-    eventType = "payment-cancel-succeeded",
+    eventType = EventConstants.EventTypes.PAYMENT_CANCEL_SUCCEEDED,
     userId = customerId
 ) {
     override fun getEventPayload(): Map<String, Any> = mapOf(
@@ -391,7 +393,7 @@ data class PaymentCreateRequestedEvent(
     val occurredAt: LocalDateTime = LocalDateTime.now()
 ) : BasePaymentEvent(
     paymentId = _paymentId,
-    eventType = "payment-create-requested",
+    eventType = EventConstants.EventTypes.PAYMENT_CREATE_REQUESTED,
     userId = customerId
 ) {
     override fun getEventPayload(): Map<String, Any> = buildMap {
@@ -423,7 +425,7 @@ data class PaymentCancelRequestedEvent(
     val occurredAt: LocalDateTime = LocalDateTime.now()
 ) : BasePaymentEvent(
     paymentId = _paymentId,
-    eventType = "payment-cancel-requested",
+    eventType = EventConstants.EventTypes.PAYMENT_CANCEL_REQUESTED,
     userId = customerId
 ) {
     override fun getEventPayload(): Map<String, Any> = mapOf(
@@ -449,7 +451,7 @@ data class OrderInfoRequestPaymentEvent(
     val occurredAt: LocalDateTime = LocalDateTime.now()
 ) : BasePaymentEvent(
     paymentId = _requestId,
-    eventType = "order-info-request",
+    eventType = EventConstants.EventTypes.ORDER_INFO_REQUEST,
     userId = null
 ) {
     override fun getEventPayload(): Map<String, Any> = mapOf(

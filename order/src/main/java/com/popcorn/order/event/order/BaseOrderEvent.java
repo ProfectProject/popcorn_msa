@@ -5,6 +5,7 @@ import java.util.UUID;
 
 import com.fasterxml.jackson.annotation.JsonSubTypes;
 import com.fasterxml.jackson.annotation.JsonTypeInfo;
+import com.popcorn.order.constants.EventConstants;
 import com.popcorn.common.event.BaseEvent;
 
 import lombok.Getter;
@@ -28,11 +29,11 @@ import lombok.Getter;
  */
 @JsonTypeInfo(use = JsonTypeInfo.Id.NAME, property = "@type")
 @JsonSubTypes({
-    @JsonSubTypes.Type(value = OrderCreatedEvent.class, name = "order_created"),
-    @JsonSubTypes.Type(value = OrderStatusChangedEvent.class, name = "order_status_changed"),
-    @JsonSubTypes.Type(value = OrderCancelledEvent.class, name = "order_cancelled"),
-    @JsonSubTypes.Type(value = OrderCompletedEvent.class, name = "order_completed"),
-    @JsonSubTypes.Type(value = OrderPaidEvent.class, name = "order_paid")
+    @JsonSubTypes.Type(value = OrderCreatedEvent.class, name = EventConstants.EventTypes.ORDER_CREATED),
+    @JsonSubTypes.Type(value = OrderStatusChangedEvent.class, name = EventConstants.EventTypes.ORDER_STATUS_CHANGED),
+    @JsonSubTypes.Type(value = OrderCancelledEvent.class, name = EventConstants.EventTypes.ORDER_CANCELLED),
+    @JsonSubTypes.Type(value = OrderCompletedEvent.class, name = EventConstants.EventTypes.ORDER_COMPLETED),
+    @JsonSubTypes.Type(value = OrderPaidEvent.class, name = "order-paid")
 })
 @Getter
 public abstract class BaseOrderEvent extends BaseEvent {

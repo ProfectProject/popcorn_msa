@@ -3,6 +3,7 @@ package com.popcorn.order.event.order;
 import java.util.Map;
 import java.util.UUID;
 
+import com.popcorn.order.constants.EventConstants;
 import com.popcorn.order.entity.Order;
 import com.popcorn.order.entity.OrderStatus;
 import com.popcorn.order.entity.ItemType;
@@ -46,7 +47,7 @@ public class OrderCreatedEvent extends BaseOrderEvent {
         // 부모 클래스에 이벤트 기본 정보 전달
         super(
             order.getId(),                      // 주문 ID
-            "order_created",                    // 이벤트 타입 이름
+            EventConstants.EventTypes.ORDER_CREATED,  // 이벤트 타입 이름
             order.getCustomerId(),              // 주문한 고객 ID
             createEventMetadata(order, idempotencyKey)  // 추가 메타데이터
         );
