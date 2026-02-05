@@ -27,8 +27,10 @@ import com.popcorn.order.entity.OrderStatusHistory;
 import com.popcorn.order.entity.ItemType;
 import com.popcorn.order.event.order.OrderCreatedEvent;
 import com.popcorn.order.event.order.OrderStatusChangedEvent;
+//import com.popcorn.order.event.TestProducer;
 import com.popcorn.order.event.order.OrderCancelledEvent;
 import com.popcorn.order.event.publisher.OrderEventPublisher;
+import com.popcorn.order.kafka.event.OrderEventProducer;
 import com.popcorn.order.repository.OrderRepository;
 import com.popcorn.order.repository.OrderItemRepository;
 import com.popcorn.order.repository.OrderStatusHistoryRepository;
@@ -69,6 +71,8 @@ public class OrderCommandService {
     private final OrderReservationAwaiter orderReservationAwaiter;
     private final IdempotencyService idempotencyService;
     private final CircuitBreakerFactory circuitBreakerFactory;
+    private final OrderEventProducer orderEventProducer;
+
 
     // 🚀 극한 성능 최적화 서비스들 (목표: 1초 미만)
     private final OrderPerformanceMonitor performanceMonitor;
@@ -147,6 +151,18 @@ public class OrderCommandService {
         boolean hasGoodsItems = result.hasGoodsItems();
         boolean hasReservationItems = result.hasReservationItems();
 
+        /*!!!!kafka : 주문 생성 이벤트 발행 !!!*/
+        //testProducer.sendMessage("eventType: order_created");
+        // 
+        /*orderEventProducer.publishOrderCreated(
+                    savedOrder.getId(),
+                    savedOrder.getOrderNo(),
+                    savedOrder.getCustomerId(),
+                    savedOrder.getOrderType().name(),
+                    savedOrder.getPopupId(),
+                    savedOrder.getTotalAmount(),
+                    null);*/
+        
         log.info("⚡ 주문 DB 생성 완료 - 주문번호: {}, 처리시간: {}ms",
                 savedOrder.getOrderNo(), System.currentTimeMillis() - startTime);
 
@@ -213,6 +229,8 @@ public class OrderCommandService {
 
         // 주문 생성 이벤트 발행 (중복 제거 완료)
         eventPublisher.publishEvent(new OrderCreatedEvent(latestOrder, null));
+        /*kafka 이벤트 발행 */
+        orderEventProducer.publishOrderCreated(latestOrder,hasGoodsItems,hasReservationItems);
         orderCacheService.evictMyOrdersCache(latestOrder.getCustomerId());
 
         // 성능 모니터링 완료

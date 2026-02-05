@@ -6,6 +6,11 @@ server:
 
 
 spring:
+  kafka:
+    enabled: true
+    bootstrap-servers: localhost:29092
+    consumer:
+      group-id: order-service-group
   config:
     activate:
       on-profile: local
@@ -172,6 +177,10 @@ logging:
     org.springframework.boot.web: WARN
     org.hibernate.SQL: INFO  # DEBUG → INFO (SQL 로깅 최소화로 큰 성능 향상)
     org.springframework.security: WARN
+    com.adjh.springbootkafka: DEBUG
+    org:
+      apache.kafka: INFO
+      springframework.kafka: INFO
 
 # 외부 서비스 설정
 external:

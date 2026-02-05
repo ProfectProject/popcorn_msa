@@ -38,25 +38,19 @@ public class KafkaConfig {
      * Producer 설정을 위한 Factory Bean
      * - 메시지 생산자의 직렬화 설정 및 서버 연결 설정을 담당
      *
-     * @return ProducerFactory<String, String>
+     * @return ProducerFactory<String, Object>
      */
     @Bean
-    public ProducerFactory<String, String> producerFactory() {
+    public ProducerFactory<String, Object> producerFactory() {
         Map<String, Object> props = new HashMap<>();
         props.put(ProducerConfig.BOOTSTRAP_SERVERS_CONFIG, bootstrapServers);
-        props.put(ProducerConfig.KEY_SERIALIZER_CLASS_CONFIG, StringSerializer.class);
-        props.put(ProducerConfig.VALUE_SERIALIZER_CLASS_CONFIG, StringSerializer.class);
+        props.put(ProducerConfig.KEY_SERIALIZER_CLASS_CONFIG, org.apache.kafka.common.serialization.StringSerializer.class);
+        props.put(ProducerConfig.VALUE_SERIALIZER_CLASS_CONFIG, org.springframework.kafka.support.serializer.JsonSerializer.class);
         return new DefaultKafkaProducerFactory<>(props);
     }
 
-    /**
-     * Kafka 메시지를 전송하기 위한 템플릿 Bean
-     * 실제 애플리케이션에서 메시지 전송시 사용됨
-     *
-     * @return KafkaTemplate<String, String>
-     */
     @Bean
-    public KafkaTemplate<String, String> kafkaTemplate() {
+    public KafkaTemplate<String, Object> kafkaTemplate() {
         return new KafkaTemplate<>(producerFactory());
     }
 

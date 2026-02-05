@@ -13,7 +13,7 @@ import com.popcorn.users.users.dto.UserAddressRequest;
 import com.popcorn.users.users.dto.UserUpdateRequest;
 import com.popcorn.users.users.entity.User;
 import com.popcorn.users.users.entity.UserAddress;
-import com.popcorn.users.users.event.TestProducer;
+//import com.popcorn.users.users.event.TestProducer;
 import com.popcorn.users.users.repository.UserAddressRepository;
 import com.popcorn.users.users.repository.UserRepository;
 //import com.popcorn.demo.global.exception.ValidationException;
@@ -35,7 +35,7 @@ public class UserService {
     private final UserRepository userRepository;
     private final PasswordEncoder passwordEncoder;
     private final UserAddressRepository userAddressRepository;
-    private final TestProducer testProducer;
+    //private final TestProducer testProducer;
 
     //추가
 
@@ -178,7 +178,7 @@ public class UserService {
         
         log.debug("Saving address for userId: {}", userId);
         UserAddress savedAddress = userAddressRepository.save(address);
-        testProducer.sendMessage("kafka teset");
+        //testProducer.sendMessage("kafka teset");
         log.debug("Address saved successfully with id: {}", savedAddress.getId());
         return savedAddress;
     }
