@@ -2,6 +2,7 @@ package com.popcorn.payment.service
 
 import com.fasterxml.jackson.databind.ObjectMapper
 import com.popcorn.payment.config.ReadOnlyOperation
+import com.popcorn.payment.constants.EventConstants
 import com.popcorn.payment.exception.PaymentException
 import kotlinx.coroutines.*
 import org.slf4j.LoggerFactory
@@ -69,11 +70,11 @@ class OrderQueryCoroutineService(
 
             // 주문 조회 요청 이벤트 발행
             val queryEvent = mapOf(
-                "eventType" to "ORDER_QUERY_REQUEST",
+                EventConstants.MetadataKeys.EVENT_TYPE to "ORDER_QUERY_REQUEST",
                 "orderId" to orderId.toString(),
-                "correlationId" to correlationId,
+                EventConstants.MetadataKeys.CORRELATION_ID to correlationId,
                 "requestedBy" to "payment-service",
-                "timestamp" to LocalDateTime.now().toString()
+                EventConstants.MetadataKeys.TIMESTAMP to LocalDateTime.now().toString()
             )
 
             redisTemplate.opsForStream<String, String>()
@@ -114,13 +115,13 @@ class OrderQueryCoroutineService(
 
             // 주문 상태 업데이트 이벤트 발행
             val updateEvent = mapOf(
-                "eventType" to "ORDER_STATUS_UPDATE_REQUEST",
+                EventConstants.MetadataKeys.EVENT_TYPE to "ORDER_STATUS_UPDATE_REQUEST",
                 "orderId" to orderId.toString(),
                 "newStatus" to status,
                 "reason" to reason,
-                "correlationId" to correlationId,
+                EventConstants.MetadataKeys.CORRELATION_ID to correlationId,
                 "requestedBy" to "payment-service",
-                "timestamp" to LocalDateTime.now().toString()
+                EventConstants.MetadataKeys.TIMESTAMP to LocalDateTime.now().toString()
             )
 
             redisTemplate.opsForStream<String, String>()

@@ -1,6 +1,7 @@
 package com.popcorn.order.controller;
 
 import com.popcorn.order.monitor.ExternalServiceHealthMonitor;
+import io.swagger.v3.oas.annotations.Hidden;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.http.ResponseEntity;
@@ -14,6 +15,7 @@ import java.util.Map;
  * 시스템 상태 및 외부 서비스 상태 조회 API
  * 운영 모니터링 및 장애 대응을 위한 헬스 체크 엔드포인트 제공
  */
+@Hidden
 @RestController
 @RequestMapping("/api/orders/health")
 @RequiredArgsConstructor

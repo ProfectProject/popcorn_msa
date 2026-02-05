@@ -43,7 +43,7 @@ data class InventoryConfirmationRequestedEvent(
     val relatedPaymentId: UUID
 ) : BasePaymentEvent(
     paymentId = relatedPaymentId,
-    eventType = EventConstants.EventTypes.INVENTORY_CONFIRMATION_REQUESTED
+    eventType = EventConstants.EventTypes.Integration.INVENTORY_CONFIRMATION_REQUESTED
 ) {
 
     override fun getEventPayload(): Map<String, Any> = mapOf(
@@ -53,7 +53,7 @@ data class InventoryConfirmationRequestedEvent(
         "reason" to reason,
         "requestedAt" to requestedAt.toString(),
         "occurredAt" to occurredAt.toString(),
-        "eventId" to eventId
+        EventConstants.MetadataKeys.EVENT_ID to eventId
     )
 
     companion object {

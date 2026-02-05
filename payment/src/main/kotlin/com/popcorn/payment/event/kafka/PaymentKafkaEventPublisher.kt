@@ -28,19 +28,6 @@ class PaymentKafkaEventPublisher(
 ) {
     private val log = LoggerFactory.getLogger(PaymentKafkaEventPublisher::class.java)
 
-    // Topic 이름 상수 - 최신 토픽 구조 반영
-    companion object {
-        private const val PAYMENT_EVENTS_TOPIC = "payment-events"
-        private const val PAYMENT_REQUESTS_TOPIC = "payment-requests"
-        private const val ORDER_EVENTS_TOPIC = "order-events"
-        private const val ORDER_REQUESTS_TOPIC = "order-requests"
-        private const val ORDER_INFO_REQUESTS_TOPIC = "order-info-requests"
-        private const val STORE_EVENTS_TOPIC = "store-events"
-        private const val STORE_REQUESTS_TOPIC = "store-requests"
-        private const val CHECKIN_EVENTS_TOPIC = "checkin-events"
-        private const val CHECKIN_REQUESTS_TOPIC = "checkin-requests"
-    }
-
     /**
      * 이벤트를 Kafka로 발행
      * - 동기 발행 (실패 시 예외 발생)
@@ -114,14 +101,14 @@ class PaymentKafkaEventPublisher(
         // BasePaymentEvent인 경우 BaseEvent의 메타데이터 활용
         if (event is BasePaymentEvent) {
             eventData.putAll(mapOf(
-                "eventType" to event.eventType,
-                "eventId" to event.eventId.toString(),
-                "aggregateId" to event.aggregateId.toString(),
-                "aggregateType" to event.aggregateType,
-                "timestamp" to event.timestamp.toString(),
-                "eventVersion" to event.eventVersion,
-                "correlationId" to event.correlationId.toString(),
-                "userId" to event.userId?.toString(),
+                EventConstants.MetadataKeys.EVENT_TYPE to event.eventType,
+                EventConstants.MetadataKeys.EVENT_ID to event.eventId.toString(),
+                EventConstants.MetadataKeys.AGGREGATE_ID to event.aggregateId.toString(),
+                EventConstants.MetadataKeys.AGGREGATE_TYPE to event.aggregateType,
+                EventConstants.MetadataKeys.TIMESTAMP to event.timestamp.toString(),
+                EventConstants.MetadataKeys.EVENT_VERSION to event.eventVersion,
+                EventConstants.MetadataKeys.CORRELATION_ID to event.correlationId.toString(),
+                EventConstants.MetadataKeys.USER_ID to event.userId?.toString(),
                 // eventPayload 추가
                 *event.eventPayload.toList().toTypedArray()
             ))
@@ -133,8 +120,8 @@ class PaymentKafkaEventPublisher(
         } else {
             // 기존 방식 (비-BaseEvent 이벤트용)
             eventData.putAll(mapOf(
-                "eventType" to eventType,
-                "eventId" to java.util.UUID.randomUUID().toString(),
+                EventConstants.MetadataKeys.EVENT_TYPE to eventType,
+                EventConstants.MetadataKeys.EVENT_ID to java.util.UUID.randomUUID().toString(),
                 "eventTime" to java.time.LocalDateTime.now().toString()
             ))
 
@@ -156,98 +143,98 @@ class PaymentKafkaEventPublisher(
         return when (event) {
             // 기존 Payment Events
             is PaymentCreatedEvent -> Triple(
-                PAYMENT_EVENTS_TOPIC,
+                EventConstants.Streams.PAYMENT_EVENTS,
                 event.eventType,
                 extractPartitionKey(event.paymentId.toString(), event.orderId?.toString())
             )
             is PaymentApprovedEvent -> Triple(
-                PAYMENT_EVENTS_TOPIC,
+                EventConstants.Streams.PAYMENT_EVENTS,
                 event.eventType,
                 extractPartitionKey(event.paymentId.toString(), event.orderId?.toString())
             )
             is PaymentFailedEvent -> Triple(
-                PAYMENT_EVENTS_TOPIC,
+                EventConstants.Streams.PAYMENT_EVENTS,
                 event.eventType,
                 extractPartitionKey(event.paymentId.toString(), event.orderId?.toString())
             )
             is PaymentCancelledEvent -> Triple(
-                PAYMENT_EVENTS_TOPIC,
+                EventConstants.Streams.PAYMENT_EVENTS,
                 event.eventType,
                 extractPartitionKey(event.paymentId.toString(), event.orderId?.toString())
             )
             is PaymentCancelFailedEvent -> Triple(
-                PAYMENT_EVENTS_TOPIC,
+                EventConstants.Streams.PAYMENT_EVENTS,
                 event.eventType,
                 extractPartitionKey(event.paymentId.toString(), null)
             )
             is PaymentExpiredEvent -> Triple(
-                PAYMENT_EVENTS_TOPIC,
+                EventConstants.Streams.PAYMENT_EVENTS,
                 event.eventType,
                 extractPartitionKey(event.paymentId.toString(), null)
             )
             is PaymentSuccessEvent -> Triple(
-                PAYMENT_EVENTS_TOPIC,
+                EventConstants.Streams.PAYMENT_EVENTS,
                 event.eventType,
                 extractPartitionKey(event.paymentId.toString(), event.orderId?.toString())
             )
 
             // 새로운 Payment Events (사용자 요청)
             is PaymentUserCancelledEvent -> Triple(
-                PAYMENT_EVENTS_TOPIC,
+                EventConstants.Streams.PAYMENT_EVENTS,
                 event.eventType,
                 extractPartitionKey(event.paymentId.toString(), null)
             )
             is PaymentCancelSucceededEvent -> Triple(
-                PAYMENT_EVENTS_TOPIC,
+                EventConstants.Streams.PAYMENT_EVENTS,
                 event.eventType,
                 extractPartitionKey(event.paymentId.toString(), null)
             )
 
             // 새로운 Payment Requests (사용자 요청)
             is PaymentCreateRequestedEvent -> Triple(
-                PAYMENT_REQUESTS_TOPIC,
+                EventConstants.Streams.PAYMENT_REQUESTS,
                 event.eventType,
                 extractPartitionKey(null, event.orderId?.toString())
             )
             is PaymentCancelRequestedEvent -> Triple(
-                PAYMENT_REQUESTS_TOPIC,
+                EventConstants.Streams.PAYMENT_REQUESTS,
                 event.eventType,
                 extractPartitionKey(event.paymentId?.toString(), null)
             )
 
             // 기존 외부 도메인 이벤트들
             is PaymentCompletedEvent -> Triple(
-                PAYMENT_EVENTS_TOPIC,
-                EventConstants.EventTypes.PAYMENT_COMPLETED,
+                EventConstants.Streams.PAYMENT_EVENTS,
+                EventConstants.EventTypes.PaymentDomain.PAYMENT_SUCCESS,
                 "completed:${System.currentTimeMillis()}"
             )
             is QrCodeGenerationRequestedEvent -> Triple(
-                CHECKIN_REQUESTS_TOPIC,
+                EventConstants.Streams.CHECKIN_REQUESTS,
                 event.eventType,
                 extractPartitionKey(null, event.orderId?.toString())
             )
             is QrCodeInvalidationRequestedEvent -> Triple(
-                CHECKIN_REQUESTS_TOPIC,
+                EventConstants.Streams.CHECKIN_REQUESTS,
                 event.eventType,
                 extractPartitionKey(null, event.orderId?.toString())
             )
             is InventoryConfirmationRequestedEvent -> Triple(
-                STORE_REQUESTS_TOPIC,
+                EventConstants.Streams.STORE_REQUESTS,
                 event.eventType,
                 extractPartitionKey(null, event.orderId?.toString())
             )
             is OrderStatusUpdateRequestedEvent -> Triple(
-                ORDER_EVENTS_TOPIC,
+                EventConstants.Streams.ORDER_EVENTS,
                 event.eventType,
                 extractPartitionKey(null, event.orderId?.toString())
             )
             is PaymentCancelRetryEvent -> Triple(
-                PAYMENT_EVENTS_TOPIC,
+                EventConstants.Streams.PAYMENT_EVENTS,
                 event.eventType,
                 extractPartitionKey(event.paymentId?.toString(), null)
             )
             is PaymentCancelFinalFailureEvent -> Triple(
-                PAYMENT_EVENTS_TOPIC,
+                EventConstants.Streams.PAYMENT_EVENTS,
                 event.eventType,
                 extractPartitionKey(event.paymentId?.toString(), null)
             )
@@ -255,10 +242,10 @@ class PaymentKafkaEventPublisher(
             // BasePaymentEvent 기반 이벤트 처리 (제네릭)
             is BasePaymentEvent -> {
                 val topic = when (event.eventType) {
-                    EventConstants.EventTypes.PAYMENT_CREATE_REQUESTED,
-                    EventConstants.EventTypes.PAYMENT_CANCEL_REQUESTED -> PAYMENT_REQUESTS_TOPIC
-                    EventConstants.EventTypes.ORDER_INFO_REQUEST -> ORDER_INFO_REQUESTS_TOPIC
-                    else -> PAYMENT_EVENTS_TOPIC
+                    EventConstants.EventTypes.PaymentRequest.PAYMENT_CREATE_REQUESTED,
+                    EventConstants.EventTypes.PaymentRequest.PAYMENT_CANCEL_REQUESTED -> EventConstants.Streams.PAYMENT_REQUESTS
+                    EventConstants.EventTypes.Integration.ORDER_INFO_REQUEST -> EventConstants.Streams.ORDER_INFO_REQUESTS
+                    else -> EventConstants.Streams.PAYMENT_EVENTS
                 }
                 Triple(
                     topic,

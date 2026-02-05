@@ -51,7 +51,7 @@ data class PaymentCancelFinalFailureEvent(
     val relatedPaymentId: UUID
 ) : BasePaymentEvent(
     paymentId = relatedPaymentId,
-    eventType = EventConstants.EventTypes.PAYMENT_CANCEL_FINAL_FAILURE,
+    eventType = EventConstants.EventTypes.PaymentRetry.PAYMENT_CANCEL_FINAL_FAILURE,
     userId = customerId
 ) {
 
@@ -64,7 +64,7 @@ data class PaymentCancelFinalFailureEvent(
         "totalRetryCount" to totalRetryCount,
         "customerId" to (customerId?.toString() ?: ""),
         "occurredAt" to occurredAt.toString(),
-        "eventId" to eventId
+        EventConstants.MetadataKeys.EVENT_ID to eventId
     )
 
     companion object {

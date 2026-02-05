@@ -1,6 +1,7 @@
 package com.popcorn.payment.event.listener
 
 import com.fasterxml.jackson.databind.ObjectMapper
+import com.popcorn.payment.constants.EventConstants
 import com.popcorn.payment.service.PaymentOrderInfoService
 import com.popcorn.payment.event.domain.payment.OrderInfoResponseEvent
 import com.popcorn.payment.service.TossPaymentCoroutineService
@@ -40,7 +41,7 @@ class PaymentRedisStreamListener(
             val values = record.value
 
             log.info("🔔 [PAYMENT] Stream 메시지 수신 - stream: {}, recordId: {}, eventType: {}",
-                streamName, recordId, values["eventType"])
+                streamName, recordId, values[EventConstants.MetadataKeys.EVENT_TYPE])
 
             // 🚀 스트림별 최적화된 처리
             when (streamName) {
@@ -50,13 +51,13 @@ class PaymentRedisStreamListener(
                 }
                 "payment-events" -> {
                     // 기존 eventType 기반 처리 (성능 최적화)
-                    val rawEventType = values["eventType"] as? String
+                    val rawEventType = values[EventConstants.MetadataKeys.EVENT_TYPE] as? String
                     val eventType = rawEventType?.trim()?.trim('"')
                     handleStreamEvent(eventType, values)
                 }
                 else -> {
                     // 알려지지 않은 스트림도 기본 처리
-                    val rawEventType = values["eventType"] as? String
+                    val rawEventType = values[EventConstants.MetadataKeys.EVENT_TYPE] as? String
                     val eventType = rawEventType?.trim()?.trim('"')
                     handleStreamEvent(eventType, values)
                 }
@@ -120,7 +121,7 @@ class PaymentRedisStreamListener(
                 "PAYMENT_USER_CANCELLED" -> {
                     log.info("↩️ [PAYMENT] 결제 취소 이벤트 수신 - paymentId: {}", values["paymentId"])
                 }
-                "PAYMENT_COMPLETED" -> {
+                EventConstants.EventTypes.PaymentDomain.PAYMENT_SUCCESS -> {
                     log.info("✅ [PAYMENT] 결제 완료 이벤트 수신 - paymentId: {}", values["paymentId"])
                 }
 

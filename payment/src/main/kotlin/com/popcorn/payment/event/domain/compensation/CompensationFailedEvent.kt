@@ -28,7 +28,7 @@ data class CompensationFailedEvent(
     private val eventMetadata: Map<String, Any>? = null
 ) : BasePaymentEvent(
     paymentId = compensationId,
-    eventType = EventConstants.EventTypes.COMPENSATION_FAILED,
+    eventType = EventConstants.EventTypes.Compensation.COMPENSATION_FAILED,
     userId = eventUserId
 ) {
 
@@ -48,8 +48,8 @@ data class CompensationFailedEvent(
             "requiresManualIntervention" to requiresManualIntervention,
             "retryable" to retryable,
             "severity" to "HIGH",
-            "sourceService" to "order-service",
-            "targetService" to "payment-service"
+            EventConstants.MetadataKeys.SOURCE_SERVICE to "order-service",
+            EventConstants.MetadataKeys.TARGET_SERVICE to "payment-service"
         ).also { payload ->
             eventMetadata?.let { payload.putAll(it) }
         }

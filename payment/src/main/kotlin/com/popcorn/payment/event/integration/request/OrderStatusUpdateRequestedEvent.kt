@@ -41,7 +41,7 @@ data class OrderStatusUpdateRequestedEvent(
     val relatedPaymentId: UUID
 ) : BasePaymentEvent(
     paymentId = relatedPaymentId,
-    eventType = EventConstants.EventTypes.ORDER_STATUS_UPDATE_REQUESTED
+    eventType = EventConstants.EventTypes.Integration.ORDER_STATUS_UPDATE_REQUESTED
 ) {
 
     override fun getEventPayload(): Map<String, Any> = mapOf(
@@ -51,7 +51,7 @@ data class OrderStatusUpdateRequestedEvent(
         "reason" to (reason ?: ""),
         "requestedAt" to requestedAt.toString(),
         "occurredAt" to occurredAt.toString(),
-        "eventId" to eventId
+        EventConstants.MetadataKeys.EVENT_ID to eventId
     )
 
     companion object {
@@ -65,7 +65,7 @@ data class OrderStatusUpdateRequestedEvent(
         ): OrderStatusUpdateRequestedEvent {
             return OrderStatusUpdateRequestedEvent(
                 orderId = orderId,
-                newStatus = "FAILED",
+                newStatus = EventConstants.EventStatus.FAILED,
                 reason = reason,
                 requestedAt = LocalDateTime.now(),
                 occurredAt = LocalDateTime.now(),
@@ -82,7 +82,7 @@ data class OrderStatusUpdateRequestedEvent(
         ): OrderStatusUpdateRequestedEvent {
             return OrderStatusUpdateRequestedEvent(
                 orderId = orderId,
-                newStatus = "EXPIRED",
+                newStatus = EventConstants.EventStatus.EXPIRED,
                 reason = "결제 만료",
                 requestedAt = LocalDateTime.now(),
                 occurredAt = LocalDateTime.now(),

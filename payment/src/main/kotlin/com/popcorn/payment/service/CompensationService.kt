@@ -1,5 +1,6 @@
 package com.popcorn.payment.service
 
+import com.popcorn.payment.constants.EventConstants
 import com.popcorn.payment.event.base.BasePaymentEventPublisher
 import com.popcorn.payment.event.domain.compensation.CompensationRequestedEvent
 import com.popcorn.payment.event.domain.compensation.PaymentValidationFailedEvent
@@ -372,7 +373,7 @@ class CompensationService(
                 actionType = "UPDATE_ORDER_STATUS",
                 targetResource = "order",
                 parameters = mapOf(
-                    "newStatus" to "FAILED",
+                    "newStatus" to EventConstants.EventStatus.FAILED,
                     "reason" to "partial_failure_at_$failedStep"
                 )
             )

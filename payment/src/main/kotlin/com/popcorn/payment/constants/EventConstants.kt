@@ -12,42 +12,50 @@ object EventConstants {
     object EventTypes {
 
         // ================ Payment Domain Events ================
-        const val PAYMENT_CREATED = "PAYMENT_CREATED"
-        const val PAYMENT_APPROVED = "PAYMENT_APPROVED"
-        const val PAYMENT_FAILED = "PAYMENT_FAILED"
-        const val PAYMENT_CANCELLED = "PAYMENT_CANCELLED"
-        const val PAYMENT_USER_CANCELLED = "PAYMENT_USER_CANCELLED"
-        const val PAYMENT_CANCEL_SUCCEEDED = "PAYMENT_CANCEL_SUCCEEDED"
-        const val PAYMENT_CANCEL_FAILED = "PAYMENT_CANCEL_FAILED"
-        const val PAYMENT_EXPIRED = "PAYMENT_EXPIRED"
-        const val PAYMENT_SUCCESS = "PAYMENT_SUCCESS"
+        object PaymentDomain {
+            const val PAYMENT_CREATED = "PAYMENT_CREATED"
+            const val PAYMENT_APPROVED = "PAYMENT_APPROVED"
+            const val PAYMENT_FAILED = "PAYMENT_FAILED"
+            const val PAYMENT_CANCELLED = "PAYMENT_CANCELLED"
+            const val PAYMENT_USER_CANCELLED = "PAYMENT_USER_CANCELLED"
+            const val PAYMENT_CANCEL_SUCCEEDED = "PAYMENT_CANCEL_SUCCEEDED"
+            const val PAYMENT_CANCEL_FAILED = "PAYMENT_CANCEL_FAILED"
+            const val PAYMENT_EXPIRED = "PAYMENT_EXPIRED"
+            const val PAYMENT_SUCCESS = "PAYMENT_SUCCESS"
+        }
 
         // ================ Payment Request Events ================
-        const val PAYMENT_CREATE_REQUESTED = "PAYMENT_CREATE_REQUESTED"
-        const val PAYMENT_CANCEL_REQUESTED = "PAYMENT_CANCEL_REQUESTED"
+        object PaymentRequest {
+            const val PAYMENT_CREATE_REQUESTED = "PAYMENT_CREATE_REQUESTED"
+            const val PAYMENT_CANCEL_REQUESTED = "PAYMENT_CANCEL_REQUESTED"
+        }
 
         // ================ Payment Retry/Recovery Events ================
-        const val PAYMENT_CANCEL_RETRY = "PAYMENT_CANCEL_RETRY"
-        const val PAYMENT_CANCEL_FINAL_FAILURE = "PAYMENT_CANCEL_FINAL_FAILURE"
+        object PaymentRetry {
+            const val PAYMENT_CANCEL_RETRY = "PAYMENT_CANCEL_RETRY"
+            const val PAYMENT_CANCEL_FINAL_FAILURE = "PAYMENT_CANCEL_FINAL_FAILURE"
+        }
 
         // ================ Integration Events ================
-        const val QR_GENERATION_REQUESTED = "QR_GENERATION_REQUESTED"
-        const val QR_INVALIDATION_REQUESTED = "QR_INVALIDATION_REQUESTED"
-        const val ORDER_STATUS_UPDATE_REQUESTED = "ORDER_STATUS_UPDATE_REQUESTED"
-        const val INVENTORY_CONFIRMATION_REQUESTED = "INVENTORY_CONFIRMATION_REQUESTED"
-        const val ORDER_INFO_REQUEST = "ORDER_INFO_REQUEST"
-        const val ORDER_INFO_RESPONSE = "ORDER_INFO_RESPONSE"
+        object Integration {
+            const val QR_GENERATION_REQUESTED = "QR_GENERATION_REQUESTED"
+            const val QR_INVALIDATION_REQUESTED = "QR_INVALIDATION_REQUESTED"
+            const val ORDER_STATUS_UPDATE_REQUESTED = "ORDER_STATUS_UPDATE_REQUESTED"
+            const val INVENTORY_CONFIRMATION_REQUESTED = "INVENTORY_CONFIRMATION_REQUESTED"
+            const val ORDER_INFO_REQUEST = "ORDER_INFO_REQUEST"
+            const val ORDER_INFO_RESPONSE = "ORDER_INFO_RESPONSE"
+        }
 
         // ================ Compensation Events ================
-        const val PAYMENT_VALIDATION_FAILED = "PAYMENT_VALIDATION_FAILED"
-        const val COMPENSATION_REQUESTED = "COMPENSATION_REQUESTED"
-        const val COMPENSATION_COMPLETED = "COMPENSATION_COMPLETED"
-        const val COMPENSATION_FAILED = "COMPENSATION_FAILED"
-        const val ORDER_COMPENSATION_REQUESTED = "ORDER_COMPENSATION_REQUESTED"
-        const val RESERVATION_CANCELLATION_REQUESTED = "RESERVATION_CANCELLATION_REQUESTED"
+        object Compensation {
+            const val PAYMENT_VALIDATION_FAILED = "PAYMENT_VALIDATION_FAILED"
+            const val COMPENSATION_REQUESTED = "COMPENSATION_REQUESTED"
+            const val COMPENSATION_COMPLETED = "COMPENSATION_COMPLETED"
+            const val COMPENSATION_FAILED = "COMPENSATION_FAILED"
+            const val ORDER_COMPENSATION_REQUESTED = "ORDER_COMPENSATION_REQUESTED"
+            const val RESERVATION_CANCELLATION_REQUESTED = "RESERVATION_CANCELLATION_REQUESTED"
+        }
 
-        // ================ Legacy Events ================
-        const val PAYMENT_COMPLETED = "PAYMENT_COMPLETED"
     }
 
     /**
@@ -57,6 +65,15 @@ object EventConstants {
         const val PAYMENT_EVENTS = "payment-events"
         const val PAYMENT_REQUESTS = "payment-requests"
         const val ORDER_INFO_REQUESTS = "order-info-requests"
+        const val ORDER_REQUESTS = "order-requests"
+        const val ORDER_EVENTS = "order-events"
+        const val STORE_EVENTS = "store-events"
+        const val STORE_REQUESTS = "store-requests"
+        const val CHECKIN_EVENTS = "checkin-events"
+        const val CHECKIN_REQUESTS = "checkin-requests"
+        const val PAYMENT_EVENTS_DLQ = "payment-events-dlq"
+        const val PAYMENT_REQUESTS_DLQ = "payment-requests-dlq"
+        const val ORDER_REQUESTS_DLQ = "order-requests-dlq"
     }
 
     /**
@@ -64,6 +81,7 @@ object EventConstants {
      */
     object ConsumerGroups {
         const val PAYMENT_SERVICE_GROUP = "payment-service-group"  // Redis Stream & Kafka 공통 사용
+        const val PAYMENT_DLQ_GROUP = "payment-dlq-group"
     }
 
     /**

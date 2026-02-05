@@ -25,7 +25,7 @@ data class CompensationCompletedEvent(
     private val eventMetadata: Map<String, Any>? = null
 ) : BasePaymentEvent(
     paymentId = compensationId,
-    eventType = EventConstants.EventTypes.COMPENSATION_COMPLETED,
+    eventType = EventConstants.EventTypes.Compensation.COMPENSATION_COMPLETED,
     userId = eventUserId
 ) {
 
@@ -41,8 +41,8 @@ data class CompensationCompletedEvent(
             "completedAt" to completedAt.toString(),
             "result" to result,
             "notes" to (notes ?: ""),
-            "sourceService" to "order-service",
-            "targetService" to "payment-service"
+            EventConstants.MetadataKeys.SOURCE_SERVICE to "order-service",
+            EventConstants.MetadataKeys.TARGET_SERVICE to "payment-service"
         ).also { payload ->
             eventMetadata?.let { payload.putAll(it) }
         }
@@ -51,7 +51,7 @@ data class CompensationCompletedEvent(
     /**
      * 보상 처리가 성공했는지 확인
      */
-    fun isSuccessful(): Boolean = result == "SUCCESS"
+    fun isSuccessful(): Boolean = result == EventConstants.EventStatus.SUCCESS
 
     /**
      * 부분 성공인지 확인
@@ -61,7 +61,7 @@ data class CompensationCompletedEvent(
     /**
      * 보상 처리가 실패했는지 확인
      */
-    fun isFailed(): Boolean = result == "FAILED"
+    fun isFailed(): Boolean = result == EventConstants.EventStatus.FAILED
 
     /**
      * 예약 취소가 완료되었는지 확인
@@ -110,7 +110,7 @@ data class CompensationCompletedEvent(
                 compensationType = compensationType,
                 completedActions = completedActions,
                 completedAt = LocalDateTime.now(),
-                result = "SUCCESS",
+                result = EventConstants.EventStatus.SUCCESS,
                 notes = notes,
                 eventUserId = eventUserId
             )
@@ -168,7 +168,7 @@ data class CompensationCompletedEvent(
                 compensationType = compensationType,
                 completedActions = completedActions,
                 completedAt = LocalDateTime.now(),
-                result = "FAILED",
+                result = EventConstants.EventStatus.FAILED,
                 notes = "Compensation failed: $failureReason",
                 eventUserId = eventUserId
             )

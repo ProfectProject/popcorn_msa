@@ -1,24 +1,31 @@
 server:
-  port: 8085
+  port: ${SERVER_PORT:8085}
   shutdown: immediate
   tomcat:
     uri-encoding: UTF-8
+
 spring:
   config:
     activate:
       on-profile: local
+
+  kafka:
+    bootstrap-servers: ${KAFKA_BOOTSTRAP_SERVERS}
+
+  # 데이터베이스 설정
   datasource:
-      url: jdbc:postgresql://${DB_HOST}:${DB_PORT}/${DB_NAME}
-      username: ${PAYMENT_DB_USERNAME}
-      password: ${PAYMENT_DB_PASSWORD}
-      driver-class-name: org.postgresql.Driver
-      hikari:
-        maximum-pool-size: 20
-        minimum-idle: 5
-        connection-timeout: 20000
-        validation-timeout: 3000
-        idle-timeout: 300000
-        max-lifetime: 1200000
+    url: jdbc:postgresql://${DB_HOST:localhost}:${DB_PORT:5432}/${DB_NAME:popcorn_db}
+    username: ${PAYMENT_DB_USERNAME:payment_app}
+    password: ${PAYMENT_DB_PASSWORD:payment123}
+    driver-class-name: org.postgresql.Driver
+    hikari:
+      maximum-pool-size: 10  # 최적화: 20 → 10
+      minimum-idle: 3        # 최적화: 5 → 3
+      connection-timeout: 5000  # 최적화: 20초 → 5초
+      validation-timeout: 3000
+      idle-timeout: 300000
+      max-lifetime: 1200000
+
   jpa:
     open-in-view: false
     database-platform: org.hibernate.dialect.PostgreSQLDialect
@@ -45,34 +52,35 @@ spring:
     type: simple
     cache-names: hybridPrices,sessionPrices,goodsPrices
     caffeine:
-      spec: maximumSize=1000,expireAfterWrite=5m  # 5분 캐시
+      spec: maximumSize=1000,expireAfterWrite=5m
 
-  # Redis 설정 (stores 서비스와 동일한 극한 성능 최적화)
+  # Redis 설정
   data:
     redis:
       host: ${REDIS_HOST:localhost}
       port: ${REDIS_PORT:6379}
       password: ${REDIS_PASSWORD:}
-      timeout: 2000ms  # Redis Stream 안정성 위해 기본 타임아웃 복구
-      database: ${REDIS_DATABASE:0}  # Order, Stores 서비스와 동일한 database 0 사용
-      connection-timeout: 2000ms  # 연결 지연에 대비해 타임아웃 완화
-      jedis:
+      timeout: 1000ms  # 최적화: 2초 → 1초
+      database: 2  # Payment 서비스 전용 DB
+      connection-timeout: 1000ms  # 최적화: 2초 → 1초
+      lettuce:
         pool:
-          max-active: 20  # 10 → 20 (더 많은 동시 연결)
-          max-idle: 16   # 8 → 16 (더 많은 유휴 연결)
-          min-idle: 8    # 2 → 8 (더 많은 최소 연결)
-          max-wait: 2000ms # 커넥션 풀 대기 여유 확대
+          max-active: 10  # 최적화: 20 → 10
+          max-idle: 8     # 최적화: 16 → 8
+          min-idle: 3     # 최적화: 8 → 3
+          max-wait: 1000ms  # 최적화: 2초 → 1초
 
   flyway:
     enabled: true
-    user: ${PAYMENT_FLYWAY_USERNAME}
-    password: ${PAYMENT_FLYWAY_PASSWORD}
+    user: ${PAYMENT_FLYWAY_USERNAME:payment_migrator}
+    password: ${PAYMENT_FLYWAY_PASSWORD:payment321}
     default-schema: payment
     schemas: payment
-    locations: classpath:db/migration/schema,classpath:db/migration
+    locations: classpath:db/migration
     baseline-on-migrate: true
-    validate-on-migrate: false
+    validate-on-migrate: true
     clean-disabled: false
+
 
 # 인증 설정
 passport:
@@ -84,18 +92,63 @@ redis:
   events:
     enabled: true
 
-# Kafka 설정 (점진적 전환용)
-kafka:
-  enabled: true  # Kafka 활성화
-  bootstrap-servers: ${KAFKA_BOOTSTRAP_SERVERS:localhost:9092}
-  consumer:
-    group-id: payment-service-group  # Redis Stream과 동일한 Consumer Group
-    concurrency: 6  # payment-events 파티션 수에 맞춤
-
 jwt:
   secret: ${JWT_SECRET:dGVzdC1qd3Qtc2VjcmV0LWtleS1mb3ItbG9jYWwtZGV2ZWxvcG1lbnQtb25seS1kb25vdC11c2UtaW4tcHJvZHVjdGlvbg==}
   expiration: 3600000
   refresh-expiration-ms: 1209600000
+
+# Kafka 설정 (프로덕션 준비)
+kafka:
+  enabled: true
+  bootstrap-servers: ${KAFKA_BOOTSTRAP_SERVERS:kafka-1:9092,kafka-2:9092,kafka-3:9092}
+
+  # Consumer 설정
+  consumer:
+    group-id: payment-service-group
+    concurrency: 6
+    max-poll-records: 500
+    session-timeout-ms: 30000
+    heartbeat-interval-ms: 10000
+    auto-offset-reset: earliest
+    enable-auto-commit: false
+
+  # Producer 설정
+  producer:
+    acks: all
+    retries: 2147483647
+    enable-idempotence: true
+    max-in-flight-requests-per-connection: 5
+    compression-type: snappy
+    batch-size: 16384
+    linger-ms: 5
+    request-timeout-ms: 30000
+    delivery-timeout-ms: 120000
+
+  # DLQ 및 재시도 설정
+  retry:
+    max-attempts: 3
+    initial-delay-ms: 1000
+    max-delay-ms: 300000  # 5분
+    multiplier: 2.0
+
+  # 토픽 설정
+  topics:
+    payment-events:
+      partitions: 6
+      replicas: 1
+      retention-ms: 86400000  # 1일
+    payment-requests:
+      partitions: 6
+      replicas: 1
+      retention-ms: 86400000
+    payment-events-dlq:
+      partitions: 6
+      replicas: 1
+      retention-ms: 2592000000  # 30일
+    payment-requests-dlq:
+      partitions: 6
+      replicas: 1
+      retention-ms: 2592000000
 
 springdoc:
   api-docs:
@@ -105,42 +158,85 @@ springdoc:
     enabled: true
     path: /swagger-ui.html
 
-# Toss Payments 설정 (stores 서비스 방식 적용)
-payment:
-  toss:
-    base-url: ${TOSS_PAYMENTS_BASE_URL:https://api.tosspayments.com}
-    secret-key: ${TOSS_SECRET_KEY:test_sk_Poxy1XQL8Rxpno1voaJZV7nO5Wml}
-    client-key: ${TOSS_CLIENT_KEY:test_ck_AQ92ymxN34LKgMYlpPZy3ajRKXvd}
-
-# 외부 서비스 및 DB 설정 (통합)
-external:
-  database:
-    users:
-      jdbc-url: jdbc:postgresql://${DB_HOST}:${DB_PORT}/${DB_NAME}
-      username: ${USER_AUTH_DB_USERNAME}
-      password: ${USER_AUTH_DB_PASSWORD}
-      driver-class-name: org.postgresql.Driver
-      hikari:
-        maximum-pool-size: 5    # 읽기 전용이므로 작은 풀 사용
-        minimum-idle: 2
-        connection-timeout: 3000ms
-        read-only: true         # 읽기 전용 연결
-    stores:
-      jdbc-url: jdbc:postgresql://${DB_HOST}:${DB_PORT}/${DB_NAME}
-      username: ${STORE_DB_USERNAME}
-      password: ${STORE_DB_PASSWORD}
-      driver-class-name: org.postgresql.Driver
-      hikari:
-        maximum-pool-size: 5    # 읽기 전용이므로 작은 풀 사용
-        minimum-idle: 2
-        connection-timeout: 3000ms
-        read-only: true         # 읽기 전용 연결
+# 모니터링 및 메트릭 설정
+management:
+  endpoints:
+    web:
+      exposure:
+        include: health,info,metrics,prometheus
+  endpoint:
+    health:
+      show-details: always
+    metrics:
+      enabled: true
+    prometheus:
+      enabled: true
+  metrics:
+    export:
+      prometheus:
+        enabled: true
+        step: 10s
+    distribution:
+      percentiles-histogram:
+        payment.kafka.processing.duration: true
+      percentiles:
+        payment.kafka.processing.duration: 0.5, 0.95, 0.99
+  tracing:
+    sampling:
+      probability: 1.0
 
 logging:
   level:
-    root: WARN  # 기본 로그 레벨을 WARN으로 설정하여 성능 개선
-    com.popcorn.payment: INFO  # DEBUG → INFO (20-30% 성능 향상)
-    org.springframework.web: WARN  # DEBUG → WARN (웹 요청 로그 최소화)
+    root: WARN
+    com.popcorn.payment: INFO
+    org.springframework.web: WARN
     org.springframework.boot.web: WARN
-    org.hibernate.SQL: INFO  # DEBUG → INFO (SQL 로깅 최소화로 큰 성능 향상)
+    org.hibernate.SQL: INFO
     org.springframework.security: WARN
+
+# 외부 서비스/DB 설정
+external:
+  services:
+    users:
+      base-url: ${USERS_SERVICE_BASE_URL:http://localhost:8082}
+    stores:
+      base-url: ${STORES_SERVICE_BASE_URL:http://localhost:8083}
+
+  # 외부 서비스 데이터베이스 직접 연결
+  database:
+    users:
+      jdbc-url: ${EXTERNAL_DATABASE_USERS_JDBC_URL:jdbc:postgresql://${DB_HOST:db}:${DB_PORT:5432}/${DB_NAME:popcorn_db}}
+      username: ${USER_AUTH_DB_USERNAME:user_auth_app}
+      password: ${USER_AUTH_DB_PASSWORD:user_auth123}
+      driver-class-name: org.postgresql.Driver
+      hikari:
+        maximum-pool-size: 5
+        minimum-idle: 2
+        connection-timeout: 3000ms
+        read-only: true
+    stores:
+      jdbc-url: ${EXTERNAL_DATABASE_STORES_JDBC_URL:jdbc:postgresql://${DB_HOST:db}:${DB_PORT:5432}/${DB_NAME:popcorn_db}}
+      username: ${STORE_DB_USERNAME:store_app}
+      password: ${STORE_DB_PASSWORD:store123}
+      driver-class-name: org.postgresql.Driver
+      hikari:
+        maximum-pool-size: 5
+        minimum-idle: 2
+        connection-timeout: 3000ms
+        read-only: true
+
+# Payment 서비스 설정
+payment:
+  webhook:
+    timeout: ${PAYMENT_WEBHOOK_TIMEOUT:30000}
+  validation:
+    max-amount: ${PAYMENT_MAX_AMOUNT:500000}
+  notification:
+    enabled: ${PAYMENT_NOTIFICATION_ENABLED:true}
+    retry-count: ${PAYMENT_NOTIFICATION_RETRY:3}
+  # Toss Payments 설정
+  toss:
+    base-url: ${TOSS_PAYMENTS_BASE_URL}
+    secret-key: ${TOSS_PAYMENTS_SECRET_KEY}
+    client-key: ${TOSS_PAYMENTS_CLIENT_KEY}
+    test-mode: ${TOSS_PAYMENTS_TEST_MODE}

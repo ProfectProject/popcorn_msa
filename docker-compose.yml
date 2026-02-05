@@ -37,29 +37,159 @@ services:
     image: confluentinc/cp-kafka:7.4.0
     container_name: kafka
     ports:
-      - "29092:29092"
       - "9092:9092"
-      - "9101:9101"
+      - "19101:9101"
     environment:
-      # KRaft 모드 (ZooKeeper 미사용)
+      # KRaft 모드 설정 (안정화)
       KAFKA_NODE_ID: 1
       KAFKA_PROCESS_ROLES: broker,controller
-      KAFKA_CONTROLLER_QUORUM_VOTERS: 1@kafka:29093
+      KAFKA_CONTROLLER_QUORUM_VOTERS: 1@localhost:9093
       KAFKA_CONTROLLER_LISTENER_NAMES: CONTROLLER
-      KAFKA_LISTENERS: PLAINTEXT://0.0.0.0:29092,PLAINTEXT_HOST://0.0.0.0:9092,CONTROLLER://0.0.0.0:29093
-      KAFKA_ADVERTISED_LISTENERS: PLAINTEXT://kafka:29092,PLAINTEXT_HOST://localhost:9092
-      KAFKA_LISTENER_SECURITY_PROTOCOL_MAP: PLAINTEXT:PLAINTEXT,PLAINTEXT_HOST:PLAINTEXT,CONTROLLER:PLAINTEXT
+
+      # 리스너 설정 (단순화)
+      KAFKA_LISTENERS: PLAINTEXT://0.0.0.0:9092,CONTROLLER://0.0.0.0:9093
+      KAFKA_ADVERTISED_LISTENERS: PLAINTEXT://kafka:9092
+      KAFKA_LISTENER_SECURITY_PROTOCOL_MAP: PLAINTEXT:PLAINTEXT,CONTROLLER:PLAINTEXT
       KAFKA_INTER_BROKER_LISTENER_NAME: PLAINTEXT
+
+      # 단일 노드 설정
       KAFKA_OFFSETS_TOPIC_REPLICATION_FACTOR: 1
       KAFKA_TRANSACTION_STATE_LOG_MIN_ISR: 1
       KAFKA_TRANSACTION_STATE_LOG_REPLICATION_FACTOR: 1
       KAFKA_GROUP_INITIAL_REBALANCE_DELAY_MS: 0
+
+      # 토픽 자동 생성 설정
+      KAFKA_AUTO_CREATE_TOPICS_ENABLE: 'true'
+      KAFKA_NUM_PARTITIONS: 6
+      KAFKA_DEFAULT_REPLICATION_FACTOR: 1
+
+      # 로그 설정 (안정성 향상)
+      KAFKA_LOG_DIRS: /var/lib/kafka/data/logs
+      KAFKA_LOG_RETENTION_HOURS: 24
+      KAFKA_LOG_SEGMENT_BYTES: 1073741824
+      KAFKA_LOG_RETENTION_CHECK_INTERVAL_MS: 300000
+
+      # JMX 모니터링
       KAFKA_JMX_PORT: 9101
       KAFKA_JMX_HOSTNAME: localhost
-      # KRaft 스토리지 초기화용 (최초 1회 필요)
-      KAFKA_CLUSTER_ID: "0000000000000000000000"
+
+      # 올바른 CLUSTER_ID 형식 (22자리 base64)
+      CLUSTER_ID: 4L6g3nShT-eMCtK--X86sw
     volumes:
       - kafka_data:/var/lib/kafka/data
+    restart: unless-stopped
+    healthcheck:
+      test: ["CMD", "kafka-broker-api-versions", "--bootstrap-server", "localhost:9092"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+
+  kafka-ui:
+    image: provectuslabs/kafka-ui:latest
+    container_name: kafka-ui
+    depends_on:
+      - kafka
+    ports:
+      - "8090:8080"
+    environment:
+      KAFKA_CLUSTERS_0_NAME: popcorn-cluster
+      KAFKA_CLUSTERS_0_BOOTSTRAPSERVERS: kafka:9092
+      KAFKA_CLUSTERS_0_METRICS_PORT: 9101
+
+      # UI 기능 활성화
+      DYNAMIC_CONFIG_ENABLED: 'true'
+
+      # Security 설정 (개발환경용 - 비활성화)
+      KAFKA_CLUSTERS_0_READONLY: 'false'
+
+      # Schema Registry 설정 (필요시)
+      # KAFKA_CLUSTERS_0_SCHEMAREGISTRY: http://schema-registry:8081
+
+      # Kafka Connect 설정
+      KAFKA_CLUSTERS_0_KAFKACONNECT_0_NAME: connect
+      KAFKA_CLUSTERS_0_KAFKACONNECT_0_ADDRESS: http://kafka-connect:8083
+
+      # KSQL DB 설정 (필요시)
+      # KAFKA_CLUSTERS_0_KSQLDBSERVER: http://ksqldb:8088
+
+      # JMX 메트릭 설정
+      KAFKA_CLUSTERS_0_JMX_PORT: 9101
+      KAFKA_CLUSTERS_0_JMX_SSL: 'false'
+
+      # UI 설정
+      MANAGEMENT_HEALTH_LDAP_ENABLED: 'false'
+      SPRING_SECURITY_ENABLED: 'false'
+    restart: unless-stopped
+
+  elasticsearch:
+    image: docker.elastic.co/elasticsearch/elasticsearch:8.11.0
+    container_name: elasticsearch
+    environment:
+      - discovery.type=single-node
+      - xpack.security.enabled=false
+      - "ES_JAVA_OPTS=-Xms512m -Xmx512m"
+    ports:
+      - "9200:9200"
+      - "9300:9300"
+    volumes:
+      - elasticsearch_data:/usr/share/elasticsearch/data
+    healthcheck:
+      test: ["CMD-SHELL", "curl -f http://localhost:9200/_cluster/health || exit 1"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+    restart: unless-stopped
+
+  kibana:
+    image: docker.elastic.co/kibana/kibana:8.11.0
+    container_name: kibana
+    depends_on:
+      elasticsearch:
+        condition: service_healthy
+    environment:
+      ELASTICSEARCH_HOSTS: http://elasticsearch:9200
+      XPACK_SECURITY_ENABLED: 'false'
+    ports:
+      - "5601:5601"
+    restart: unless-stopped
+
+  kafka-connect:
+    image: confluentinc/cp-kafka-connect:7.4.0
+    container_name: kafka-connect
+    depends_on:
+      - kafka
+      - elasticsearch
+    ports:
+      - "8088:8083"
+    command:
+      - bash
+      - -c
+      - |
+        echo "Installing Elasticsearch connector..."
+        confluent-hub install --no-prompt confluentinc/kafka-connect-elasticsearch:14.0.0
+        echo "Starting Kafka Connect..."
+        /etc/confluent/docker/run &
+        wait
+    environment:
+      CONNECT_BOOTSTRAP_SERVERS: kafka:9092
+      CONNECT_REST_ADVERTISED_HOST_NAME: kafka-connect
+      CONNECT_REST_PORT: 8083
+      CONNECT_GROUP_ID: popcorn-connect-group
+      CONNECT_CONFIG_STORAGE_TOPIC: popcorn-connect-configs
+      CONNECT_CONFIG_STORAGE_REPLICATION_FACTOR: 1
+      CONNECT_OFFSET_STORAGE_TOPIC: popcorn-connect-offsets
+      CONNECT_OFFSET_STORAGE_REPLICATION_FACTOR: 1
+      CONNECT_STATUS_STORAGE_TOPIC: popcorn-connect-status
+      CONNECT_STATUS_STORAGE_REPLICATION_FACTOR: 1
+      CONNECT_KEY_CONVERTER: org.apache.kafka.connect.json.JsonConverter
+      CONNECT_VALUE_CONVERTER: org.apache.kafka.connect.json.JsonConverter
+      CONNECT_KEY_CONVERTER_SCHEMAS_ENABLE: 'false'
+      CONNECT_VALUE_CONVERTER_SCHEMAS_ENABLE: 'false'
+      CONNECT_INTERNAL_KEY_CONVERTER: org.apache.kafka.connect.json.JsonConverter
+      CONNECT_INTERNAL_VALUE_CONVERTER: org.apache.kafka.connect.json.JsonConverter
+      CONNECT_LOG4J_ROOT_LOGLEVEL: INFO
+      CONNECT_PLUGIN_PATH: /usr/share/java,/usr/share/confluent-hub-components
+    restart: unless-stopped
 
   app:
     image: ${DOCKERHUB_USERNAME}/popcorn-backend:latest
@@ -78,18 +208,8 @@ services:
       - "8080:8080"
     restart: always
 
-  frontend:
-    build: ./frontend
-    container_name: popcorn-frontend
-    environment:
-      - NEXT_PUBLIC_API_BASE_URL=http://localhost:8080
-      - NEXT_PUBLIC_TOSS_CLIENT_KEY=${TOSS_CLIENT_KEY}
-    depends_on:
-      - app
-    ports:
-      - "3000:3000"
-    restart: always
 
 volumes:
   redis-data:
   kafka_data:
+  elasticsearch_data:

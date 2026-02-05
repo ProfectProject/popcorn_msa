@@ -17,9 +17,9 @@ spring:
     password: ${ORDER_DB_PASSWORD:order123}
     driver-class-name: org.postgresql.Driver
     hikari:
-      maximum-pool-size: 30          # 로컬은 30으로 설정
-      minimum-idle: 5                # 최소 유휴
-      connection-timeout: 3000       # 3초 연결 타임아웃
+      maximum-pool-size: 10          # 최적화: 30 → 10
+      minimum-idle: 3                # 최적화: 5 → 3
+      connection-timeout: 5000       # 최적화: 3초 → 5초
       idle-timeout: 300000           # 5분 유휴 타임아웃
       max-lifetime: 1800000          # 30분 최대 생명주기
 
@@ -56,10 +56,10 @@ spring:
       host: ${REDIS_HOST:localhost}
       port: ${REDIS_PORT:6379}
       password: ${REDIS_PASSWORD:}
-      timeout: 10000ms  # 2초 → 10초 (타임아웃 대폭 증가)
-      command-timeout: 10000ms  # 명령 실행 타임아웃
+      timeout: 1000ms  # 최적화: 10초 → 1초 (타임아웃 감소)
+      command-timeout: 1000ms  # 최적화: 명령 실행 타임아웃 감소
       database: 0  # Payment, Stores 서비스와 동일한 database 0 사용
-      connection-timeout: 10000ms  # 연결 타임아웃도 증가
+      connection-timeout: 1000ms  # 최적화: 연결 타임아웃 감소
       lettuce:
         pool:
           max-active: 30  # 100 → 30 (메모리 사용량 70% 감소)

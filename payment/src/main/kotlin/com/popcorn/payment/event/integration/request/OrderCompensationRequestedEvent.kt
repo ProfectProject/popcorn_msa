@@ -27,7 +27,7 @@ data class OrderCompensationRequestedEvent(
     private val eventMetadata: Map<String, Any>? = null
 ) : BasePaymentEvent(
     paymentId = compensationId,
-    eventType = EventConstants.EventTypes.ORDER_COMPENSATION_REQUESTED,
+    eventType = EventConstants.EventTypes.Compensation.ORDER_COMPENSATION_REQUESTED,
     userId = eventUserId
 ) {
 
@@ -43,9 +43,9 @@ data class OrderCompensationRequestedEvent(
             "failedAt" to failedAt.toString(),
             "requestedActions" to requestedActions.map { it.actionType },
             "priority" to priority,
-            "correlationId" to (correlationId ?: UUID.randomUUID().toString()),
-            "targetService" to "order-service",
-            "sourceService" to "payment-service"
+            EventConstants.MetadataKeys.CORRELATION_ID to (correlationId ?: UUID.randomUUID().toString()),
+            EventConstants.MetadataKeys.TARGET_SERVICE to "order-service",
+            EventConstants.MetadataKeys.SOURCE_SERVICE to "payment-service"
         )
         eventMetadata?.let { payload.putAll(it) }
         return payload
@@ -125,7 +125,7 @@ data class OrderCompensationRequestedEvent(
                         actionType = "UPDATE_ORDER_STATUS",
                         targetResource = orderId.toString(),
                         parameters = mapOf(
-                            "newStatus" to "CANCELLED",
+                            "newStatus" to EventConstants.EventStatus.CANCELLED,
                             "reason" to validationFailureReason
                         )
                     )

@@ -65,6 +65,7 @@ public class OrderDomainService {
         transitions.put(OrderStatus.REQUESTED, EnumSet.of(
                 OrderStatus.ACCEPTED,        // 수락됨
                 OrderStatus.PAYMENT_PENDING, // 결제 대기
+                OrderStatus.PAID,            // 결제 완료 (결제 이벤트 직접 수신 시)
                 OrderStatus.RESERVED,        // 예약 확정
                 OrderStatus.REJECTED,        // 거절됨
                 OrderStatus.CANCELLED        // 취소됨

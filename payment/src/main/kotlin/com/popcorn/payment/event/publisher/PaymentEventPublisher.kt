@@ -253,6 +253,6 @@ class BasePaymentEventPublisherImpl(
         )
 
         log.info("🚀 QR 코드 생성 요청 이벤트 발행: paymentId={}, orderId={}, orderNo={}", paymentId, orderId, orderNo)
-        applicationEventPublisher.publishEvent(event)
+        publish(event)
     }
 }

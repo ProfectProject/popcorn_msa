@@ -39,14 +39,14 @@ class PaymentRedisEventPublisher(
             // BasePaymentEvent인 경우 BaseEvent의 메타데이터 활용
             if (event is BasePaymentEvent) {
                 eventData.putAll(mapOf(
-                    "eventType" to event.eventType,
-                    "eventId" to event.eventId.toString(),
-                    "aggregateId" to event.aggregateId.toString(),
-                    "aggregateType" to event.aggregateType,
-                    "timestamp" to event.timestamp.toString(),
-                    "eventVersion" to event.eventVersion,
-                    "correlationId" to event.correlationId.toString(),
-                    "userId" to event.userId?.toString(),
+                    EventConstants.MetadataKeys.EVENT_TYPE to event.eventType,
+                    EventConstants.MetadataKeys.EVENT_ID to event.eventId.toString(),
+                    EventConstants.MetadataKeys.AGGREGATE_ID to event.aggregateId.toString(),
+                    EventConstants.MetadataKeys.AGGREGATE_TYPE to event.aggregateType,
+                    EventConstants.MetadataKeys.TIMESTAMP to event.timestamp.toString(),
+                    EventConstants.MetadataKeys.EVENT_VERSION to event.eventVersion,
+                    EventConstants.MetadataKeys.CORRELATION_ID to event.correlationId.toString(),
+                    EventConstants.MetadataKeys.USER_ID to event.userId?.toString(),
                     // eventPayload 추가
                     *event.eventPayload.toList().toTypedArray()
                 ))
@@ -58,8 +58,8 @@ class PaymentRedisEventPublisher(
             } else {
                 // 기존 방식 (비-BaseEvent 이벤트용)
                 eventData.putAll(mapOf(
-                    "eventType" to eventType,
-                    "eventId" to java.util.UUID.randomUUID().toString(),
+                    EventConstants.MetadataKeys.EVENT_TYPE to eventType,
+                    EventConstants.MetadataKeys.EVENT_ID to java.util.UUID.randomUUID().toString(),
                     "eventTime" to LocalDateTime.now().toString()
                 ))
 
@@ -109,7 +109,7 @@ class PaymentRedisEventPublisher(
             is PaymentCancelRequestedEvent -> PAYMENT_REQUESTS_STREAM to event.eventType
 
             // 기존 외부 도메인 이벤트들
-            is PaymentCompletedEvent -> PAYMENT_EVENTS_STREAM to EventConstants.EventTypes.PAYMENT_COMPLETED
+            is PaymentCompletedEvent -> PAYMENT_EVENTS_STREAM to EventConstants.EventTypes.PaymentDomain.PAYMENT_SUCCESS
             is QrCodeGenerationRequestedEvent -> QR_EVENTS_STREAM to event.eventType
             is QrCodeInvalidationRequestedEvent -> QR_EVENTS_STREAM to event.eventType
             is InventoryConfirmationRequestedEvent -> INVENTORY_EVENTS_STREAM to event.eventType
@@ -119,9 +119,9 @@ class PaymentRedisEventPublisher(
 
             // BasePaymentEvent 기반 이벤트 처리 (제네릭)
             is BasePaymentEvent -> when (event.eventType) {
-                EventConstants.EventTypes.PAYMENT_CREATE_REQUESTED,
-                EventConstants.EventTypes.PAYMENT_CANCEL_REQUESTED -> PAYMENT_REQUESTS_STREAM to event.eventType
-                EventConstants.EventTypes.ORDER_INFO_REQUEST -> ORDER_INFO_REQUESTS_STREAM to event.eventType
+                EventConstants.EventTypes.PaymentRequest.PAYMENT_CREATE_REQUESTED,
+                EventConstants.EventTypes.PaymentRequest.PAYMENT_CANCEL_REQUESTED -> PAYMENT_REQUESTS_STREAM to event.eventType
+                EventConstants.EventTypes.Integration.ORDER_INFO_REQUEST -> ORDER_INFO_REQUESTS_STREAM to event.eventType
                 else -> PAYMENT_EVENTS_STREAM to event.eventType
             }
 

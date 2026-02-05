@@ -22,7 +22,7 @@ data class PaymentValidationFailedEvent(
     private val eventMetadata: Map<String, Any>? = null
 ) : BasePaymentEvent(
     paymentId = validationPaymentId,
-    eventType = EventConstants.EventTypes.PAYMENT_VALIDATION_FAILED,
+    eventType = EventConstants.EventTypes.Compensation.PAYMENT_VALIDATION_FAILED,
     userId = eventUserId
 ) {
 

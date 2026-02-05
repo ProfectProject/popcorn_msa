@@ -2,6 +2,7 @@ package com.popcorn.payment.service
 
 import com.fasterxml.jackson.databind.ObjectMapper
 import com.popcorn.payment.client.TossPaymentsCoroutineClient
+import com.popcorn.payment.constants.EventConstants
 import com.popcorn.payment.dto.TossPaymentCancelRequest
 import com.popcorn.payment.dto.TossPaymentConfirmRequest
 import com.popcorn.payment.event.publisher.BasePaymentEventPublisherImpl
@@ -204,7 +205,7 @@ class TossPaymentCoroutineService(
                 val result = TossPaymentConfirmResult(
                     paymentId = paymentResult.paymentId,
                     paymentStatus = "PAID",
-                    orderStatus = "PAYMENT_COMPLETED", // Order 서비스에서 이벤트 구독 후 실제 상태로 업데이트
+                    orderStatus = EventConstants.EventTypes.PaymentDomain.PAYMENT_SUCCESS, // Order 서비스에서 이벤트 구독 후 실제 상태로 업데이트
                     orderId = UUID.fromString(orderId),
                     orderNo = orderId,
                     amount = amount,
@@ -314,7 +315,7 @@ class TossPaymentCoroutineService(
         // Step 3: 결제 상태 업데이트
         paymentCommandService.updatePaymentStatus(
             paymentId = payment.paymentId,
-            status = "CANCELLED",
+            status = EventConstants.EventStatus.CANCELLED,
             rawPayload = serializeResponse(cancelResponse)
         )
 
@@ -704,7 +705,7 @@ class TossPaymentCoroutineService(
                 "failureType" to failureType,
                 "originalFailureReason" to originalFailureReason,
                 "compensationError" to compensationError.message,
-                "timestamp" to java.time.LocalDateTime.now().toString(),
+                EventConstants.MetadataKeys.TIMESTAMP to java.time.LocalDateTime.now().toString(),
                 "severity" to "CRITICAL"
             )
 

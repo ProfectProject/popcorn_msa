@@ -1,5 +1,6 @@
 package com.popcorn.payment.service.kafka
 
+import com.popcorn.payment.constants.EventConstants
 import org.slf4j.LoggerFactory
 import org.springframework.boot.autoconfigure.condition.ConditionalOnProperty
 import org.springframework.data.redis.core.RedisTemplate
@@ -58,11 +59,11 @@ class KafkaIdempotencyService(
 
             // 처리 정보를 Map으로 저장 (디버깅/모니터링용)
             val eventInfo = mutableMapOf<String, Any>(
-                "eventId" to eventId,
+                EventConstants.MetadataKeys.EVENT_ID to eventId,
                 "processedAt" to System.currentTimeMillis(),
             )
 
-            eventType?.let { eventInfo["eventType"] = it }
+            eventType?.let { eventInfo[EventConstants.MetadataKeys.EVENT_TYPE] = it }
             topic?.let { eventInfo["topic"] = it }
             partition?.let { eventInfo["partition"] = it }
             offset?.let { eventInfo["offset"] = it }

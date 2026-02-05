@@ -1,6 +1,7 @@
 package com.popcorn.payment.controller
 
 import com.popcorn.payment.dto.*
+import com.popcorn.payment.constants.EventConstants
 import com.popcorn.payment.exception.PaymentException
 import com.popcorn.payment.service.TossPaymentCoroutineService
 import com.popcorn.payment.service.PaymentCommandCoroutineService
@@ -443,7 +444,7 @@ class PaymentController(
     suspend fun healthCheck(): ResponseEntity<Map<String, Any>> {
         val healthInfo = mapOf(
             "status" to "UP",
-            "timestamp" to java.time.LocalDateTime.now(),
+            EventConstants.MetadataKeys.TIMESTAMP to java.time.LocalDateTime.now(),
             "service" to "payment-service"
         )
         return ResponseEntity.ok(healthInfo)
