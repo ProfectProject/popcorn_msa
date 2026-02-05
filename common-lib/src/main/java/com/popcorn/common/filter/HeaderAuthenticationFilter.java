@@ -31,6 +31,12 @@ public class HeaderAuthenticationFilter extends OncePerRequestFilter {
             HttpServletResponse response,
             FilterChain filterChain
     ) throws ServletException, IOException {
+        String uri = request.getRequestURI();
+        // Allow actuator endpoints without passport/internal headers
+        if (uri != null && uri.startsWith("/actuator")) {
+            filterChain.doFilter(request, response);
+            return;
+        }
 
         // 기존 인증이 없을 때만 헤더에서 인증 정보 추출
         if (SecurityContextHolder.getContext().getAuthentication() == null) {
@@ -39,7 +45,7 @@ public class HeaderAuthenticationFilter extends OncePerRequestFilter {
             String passportHeader = request.getHeader("X-Passport");
 
             // 디버그 로깅 추가
-            System.out.println("🔍 HeaderAuthenticationFilter - URI: " + request.getRequestURI());
+            System.out.println("🔍 HeaderAuthenticationFilter - URI: " + uri);
             System.out.println("🔍 X-Internal-Service: " + internalServiceHeader);
             System.out.println("🔍 X-Internal-Call: " + internalCallHeader);
             System.out.println("🔍 X-Passport: " + passportHeader);
