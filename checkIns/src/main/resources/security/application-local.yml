@@ -12,6 +12,11 @@ spring:
     bootstrap-servers: ${KAFKA_BOOTSTRAP_SERVERS}
     admin:
       fail-fast: false
+      client-id: checkins-admin
+      retry-backoff-ms: 100
+      retry-timeout-ms: 60000
+      request-timeout-ms: 30000
+      connection-timeout-ms: 10000
   datasource:
     url: jdbc:postgresql://${DB_HOST:localhost}:${DB_PORT:5430}/${DB_NAME:popcorn_db}
     username: ${QR_DB_USERNAME}
@@ -105,11 +110,23 @@ kafka:
     session-timeout-ms: 30000
     auto-offset-reset: earliest
     enable-auto-commit: false
+    heartbeat-interval-ms: 3000
+    fetch-min-size: 1
+    fetch-max-wait-ms: 500
+    connections-max-idle-ms: 540000
+    request-timeout-ms: 30000
+    retry-backoff-ms: 100
   producer:
     acks: all
     retries: 2147483647
     compression-type: snappy
     enable-idempotence: true
+    connections-max-idle-ms: 540000
+    delivery-timeout-ms: 120000
+    linger-ms: 5
+    max-block-ms: 60000
+    request-timeout-ms: 30000
+    retry-backoff-ms: 100
 
 jwt:
   secret: ${JWT_SECRET:dGVzdC1qd3Qtc2VjcmV0LWtleS1mb3ItbG9jYWwtZGV2ZWxvcG1lbnQtb25seS1kb25vdC11c2UtaW4tcHJvZHVjdGlvbg==}

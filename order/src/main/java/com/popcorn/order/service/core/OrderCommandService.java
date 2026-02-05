@@ -606,17 +606,23 @@ public class OrderCommandService {
                 log.debug("⚡ 결제 토큰 캐시 히트 - 주문번호: {}", order.getOrderNo());
             } else {
                 // 토큰 생성 (목표: 50ms)
-                String customerKey = "customer_" + order.getCustomerId().toString().replace("-", "");
-                String orderName = generateOrderName(order);
+            Long customerId = order.getCustomerId();
+            String customerKey = customerId != null
+                    ? "customer_" + customerId.toString().replace("-", "")
+                    : "guest";
+            String orderName = generateOrderName(order);
+            String orderNo = order.getOrderNo() != null ? order.getOrderNo() : order.getId().toString();
+            Integer totalAmount = order.getTotalAmount();
+            int amount = totalAmount != null ? totalAmount : 0;
 
-                paymentToken = paymentTokenUtil.generatePaymentToken(
-                        order.getId(),
-                        order.getOrderNo(),
-                        order.getTotalAmount(),
-                        orderName,
-                        customerKey,
-                        paymentMethod
-                );
+            paymentToken = paymentTokenUtil.generatePaymentToken(
+                    order.getId(),
+                    orderNo,
+                    amount,
+                    orderName,
+                    customerKey,
+                    paymentMethod
+            );
 
                 // 토큰 캐싱 (30분 TTL)
                 paymentCacheService.cachePaymentToken(order.getId(), paymentToken);

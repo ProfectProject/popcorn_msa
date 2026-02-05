@@ -4,6 +4,7 @@ import com.popcorn.payment.event.base.BasePaymentEvent
 import com.popcorn.payment.event.base.BasePaymentEventPublisher
 import com.popcorn.payment.event.listener.PaymentRedisEventPublisher
 import com.popcorn.payment.event.kafka.PaymentKafkaEventPublisher
+import com.popcorn.payment.outbox.OutboxWriter
 import com.popcorn.payment.event.domain.payment.*
 import com.popcorn.payment.event.domain.legacy.PaymentCompletedEvent
 import com.popcorn.payment.event.integration.request.*
@@ -23,7 +24,8 @@ import org.springframework.stereotype.Component
 @Component
 class BasePaymentEventPublisherImpl(
     private val applicationEventPublisher: ApplicationEventPublisher,
-    private val paymentRedisEventPublisher: PaymentRedisEventPublisher
+    private val paymentRedisEventPublisher: PaymentRedisEventPublisher,
+    private val outboxWriter: OutboxWriter
 ) : BasePaymentEventPublisher {
 
     private val log = LoggerFactory.getLogger(BasePaymentEventPublisherImpl::class.java)
@@ -43,6 +45,9 @@ class BasePaymentEventPublisherImpl(
 
         try {
             log.debug("📨 이벤트 발행 시작: {}", event::class.simpleName)
+
+            // 0. Outbox 기록 (트랜잭션 내부)
+            outboxWriter.record(event)
 
             // 1. 로컬 이벤트 발행
             applicationEventPublisher.publishEvent(event)

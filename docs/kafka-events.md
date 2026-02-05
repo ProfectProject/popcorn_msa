@@ -51,20 +51,22 @@
 # 💳 Payment 도메인
 
 ## 🔹 `payment-events`
-| eventType | 발행자 | 수신자 | 주요 Payload |
+| EventType | 발행자 | 수신자 | 주요 Payload |
 | --- | --- | --- | --- |
-| `payment.created` | Payment | Order(order-cg) | paymentId, orderId, orderNo, amount, status |
-| `payment.approved` | Payment | Order, Store, CheckIn | paymentId, orderId, orderNo, amount, approvedAt |
-| `payment.failed` | Payment | Order | paymentId, orderId, orderNo, reason |
-| `payment.cancelled` | Payment | Order, Store | paymentId, orderId, orderNo, cancelReason |
-| `payment.completed` | Payment | Order | paymentId, orderId, orderNo |
+| `PAYMENT_CREATED` | Payment | Order(order-cg) | eventId, paymentId, orderId, amount, status, createdAt |
+| `PAYMENT_APPROVED` | Payment | Order, Query | eventId, paymentId, orderId, popupId, storeId, amount, approvedAt |
+| `PAYMENT_FAILED` | Payment | Order, Query | eventId, paymentId, orderId, popupId, storeId, reason, failedAt |
+| `PAYMENT_USER_CANCELLED` | Payment | Order, Query | eventId, paymentId, orderId, popupId, storeId, cancelReason, cancelledAt |
+| `PAYMENT_CANCEL_SUCCEEDED` | Payment | Order | eventId, paymentId, orderId, cancelledAt |
+| `PAYMENT_CANCEL_FAILED` | Payment | DLQ / 알람 | eventId, paymentId, orderId, lastError, retryCount, lastTriedAt |
 
 ---
 
 ## 🔹 `payment-requests`
-| eventType | 발행자 | 수신자 | 주요 Payload |
+| EventType | 발행자 | 수신자 | 주요 Payload |
 | --- | --- | --- | --- |
-| `payment.cancel.requested` | Order | Payment(payment-cg) | paymentId, orderId, orderNo |
+| `PAYMENT_CANCEL_REQUESTED` | Order | Payment(payment-cg) | eventId, paymentId, orderId, cancelReason, requestedAt |
+| `PAYMENT_CREATE_REQUESTED` | Order | Payment | eventId, orderId, amount, orderName, successUrl, failUrl, requestedAt |
 
 ---
 
@@ -155,4 +157,3 @@
 | `order.status.updated` | Order | Analytics | orderId, orderNo, fromStatus, toStatus |
 | `payment.created` | Payment | Analytics | paymentId, orderId, orderNo, amount |
 | `payment.approved` | Payment | Analytics | paymentId, orderId, orderNo, amount |
-

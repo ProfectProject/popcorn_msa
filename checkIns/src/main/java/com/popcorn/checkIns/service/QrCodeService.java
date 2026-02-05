@@ -37,6 +37,7 @@ public class QrCodeService {
 	private final ApplicationEventPublisher eventPublisher;
 	private final CheckinRedisEventPublisher checkinRedisEventPublisher;
 	private final CheckInsMetricsService metricsService;
+	private final com.popcorn.checkIns.outbox.OutboxWriter outboxWriter;
 
 	// 점진적 전환을 위해 Optional로 주입 (kafka.enabled=true일 때만 활성화)
 	private final Optional<CheckinsKafkaEventPublisher> checkinKafkaEventPublisher;
@@ -47,12 +48,14 @@ public class QrCodeService {
 						 ApplicationEventPublisher eventPublisher,
 						 CheckinRedisEventPublisher checkinRedisEventPublisher,
 						 CheckInsMetricsService metricsService,
+						 com.popcorn.checkIns.outbox.OutboxWriter outboxWriter,
 						 Optional<CheckinsKafkaEventPublisher> checkinKafkaEventPublisher) {
 		this.qrCodeRepository = qrCodeRepository;
 		this.checkinRepository = checkinRepository;
 		this.eventPublisher = eventPublisher;
 		this.checkinRedisEventPublisher = checkinRedisEventPublisher;
 		this.metricsService = metricsService;
+		this.outboxWriter = outboxWriter;
 		this.checkinKafkaEventPublisher = checkinKafkaEventPublisher;
 	}
 
@@ -390,6 +393,9 @@ public class QrCodeService {
 		String additionalId
 	) {
 		long startTime = System.currentTimeMillis();
+
+		// 0. Outbox 기록 (트랜잭션 내부)
+		outboxWriter.record(event);
 
 		// 1. Redis 발행 (기존 방식 유지)
 		try {

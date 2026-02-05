@@ -139,13 +139,24 @@ public class OrderRedisStreamListener implements StreamListener<String, MapRecor
                     String json = objectMapper.writeValueAsString(response);
                     redisTemplate.opsForValue().set(cacheKey, json, Duration.ofSeconds(30));
 
+                    if (correlationId != null && !correlationId.isBlank()) {
+                        String responseKey = "order:query:response:" + correlationId;
+                        redisTemplate.opsForValue().set(responseKey, "OK", Duration.ofSeconds(30));
+                    }
+
                     log.info("✅ [ORDER] 주문 조회 응답 캐시 저장 - orderId: {}, correlationId: {}",
                             orderId, correlationId);
                 } catch (Exception e) {
                     log.error("🚨 [ORDER] 주문 조회 응답 캐시 저장 실패 - orderId: {}, error: {}",
                             orderId, e.getMessage(), e);
                 }
-            }, () -> log.warn("🔍 [ORDER] 주문 조회 요청 대상 없음 - orderId: {}", orderIdStr));
+            }, () -> {
+                log.warn("🔍 [ORDER] 주문 조회 요청 대상 없음 - orderId: {}", orderIdStr);
+                if (correlationId != null && !correlationId.isBlank()) {
+                    String responseKey = "order:query:response:" + correlationId;
+                    redisTemplate.opsForValue().set(responseKey, "NOT_FOUND", Duration.ofSeconds(30));
+                }
+            });
         } catch (Exception e) {
             log.error("🚨 [ORDER] 주문 조회 요청 처리 실패 - values: {}, error: {}", values, e.getMessage(), e);
         }

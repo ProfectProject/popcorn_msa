@@ -6,6 +6,7 @@ import com.popcorn.payment.constants.EventConstants
 import com.popcorn.payment.exception.PaymentException
 import kotlinx.coroutines.*
 import org.slf4j.LoggerFactory
+import org.springframework.beans.factory.annotation.Value
 import org.springframework.data.redis.core.RedisTemplate
 import org.springframework.stereotype.Service
 import java.time.LocalDateTime
@@ -29,7 +30,9 @@ import java.util.concurrent.CompletableFuture
 @Service
 class OrderQueryCoroutineService(
     private val redisTemplate: RedisTemplate<String, String>,
-    private val objectMapper: ObjectMapper
+    private val objectMapper: ObjectMapper,
+    @Value("\${payment.order-query.timeout-ms:15000}")
+    private val queryTimeoutMs: Long
 ) {
 
     private val log = LoggerFactory.getLogger(OrderQueryCoroutineService::class.java)
@@ -38,7 +41,7 @@ class OrderQueryCoroutineService(
         private const val ORDER_QUERY_STREAM = "order:query:stream"
         private const val ORDER_UPDATE_STREAM = "order:update:stream"
         private const val ORDER_CACHE_PREFIX = "order:cache:"
-        private const val QUERY_TIMEOUT_MS = 5000L
+        private const val POLL_INTERVAL_MS = 100L
     }
 
 
@@ -83,7 +86,7 @@ class OrderQueryCoroutineService(
             log.debug("📤 주문 조회 이벤트 발행: orderId={}, correlationId={}", orderId, correlationId)
 
             // 응답 대기 (폴링 방식)
-            withTimeout(QUERY_TIMEOUT_MS) {
+            withTimeout(queryTimeoutMs) {
                 waitForOrderQueryResponse(correlationId, orderId)
             }
         } catch (e: TimeoutCancellationException) {
@@ -131,7 +134,7 @@ class OrderQueryCoroutineService(
                 orderId, status, correlationId)
 
             // 응답 대기 후 캐시 무효화 및 재조회
-            withTimeout(QUERY_TIMEOUT_MS) {
+            withTimeout(queryTimeoutMs) {
                 waitForOrderUpdateResponse(correlationId, orderId)
             }
 
@@ -172,8 +175,16 @@ class OrderQueryCoroutineService(
      * 주문 조회 응답 대기
      */
     private suspend fun waitForOrderQueryResponse(correlationId: String, orderId: UUID): OrderInfo {
-        repeat(50) { // 5초 동안 100ms 간격으로 폴링
-            delay(100)
+        val attempts = ((queryTimeoutMs / POLL_INTERVAL_MS).coerceAtLeast(1)).toInt()
+        repeat(attempts) {
+            delay(POLL_INTERVAL_MS)
+
+            // 응답 키 확인 (NOT_FOUND 등)
+            val responseKey = "order:query:response:$correlationId"
+            val response = redisTemplate.opsForValue().get(responseKey)
+            if (response == "NOT_FOUND") {
+                throw PaymentException.externalApiError("주문 정보를 찾을 수 없습니다: $orderId")
+            }
 
             val cached = getCachedOrder(orderId)
             if (cached != null) {
@@ -189,8 +200,9 @@ class OrderQueryCoroutineService(
      * 주문 상태 업데이트 응답 대기
      */
     private suspend fun waitForOrderUpdateResponse(correlationId: String, orderId: UUID) {
-        repeat(50) { // 5초 동안 100ms 간격으로 폴링
-            delay(100)
+        val attempts = ((queryTimeoutMs / POLL_INTERVAL_MS).coerceAtLeast(1)).toInt()
+        repeat(attempts) {
+            delay(POLL_INTERVAL_MS)
 
             // 업데이트 완료 확인 (임시 방법)
             val responseKey = "order:update:response:$correlationId"
