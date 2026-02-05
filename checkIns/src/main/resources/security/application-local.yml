@@ -8,6 +8,10 @@ spring:
   config:
     activate:
       on-profile: local
+  kafka:
+    bootstrap-servers: ${KAFKA_BOOTSTRAP_SERVERS}
+    admin:
+      fail-fast: false
   datasource:
     url: jdbc:postgresql://${DB_HOST:localhost}:${DB_PORT:5430}/${DB_NAME:popcorn_db}
     username: ${QR_DB_USERNAME}
@@ -55,10 +59,10 @@ spring:
       host: ${REDIS_HOST:localhost}
       port: ${REDIS_PORT:6379}
       password: ${REDIS_PASSWORD:}
-      timeout: 2000ms
+      timeout: 10000ms
       database: 1  # CheckIns 서비스 전용 DB
-      connection-timeout: 2000ms
-      jedis:
+      connection-timeout: 5000ms
+      lettuce:
         pool:
           max-active: 20
           max-idle: 16
@@ -85,10 +89,27 @@ passport:
   secret: ${PASSPORT_SECRET:my-super-secret-key-for-popcorn-msa-development-only-do-not-use-in-production}
   ttl-seconds: 60
 
-# Redis 이벤트 설정
+# Redis 이벤트 설정 (점진적 전환 중 유지)
 redis:
   events:
     enabled: true
+
+# Kafka 이벤트 설정 (점진적 전환용)
+kafka:
+  enabled: true
+  bootstrap-servers: ${KAFKA_BOOTSTRAP_SERVERS:kafka-1:9092,kafka-2:9092,kafka-3:9092}
+  consumer:
+    group-id: ${CHECKINS_KAFKA_CONSUMER_GROUP_ID:checkin-service-group}
+    concurrency: 3
+    max-poll-records: 500
+    session-timeout-ms: 30000
+    auto-offset-reset: earliest
+    enable-auto-commit: false
+  producer:
+    acks: all
+    retries: 2147483647
+    compression-type: snappy
+    enable-idempotence: true
 
 jwt:
   secret: ${JWT_SECRET:dGVzdC1qd3Qtc2VjcmV0LWtleS1mb3ItbG9jYWwtZGV2ZWxvcG1lbnQtb25seS1kb25vdC11c2UtaW4tcHJvZHVjdGlvbg==}
@@ -103,11 +124,38 @@ springdoc:
     enabled: true
     path: /swagger-ui.html
 
+# 모니터링 및 메트릭 설정
+management:
+  endpoints:
+    web:
+      exposure:
+        include: health,info,metrics,prometheus
+  endpoint:
+    health:
+      show-details: always
+    metrics:
+      enabled: true
+    prometheus:
+      enabled: true
+  metrics:
+    export:
+      prometheus:
+        enabled: true
+        step: 10s
+    distribution:
+      percentiles-histogram:
+        checkins.kafka.processing.duration: true
+      percentiles:
+        checkins.kafka.processing.duration: 0.5, 0.95, 0.99
+  tracing:
+    sampling:
+      probability: 1.0
 
 logging:
   level:
     root: WARN
     com.popcorn.checkIns: INFO
+    com.popcorn.common: INFO
     org.springframework.web: WARN
     org.springframework.boot.web: WARN
     org.hibernate.SQL: INFO

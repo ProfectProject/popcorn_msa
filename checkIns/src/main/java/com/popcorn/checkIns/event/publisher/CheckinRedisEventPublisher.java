@@ -1,7 +1,8 @@
-package com.popcorn.checkIns.event;
+package com.popcorn.checkIns.event.publisher;
 
 import com.fasterxml.jackson.databind.ObjectMapper;
-import com.popcorn.checkIns.event.CheckinEvents.*;
+import com.popcorn.checkIns.event.domain.BaseCheckinEvent;
+import com.popcorn.checkIns.event.domain.CheckinEvents.*;
 import com.popcorn.checkIns.constants.EventConstants;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
@@ -101,16 +102,16 @@ public class CheckinRedisEventPublisher implements CheckinEventPublisher {
         Map<String, Object> eventData = new java.util.HashMap<>();
 
         // BaseEvent 메타데이터 활용
-        eventData.put("eventType", event.getEventType());
-        eventData.put("eventId", event.getEventId().toString());
-        eventData.put("aggregateId", event.getAggregateId().toString());
-        eventData.put("aggregateType", event.getAggregateType());
-        eventData.put("timestamp", event.getTimestamp().toString());
-        eventData.put("eventVersion", event.getEventVersion());
-        eventData.put("correlationId", event.getCorrelationId().toString());
+        eventData.put(EventConstants.MetadataKeys.EVENT_TYPE, event.getEventType());
+        eventData.put(EventConstants.MetadataKeys.EVENT_ID, event.getEventId().toString());
+        eventData.put(EventConstants.MetadataKeys.AGGREGATE_ID, event.getAggregateId().toString());
+        eventData.put(EventConstants.MetadataKeys.AGGREGATE_TYPE, event.getAggregateType());
+        eventData.put(EventConstants.MetadataKeys.TIMESTAMP, event.getTimestamp().toString());
+        eventData.put(EventConstants.MetadataKeys.EVENT_VERSION, event.getEventVersion());
+        eventData.put(EventConstants.MetadataKeys.CORRELATION_ID, event.getCorrelationId().toString());
 
         if (event.getUserId() != null) {
-            eventData.put("userId", event.getUserId().toString());
+            eventData.put(EventConstants.MetadataKeys.USER_ID, event.getUserId().toString());
         }
 
         // 이벤트별 비즈니스 데이터 (getEventPayload에서 제공)

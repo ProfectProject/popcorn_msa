@@ -105,6 +105,11 @@ public final class EventConstants {
         public static final String USER_ID = "userId";
         public static final String SOURCE_SERVICE = "sourceService";
         public static final String TARGET_SERVICE = "targetService";
+        public static final String ORDER_ID = "orderId";
+        public static final String PAYMENT_ID = "paymentId";
+        public static final String QR_ID = "qrId";
+        public static final String QR_CODE = "qrCode";
+        public static final String CHECKIN_ID = "checkinId";
 
         private MetadataKeys() {}
     }

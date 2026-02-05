@@ -1,6 +1,6 @@
 package com.popcorn.checkIns.config;
 
-import com.popcorn.checkIns.event.CheckInRedisStreamListener;
+import com.popcorn.checkIns.event.listener.CheckInRedisStreamListener;
 import com.popcorn.checkIns.constants.EventConstants;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
@@ -35,7 +35,7 @@ public class CheckInRedisEventConfig {
     private final CheckInRedisStreamListener checkInRedisStreamListener;
     private final RedisTemplate<String, Object> redisTemplate;
 
-    private StreamMessageListenerContainer checkInContainer;
+    private StreamMessageListenerContainer<String, MapRecord<String, String, String>> checkInContainer;
 
     // EventConstants 사용으로 상수 통합 관리
     private static final String STANDARD_CHECKINS_EVENTS_STREAM = EventConstants.Streams.STANDARD_CHECKINS_EVENTS;
@@ -51,6 +51,7 @@ public class CheckInRedisEventConfig {
     private static final String ORDER_CONSUMER_NAME = EventConstants.Consumers.ORDER_EVENTS_CONSUMER;
     private static final String CHECKIN_REQUESTS_CONSUMER_NAME = EventConstants.Consumers.CHECKIN_REQUESTS_CONSUMER;
     private static final String CHECKIN_EVENTS_CONSUMER_NAME = EventConstants.Consumers.CHECKIN_EVENTS_CONSUMER;
+    private static final String CONSUMER_REGISTER_LOG = "📝 Redis Stream Consumer 등록: {} - {}";
 
     @PostConstruct
     public void initializeStreamsAndConsumerGroups() {
@@ -103,11 +104,12 @@ public class CheckInRedisEventConfig {
      * Redis Stream 메시지 리스너 컨테이너 설정
      */
     @Bean
-    public StreamMessageListenerContainer checkInStreamListenerContainer(
+    public StreamMessageListenerContainer<String, MapRecord<String, String, String>> checkInStreamListenerContainer(
             RedisConnectionFactory connectionFactory) {
 
-        var options = StreamMessageListenerContainer.StreamMessageListenerContainerOptions
-                        .<String, MapRecord<String, String, Object>>builder()
+        StreamMessageListenerContainer.StreamMessageListenerContainerOptions<String, MapRecord<String, String, String>> options =
+                StreamMessageListenerContainer.StreamMessageListenerContainerOptions
+                        .<String, MapRecord<String, String, String>>builder()
                         .batchSize(10)
                         .pollTimeout(Duration.ofMillis(500))
                         .errorHandler(t -> {
@@ -127,41 +129,41 @@ public class CheckInRedisEventConfig {
         checkInContainer.receive(
                 Consumer.from(CHECKIN_CONSUMER_GROUP, STANDARD_CONSUMER_NAME),
                 StreamOffset.create(STANDARD_CHECKINS_EVENTS_STREAM, ReadOffset.lastConsumed()),
-                (org.springframework.data.redis.stream.StreamListener) checkInRedisStreamListener
+                checkInRedisStreamListener
         );
-        log.info("📝 Redis Stream Consumer 등록: {} - {}", STANDARD_CHECKINS_EVENTS_STREAM, STANDARD_CONSUMER_NAME);
+        log.info(CONSUMER_REGISTER_LOG, STANDARD_CHECKINS_EVENTS_STREAM, STANDARD_CONSUMER_NAME);
 
         // 결제 이벤트 Stream 구독 (향후 확장용)
         checkInContainer.receive(
                 Consumer.from(CHECKIN_CONSUMER_GROUP, PAYMENT_CONSUMER_NAME),
                 StreamOffset.create(PAYMENT_EVENTS_STREAM, ReadOffset.lastConsumed()),
-                (org.springframework.data.redis.stream.StreamListener) checkInRedisStreamListener
+                checkInRedisStreamListener
         );
-        log.info("📝 Redis Stream Consumer 등록: {} - {}", PAYMENT_EVENTS_STREAM, PAYMENT_CONSUMER_NAME);
+        log.info(CONSUMER_REGISTER_LOG, PAYMENT_EVENTS_STREAM, PAYMENT_CONSUMER_NAME);
 
         // 주문 이벤트 Stream 구독 (향후 확장용)
         checkInContainer.receive(
                 Consumer.from(CHECKIN_CONSUMER_GROUP, ORDER_CONSUMER_NAME),
                 StreamOffset.create(ORDER_EVENTS_STREAM, ReadOffset.lastConsumed()),
-                (org.springframework.data.redis.stream.StreamListener) checkInRedisStreamListener
+                checkInRedisStreamListener
         );
-        log.info("📝 Redis Stream Consumer 등록: {} - {}", ORDER_EVENTS_STREAM, ORDER_CONSUMER_NAME);
+        log.info(CONSUMER_REGISTER_LOG, ORDER_EVENTS_STREAM, ORDER_CONSUMER_NAME);
 
         // 새로운 BaseEvent 기반 CheckIn 요청 Stream 구독 (Payment → CheckIn)
         checkInContainer.receive(
                 Consumer.from(CHECKIN_CONSUMER_GROUP, CHECKIN_REQUESTS_CONSUMER_NAME),
                 StreamOffset.create(CHECKIN_REQUESTS_STREAM, ReadOffset.lastConsumed()),
-                (org.springframework.data.redis.stream.StreamListener) checkInRedisStreamListener
+                checkInRedisStreamListener
         );
-        log.info("📝 Redis Stream Consumer 등록: {} - {}", CHECKIN_REQUESTS_STREAM, CHECKIN_REQUESTS_CONSUMER_NAME);
+        log.info(CONSUMER_REGISTER_LOG, CHECKIN_REQUESTS_STREAM, CHECKIN_REQUESTS_CONSUMER_NAME);
 
         // 새로운 BaseEvent 기반 CheckIn 이벤트 Stream 구독 (CheckIn → 다른 도메인)
         checkInContainer.receive(
                 Consumer.from(CHECKIN_CONSUMER_GROUP, CHECKIN_EVENTS_CONSUMER_NAME),
                 StreamOffset.create(CHECKIN_EVENTS_STREAM, ReadOffset.lastConsumed()),
-                (org.springframework.data.redis.stream.StreamListener) checkInRedisStreamListener
+                checkInRedisStreamListener
         );
-        log.info("📝 Redis Stream Consumer 등록: {} - {}", CHECKIN_EVENTS_STREAM, CHECKIN_EVENTS_CONSUMER_NAME);
+        log.info(CONSUMER_REGISTER_LOG, CHECKIN_EVENTS_STREAM, CHECKIN_EVENTS_CONSUMER_NAME);
 
         try {
             checkInContainer.start();

@@ -2,6 +2,7 @@ package com.popcorn.store.event;
 
 import com.fasterxml.jackson.core.type.TypeReference;
 import com.fasterxml.jackson.databind.ObjectMapper;
+import java.util.ArrayList;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.context.ApplicationEventPublisher;
@@ -265,9 +266,32 @@ public class StoreRedisStreamListener implements StreamListener<String, MapRecor
                 log.debug("🔧 [STORES] JSON 정규화 완료 - reservationItems: {}", reservationItemsJson);
             }
 
-            List<GoodsReservationItem> reservationItems = objectMapper.readValue(
-                    reservationItemsJson, new TypeReference<List<GoodsReservationItem>>() {}
-            );
+            // null 체크 추가하여 안전하게 파싱
+            List<GoodsReservationItem> reservationItems = new ArrayList<>();
+            if (reservationItemsJson != null && !reservationItemsJson.isBlank()) {
+                reservationItems = objectMapper.readValue(
+                        reservationItemsJson, new TypeReference<List<GoodsReservationItem>>() {}
+                );
+            } else {
+                // 폴백: 단일 goodsId/quantity 형태 이벤트 대응
+                String goodsIdStr = normalizeUuidString((String) values.get("goodsId"));
+                String quantityStr = normalizeQuotedString((String) values.get("quantity"));
+                if (goodsIdStr != null && quantityStr != null && !goodsIdStr.isBlank() && !quantityStr.isBlank()) {
+                    try {
+                        GoodsReservationItem item = new GoodsReservationItem();
+                        item.goodsId = UUID.fromString(goodsIdStr);
+                        item.quantity = Integer.parseInt(quantityStr);
+                        reservationItems.add(item);
+                        log.info("📋 [STORES] 단일 굿즈 예약 요청 변환 - goodsId: {}, qty: {}",
+                                item.goodsId, item.quantity);
+                    } catch (Exception parseEx) {
+                        log.warn("📋 [STORES] 단일 굿즈 예약 요청 파싱 실패 - goodsId: {}, quantity: {}, error: {}",
+                                goodsIdStr, quantityStr, parseEx.getMessage(), parseEx);
+                    }
+                } else {
+                    log.warn("📋 [STORES] 굿즈 재고 예약 요청 JSON이 비어있음 또는 null - values: {}", values);
+                }
+            }
 
             // orderId와 popupId에서 따옴표 제거
             String orderIdStr = (String) values.get("orderId");

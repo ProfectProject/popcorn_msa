@@ -1,7 +1,7 @@
-package com.popcorn.checkIns.event;
+package com.popcorn.checkIns.event.listener;
 
-import com.fasterxml.jackson.databind.ObjectMapper;
-import com.popcorn.checkIns.event.CheckinEvents.*;
+import com.popcorn.checkIns.constants.EventConstants;
+import com.popcorn.checkIns.event.domain.CheckinEvents.*;
 import com.popcorn.checkIns.service.QrCodeService;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
@@ -22,23 +22,22 @@ import java.util.UUID;
 @Component
 @RequiredArgsConstructor
 @Slf4j
-public class CheckInRedisStreamListener implements StreamListener<String, MapRecord<String, String, Object>> {
+public class CheckInRedisStreamListener implements StreamListener<String, MapRecord<String, String, String>> {
 
-    private final ObjectMapper objectMapper;
     private final ApplicationEventPublisher eventPublisher;
     private final QrCodeService qrCodeService;
 
     @Override
-    public void onMessage(MapRecord<String, String, Object> record) {
+    public void onMessage(MapRecord<String, String, String> record) {
         try {
             String streamName = record.getStream();
-            String recordId = record.getId().getValue();
-            Map<String, Object> values = record.getValue();
+            String recordId = record.getId() != null ? record.getId().getValue() : "unknown";
+            Map<String, String> values = record.getValue();
 
             log.info("[CHECKINS] Stream 메시지 수신 - stream: {}, recordId: {}, eventType: {}",
-                    streamName, recordId, values.get("eventType"));
+                    streamName, recordId, values.get(EventConstants.MetadataKeys.EVENT_TYPE));
 
-            String eventType = (String) values.get("eventType");
+            String eventType = (String) values.get(EventConstants.MetadataKeys.EVENT_TYPE);
             // eventType에서 따옴표 제거
             if (eventType != null) {
                 eventType = eventType.trim().replaceAll("^\"|\"$", "");
@@ -56,7 +55,7 @@ public class CheckInRedisStreamListener implements StreamListener<String, MapRec
     /**
      * Stream 이벤트 타입별 처리 - 실제 비즈니스 로직이 있는 이벤트만 처리
      */
-    private void handleStreamEvent(String eventType, Map<String, Object> values) {
+    private void handleStreamEvent(String eventType, Map<String, String> values) {
         try {
             switch (eventType) {
                 // === Standard 이벤트들 (기존) ===
@@ -64,14 +63,16 @@ public class CheckInRedisStreamListener implements StreamListener<String, MapRec
                 // 표준 QR 생성 이벤트
                 case "QR_GENERATED":
                     log.info("[CHECKINS] QR 생성 이벤트 수신 (Standard) - orderId: {}, qrCode: {}",
-                            values.get("orderId"), values.get("qrCode"));
+                            values.get(EventConstants.MetadataKeys.ORDER_ID),
+                            values.get(EventConstants.MetadataKeys.QR_CODE));
                     handleQrGeneratedEvent(values);
                     break;
 
                 // 표준 체크인 생성 이벤트
                 case "CHECKIN_CREATED":
                     log.info("[CHECKINS] 체크인 생성 이벤트 수신 (Standard) - checkinId: {}, orderId: {}",
-                            values.get("checkinId"), values.get("orderId"));
+                            values.get(EventConstants.MetadataKeys.CHECKIN_ID),
+                            values.get(EventConstants.MetadataKeys.ORDER_ID));
                     handleCheckinCreatedEvent(values);
                     break;
 
@@ -80,21 +81,24 @@ public class CheckInRedisStreamListener implements StreamListener<String, MapRec
                 // QR 생성 요청 이벤트 (Payment → CheckIn)
                 case "qr-generation-requested":
                     log.info("[CHECKINS] QR 생성 요청 수신 (BaseEvent) - orderId: {}, paymentId: {}",
-                            values.get("orderId"), values.get("paymentId"));
+                            values.get(EventConstants.MetadataKeys.ORDER_ID),
+                            values.get(EventConstants.MetadataKeys.PAYMENT_ID));
                     handleQrGenerationRequested(values);
                     break;
 
                 // QR 생성 완료 이벤트 (BaseEvent 기반)
                 case "qr-generated":
                     log.info("[CHECKINS] QR 생성 완료 (BaseEvent) - orderId: {}, qrId: {}",
-                            values.get("orderId"), values.get("qrId"));
+                            values.get(EventConstants.MetadataKeys.ORDER_ID),
+                            values.get(EventConstants.MetadataKeys.QR_ID));
                     handleBaseQrGeneratedEvent(values);
                     break;
 
                 // 체크인 생성 이벤트 (BaseEvent 기반)
                 case "checkin-created":
                     log.info("[CHECKINS] 체크인 생성 완료 (BaseEvent) - orderId: {}, checkinId: {}",
-                            values.get("orderId"), values.get("checkinId"));
+                            values.get(EventConstants.MetadataKeys.ORDER_ID),
+                            values.get(EventConstants.MetadataKeys.CHECKIN_ID));
                     handleBaseCheckinCreatedEvent(values);
                     break;
 
@@ -103,7 +107,8 @@ public class CheckInRedisStreamListener implements StreamListener<String, MapRec
                 // 결제 승인 시 QR 코드 생성 준비
                 case "payment-approved":
                     log.info("[CHECKINS] 결제 승인 이벤트 수신 - paymentId: {}, orderId: {}",
-                            values.get("paymentId"), values.get("orderId"));
+                            values.get(EventConstants.MetadataKeys.PAYMENT_ID),
+                            values.get(EventConstants.MetadataKeys.ORDER_ID));
                     handlePaymentApproved(values);
                     break;
 
@@ -120,11 +125,11 @@ public class CheckInRedisStreamListener implements StreamListener<String, MapRec
     /**
      * QR 생성 이벤트 처리
      */
-    private void handleQrGeneratedEvent(Map<String, Object> values) {
+    private void handleQrGeneratedEvent(Map<String, String> values) {
         try {
-            String orderId = (String) values.get("orderId");
-            String qrCode = (String) values.get("qrCode");
-            String qrId = (String) values.get("qrId");
+            String orderId = (String) values.get(EventConstants.MetadataKeys.ORDER_ID);
+            String qrCode = (String) values.get(EventConstants.MetadataKeys.QR_CODE);
+            String qrId = (String) values.get(EventConstants.MetadataKeys.QR_ID);
 
             log.info("[CHECKINS] QR 생성 이벤트 처리 완료 - orderId: {}, qrId: {}", orderId, qrId);
 
@@ -139,11 +144,11 @@ public class CheckInRedisStreamListener implements StreamListener<String, MapRec
     /**
      * 체크인 생성 이벤트 처리
      */
-    private void handleCheckinCreatedEvent(Map<String, Object> values) {
+    private void handleCheckinCreatedEvent(Map<String, String> values) {
         try {
-            String checkinId = (String) values.get("checkinId");
-            String orderId = (String) values.get("orderId");
-            String qrCode = (String) values.get("qrCode");
+            String checkinId = (String) values.get(EventConstants.MetadataKeys.CHECKIN_ID);
+            String orderId = (String) values.get(EventConstants.MetadataKeys.ORDER_ID);
+            String qrCode = (String) values.get(EventConstants.MetadataKeys.QR_CODE);
 
             log.info("[CHECKINS] 체크인 생성 이벤트 처리 완료 - checkinId: {}, orderId: {}", checkinId, orderId);
 
@@ -158,9 +163,9 @@ public class CheckInRedisStreamListener implements StreamListener<String, MapRec
     /**
      * 결제 승인 이벤트 처리 (향후 확장용)
      */
-    private void handlePaymentApproved(Map<String, Object> values) {
+    private void handlePaymentApproved(Map<String, String> values) {
         try {
-            String orderId = (String) values.get("orderId");
+            String orderId = (String) values.get(EventConstants.MetadataKeys.ORDER_ID);
             if (orderId != null) {
                 log.info("[CHECKINS] 결제 승인으로 인한 QR 코드 생성 준비 - orderId: {}", orderId);
                 // 향후 자동 QR 코드 생성 로직 추가 가능
@@ -175,10 +180,10 @@ public class CheckInRedisStreamListener implements StreamListener<String, MapRec
     /**
      * QR 생성 요청 이벤트 처리 (Payment → CheckIn)
      */
-    private void handleQrGenerationRequested(Map<String, Object> values) {
+    private void handleQrGenerationRequested(Map<String, String> values) {
         try {
-            String orderId = (String) values.get("orderId");
-            String paymentId = (String) values.get("paymentId");
+            String orderId = (String) values.get(EventConstants.MetadataKeys.ORDER_ID);
+            String paymentId = (String) values.get(EventConstants.MetadataKeys.PAYMENT_ID);
             String orderNo = (String) values.get("orderNo");
             String storeId = (String) values.get("storeId");
             String popupId = (String) values.get("popupId");
@@ -228,10 +233,10 @@ public class CheckInRedisStreamListener implements StreamListener<String, MapRec
     /**
      * QR 생성 완료 이벤트 처리 (BaseEvent 기반)
      */
-    private void handleBaseQrGeneratedEvent(Map<String, Object> values) {
+    private void handleBaseQrGeneratedEvent(Map<String, String> values) {
         try {
-            String qrId = (String) values.get("qrId");
-            String orderId = (String) values.get("orderId");
+            String qrId = (String) values.get(EventConstants.MetadataKeys.QR_ID);
+            String orderId = (String) values.get(EventConstants.MetadataKeys.ORDER_ID);
             String qrToken = (String) values.get("qrToken");
             String qrUrl = (String) values.get("qrUrl");
             String expiresAt = (String) values.get("expiresAt");
@@ -239,7 +244,7 @@ public class CheckInRedisStreamListener implements StreamListener<String, MapRec
             log.info("[CHECKINS] BaseEvent QR 생성 완료 처리 - orderId: {}, qrId: {}", orderId, qrId);
 
             // BaseEvent 메타데이터 활용
-            String eventId = (String) values.get("eventId");
+            String eventId = (String) values.get(EventConstants.MetadataKeys.EVENT_ID);
             String correlationId = (String) values.get("correlationId");
             String timestamp = (String) values.get("timestamp");
 
@@ -259,10 +264,10 @@ public class CheckInRedisStreamListener implements StreamListener<String, MapRec
     /**
      * 체크인 생성 이벤트 처리 (BaseEvent 기반)
      */
-    private void handleBaseCheckinCreatedEvent(Map<String, Object> values) {
+    private void handleBaseCheckinCreatedEvent(Map<String, String> values) {
         try {
-            String checkinId = (String) values.get("checkinId");
-            String orderId = (String) values.get("orderId");
+            String checkinId = (String) values.get(EventConstants.MetadataKeys.CHECKIN_ID);
+            String orderId = (String) values.get(EventConstants.MetadataKeys.ORDER_ID);
             String orderGoodsId = (String) values.get("orderGoodsId");
             String popupId = (String) values.get("popupId");
             String storeId = (String) values.get("storeId");
@@ -271,7 +276,7 @@ public class CheckInRedisStreamListener implements StreamListener<String, MapRec
             log.info("[CHECKINS] BaseEvent 체크인 생성 완료 처리 - checkinId: {}, orderId: {}", checkinId, orderId);
 
             // BaseEvent 메타데이터 활용
-            String eventId = (String) values.get("eventId");
+            String eventId = (String) values.get(EventConstants.MetadataKeys.EVENT_ID);
             String correlationId = (String) values.get("correlationId");
             String userId = (String) values.get("userId");
 

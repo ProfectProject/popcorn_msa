@@ -24,7 +24,7 @@ public class OwnerCheckinRepository {
 				SELECT DISTINCT c.checkin_id, c.order_id, c.order_qr_code_id, c.created_at, c.created_by, q.qr_code
 				FROM qr.qr_checkins c
 				JOIN qr.qr_order_qr_codes q ON q.qr_id = c.order_qr_code_id
-				JOIN p_orders o ON o.order_id = c.order_id AND o.deleted_at IS NULL
+				JOIN orders.p_orders o ON o.order_id = c.order_id AND o.deleted_at IS NULL
 				JOIN p_order_goods og ON og.order_id = o.order_id AND og.deleted_at IS NULL
 				LEFT JOIN p_popup_schedules ps ON ps.schedule_id = og.schedule_id AND ps.deleted_at IS NULL
 				LEFT JOIN p_goods_variants gv ON gv.goods_id = og.goods_variant_id AND gv.deleted_at IS NULL
@@ -55,7 +55,7 @@ public class OwnerCheckinRepository {
 				SELECT DISTINCT c.checkin_id, c.order_id, c.order_qr_code_id, c.created_at, c.created_by, q.qr_code
 				FROM qr.qr_checkins c
 				JOIN qr.qr_order_qr_codes q ON q.qr_id = c.order_qr_code_id
-				JOIN p_orders o ON o.order_id = c.order_id AND o.deleted_at IS NULL
+				JOIN orders.p_orders o ON o.order_id = c.order_id AND o.deleted_at IS NULL
 				JOIN p_order_goods og ON og.order_id = o.order_id AND og.deleted_at IS NULL
 				JOIN p_popup_schedules ps ON ps.schedule_id = og.schedule_id AND ps.deleted_at IS NULL
 				JOIN p_popups p ON p.popup_id = ps.popup_id AND p.deleted_at IS NULL

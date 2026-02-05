@@ -19,7 +19,7 @@ public class GoodsReservationRepository  {
     public GoodsStockResponse reserveStock(UUID goodsId, int quantity){
 
         String sql = """
-                UPDATE goods_variants
+                UPDATE store.goods_variants
                    SET stock = stock - :quantity,
                        reservation_stock = reservation_stock + :quantity,
                        updated_at = now()
@@ -40,7 +40,7 @@ public class GoodsReservationRepository  {
     public GoodsStockResponse cancelStock(UUID goodsId, int quantity){
 
         String sql = """
-                UPDATE goods_variants
+                UPDATE store.goods_variants
                    SET stock = stock + :quantity,
                        updated_at = now()
                  WHERE goods_id = :goodsId
@@ -60,7 +60,7 @@ public class GoodsReservationRepository  {
 
     public GoodsStockResponse failStock(UUID goodsId, int quantity){
         String sql = """
-                UPDATE goods_variants
+                UPDATE store.goods_variants
                    SET reservation_stock = reservation_stock - :quantity,
                        updated_at = now()
                  WHERE goods_id = :goodsId
@@ -80,7 +80,7 @@ public class GoodsReservationRepository  {
 
     public GoodsStockResponse completeStock(UUID goodsId, int quantity){
         String sql = """
-                UPDATE goods_variants
+                UPDATE store.goods_variants
                    SET reservation_stock = reservation_stock - :quantity,
                        stock = stock - :quantity,
                        updated_at = now()

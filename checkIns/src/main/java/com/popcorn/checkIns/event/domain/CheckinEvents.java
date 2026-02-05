@@ -1,4 +1,4 @@
-package com.popcorn.checkIns.event;
+package com.popcorn.checkIns.event.domain;
 
 import com.popcorn.checkIns.constants.EventConstants;
 import java.time.LocalDateTime;
@@ -98,16 +98,16 @@ public class CheckinEvents {
 
         @Override
         public Map<String, Object> getEventPayload() {
-            return Map.of(
-                    "qrId", getCheckinId(),
-                    "orderId", orderId,
-                    "orderNo", orderNo,
-                    "qrToken", qrToken != null ? qrToken : "null",
-                    "qrUrl", qrUrl != null ? qrUrl : "null",
-                    "expiresAt", expiresAt.toString(),
-                    "generatedAt", generatedAt.toString(),
-                    "ttlSeconds", ttlSeconds.toString()
-            );
+            Map<String, Object> payload = new java.util.HashMap<>();
+            payload.put("qrId", getCheckinId());
+            payload.put("orderId", orderId);
+            payload.put("orderNo", orderNo != null ? orderNo : "null");
+            payload.put("qrToken", qrToken != null ? qrToken : "null");
+            payload.put("qrUrl", qrUrl != null ? qrUrl : "null");
+            payload.put("expiresAt", expiresAt != null ? expiresAt.toString() : "null");
+            payload.put("generatedAt", generatedAt != null ? generatedAt.toString() : "null");
+            payload.put("ttlSeconds", ttlSeconds != null ? ttlSeconds.toString() : "null");
+            return payload;
         }
 
         // Getters

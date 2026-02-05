@@ -1,4 +1,4 @@
-package com.popcorn.checkIns.event;
+package com.popcorn.checkIns.event.handler;
 
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
@@ -9,6 +9,8 @@ import org.springframework.stereotype.Component;
 import org.springframework.transaction.annotation.Transactional;
 
 import com.popcorn.checkIns.checkin.repository.CheckinRepository;
+import com.popcorn.checkIns.event.domain.QrCheckinRequestedEvent;
+import com.popcorn.checkIns.event.domain.QrCheckinCompletedEvent;
 
 import lombok.RequiredArgsConstructor;
 

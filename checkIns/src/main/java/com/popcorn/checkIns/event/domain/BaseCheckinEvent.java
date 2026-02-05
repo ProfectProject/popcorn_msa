@@ -1,4 +1,4 @@
-package com.popcorn.checkIns.event;
+package com.popcorn.checkIns.event.domain;
 
 import com.popcorn.common.event.BaseEvent;
 

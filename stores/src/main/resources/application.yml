@@ -67,7 +67,8 @@ redis:
     locations:
       - classpath:db/migration/schema
 #      - classpath:db/migration/seed
-    schemas: public
+    default-schema: store
+    schemas: store
     create-schemas: true
     clean-disabled: false  # 개발 환경에서만 허용
 ---
@@ -85,7 +86,8 @@ spring:
     locations:
       - classpath:db/migration/schema
 #      - classpath:db/migration/seed
-    schemas: public
+    default-schema: store
+    schemas: store
     create-schemas: true
     clean-disabled: true  # 개발/운영 환경에서는 비활성화
 
@@ -104,7 +106,8 @@ spring:
     locations:
       - classpath:db/migration/schema
 #      - classpath:db/migration/seed
-    schemas: public
+    default-schema: store
+    schemas: store
     create-schemas: false  # 운영 환경에서는 false
     clean-disabled: true  # 운영 환경에서는 반드시 true
     validate-on-migrate: true  # 운영 환경에서 마이그레이션 검증
