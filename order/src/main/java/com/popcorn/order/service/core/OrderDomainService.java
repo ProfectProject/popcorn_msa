@@ -280,27 +280,27 @@ public class OrderDomainService {
      * 총 주문 금액 계산하기
      *
      * [초보자를 위한 설명]
-     * 각 상품의 (단가 × 수량)을 모두 더해서 총 금액을 계산해요.
-     * for문 대신 stream을 사용했는데, 같은 결과가 나와요.
+     * 각 상품의 라인 금액을 가져와서 `long`으로 누적한 다음,
+     * Integer 범위를 넘으면 예외를 던져요.
      */
     public int calculateTotalAmount(List<OrderItem> orderItems) {
         if (orderItems == null || orderItems.isEmpty()) {
             return 0;
         }
 
-        // 방법 1: for문 사용 (초보자가 이해하기 쉬운 방법)
-        /*
-        int total = 0;
+        long total = 0L;
         for (OrderItem item : orderItems) {
-            total += item.getUnitPrice() * item.getQty();
-        }
-        return total;
-        */
+            if (item.getLineAmount() == null) {
+                throw new IllegalArgumentException("주문 항목 금액이 누락되었습니다.");
+            }
 
-        // 방법 2: stream 사용 (간결한 방법)
-        return orderItems.stream()
-                .mapToInt(item -> item.getUnitPrice() * item.getQty())
-                .sum();
+            total += item.getLineAmount();
+            if (total > Integer.MAX_VALUE) {
+                throw new IllegalArgumentException("총 주문 금액이 허용 범위를 초과했습니다.");
+            }
+        }
+
+        return (int) total;
     }
 
     // ================ 상태 변경 관련 메서드들 ================

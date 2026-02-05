@@ -49,6 +49,8 @@ spring:
     baseline-on-migrate: true
     validate-on-migrate: true
     clean-disabled: false
+    placeholders:
+      ORDER_MIGRATOR_PASSWORD: ${ORDER_MIGRATOR_PASSWORD:order321}
 
   # Redis 설정 (stores 서비스와 동일한 극한 성능 최적화)
   data:

@@ -48,6 +48,10 @@ public class InventoryRedisHoldService {
         return false;
     }
 
+    public Duration getHoldDuration() {
+        return HOLD_TTL;
+    }
+
     public HoldResult holdSchedule(UUID orderId, UUID popupId, UUID scheduleId, int scheduleQty) {
         validateHoldInputs(orderId, popupId, scheduleId, scheduleQty);
         List<String> keys = Collections.singletonList(buildScheduleKey(popupId, scheduleId));
