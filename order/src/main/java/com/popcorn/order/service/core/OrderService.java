@@ -380,7 +380,7 @@ public class OrderService {
             /*
             * kafka order_cancelled 발행
             */
-            orderEventProducer.publishOrderCancelled(savedOrder,orderItems,hasGoodsItems,hasReservationItems);
+            orderEventProducer.publishOrderCancelled(savedOrder,orderItems,hasGoodsItems,hasReservationItems,LocalDateTime.now());
 
             log.info("주문 취소 처리 성공 - orderId: {}, 상태: {} -> {}, 사유: {}",
                     orderId, oldStatus, OrderStatus.CANCELLED, reason);

@@ -503,7 +503,7 @@ public class OrderCommandService {
             /*
             * kafka order_cancelled 발행
             */
-            orderEventProducer.publishOrderCancelled(savedOrder,orderItems,hasGoodsItems,hasReservationItems);
+            orderEventProducer.publishOrderCancelled(savedOrder,orderItems,hasGoodsItems,hasReservationItems,LocalDateTime.now());
         }
 
         log.info("주문 상태 변경 완료 - 주문ID: {}, {} → {}", orderId, currentStatus, newStatus);

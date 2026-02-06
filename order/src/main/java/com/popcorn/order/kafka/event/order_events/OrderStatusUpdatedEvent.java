@@ -43,5 +43,6 @@ public class OrderStatusUpdatedEvent {
     private boolean hasGoods;
 
     //private LocalDateTime updatedAt;
-    private Instant updatedAt;
+    //private Instant updatedAt;
+    private String updatedAt;
 }

@@ -73,16 +73,12 @@ public class OrderEventProducer {
                                 boolean hasGoods, boolean hasReservation) {
 
         OrderPAIDEvent event = OrderPAIDEvent.builder()
-                .meta(MetaEvent.builder()
-                        .eventId(UUID.randomUUID())
-                        .correlationId(UUID.randomUUID())
-                        .timestamp(LocalDateTime.now())
-                        .eventType("ORDER_PAID")
-                        .eventVersion("1.0")
-                        .producer("order-service")
-                        .aggregateType("Order")
-                        .metadata(Map.of())
-                        .build())
+                .eventId(UUID.randomUUID())
+                .correlationId(UUID.randomUUID())
+                .timestamp(Instant.now())
+                .eventType("ORDER_PAID")
+                .eventVersion("1.0")
+                .producer("order-service")
                 .orderId(order.getId())
                 .popupId(order.getPopupId())
                 .hasReservation(hasReservation)
@@ -118,7 +114,7 @@ public class OrderEventProducer {
                 .hasReservation(hasReservation)
                 .hasGoods(hasGoods)
                 //.updatedAt(order.getUpdatedAt())
-                .updatedAt(order.getUpdatedAt().toInstant(ZoneOffset.UTC))
+                .updatedAt(order.getUpdatedAt().atZone(ZoneOffset.UTC).toString())
                 .build();
 
         // key 전략: orderId (같은 주문 이벤트는 같은 파티션으로)
@@ -159,7 +155,7 @@ public class OrderEventProducer {
     * ORDER_CANCELLED
     */
     public void publishOrderCancelled(Order order,List<OrderItem> orderItems,
-                                boolean hasGoods, boolean hasReservation) {
+                                boolean hasGoods, boolean hasReservation,LocalDateTime cancleAt) {
         List<OrderLine> lines = orderItems.stream()
             .map(this::toLine)
             .toList();
@@ -176,7 +172,7 @@ public class OrderEventProducer {
                 .hasReservation(hasReservation)
                 .hasGoods(hasGoods)
                 .lines(lines)
-                .cancelledAt(order.getCanceledAt())
+                .cancelledAt(cancleAt)
                 .build();
 
         // key 전략: orderId (같은 주문 이벤트는 같은 파티션으로)

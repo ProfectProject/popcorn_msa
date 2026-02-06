@@ -9,12 +9,17 @@ import org.apache.kafka.common.serialization.StringSerializer;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.Configuration;
+import org.springframework.kafka.annotation.EnableKafka;
 import org.springframework.kafka.config.ConcurrentKafkaListenerContainerFactory;
 import org.springframework.kafka.config.TopicBuilder;
 import org.springframework.kafka.core.*;
+import org.springframework.kafka.listener.DeadLetterPublishingRecoverer;
+import org.springframework.kafka.listener.DefaultErrorHandler;
+import org.springframework.kafka.support.ExponentialBackOffWithMaxRetries;
 import org.apache.kafka.common.config.TopicConfig;
 import org.apache.kafka.common.serialization.StringDeserializer;
 import org.apache.kafka.common.serialization.StringSerializer;
+import org.apache.kafka.common.TopicPartition;
 
 import java.util.HashMap;
 import java.util.Map;
@@ -27,12 +32,16 @@ import java.util.Map;
  * @since : 25. 1. 9.
  */
 @Slf4j
+@EnableKafka
 @Configuration
 public class KafkaConfig {
 
     // Kafka 연결 서버 주소
     @Value("${spring.kafka.bootstrap-servers}")
     private String bootstrapServers;
+
+    @Value("${spring.kafka.consumer.group-id}")
+    private String groupId;
 
     /**
      * Producer 설정을 위한 Factory Bean
@@ -64,8 +73,10 @@ public class KafkaConfig {
     public ConsumerFactory<String, String> consumerFactory() {
         Map<String, Object> props = new HashMap<>();
         props.put(ConsumerConfig.BOOTSTRAP_SERVERS_CONFIG, bootstrapServers);
-        props.put(ConsumerConfig.GROUP_ID_CONFIG, "my-group");
+        props.put(ConsumerConfig.GROUP_ID_CONFIG, groupId);
         props.put(ConsumerConfig.AUTO_OFFSET_RESET_CONFIG, "earliest");
+        // at-least-once 전제 -> 수동 커밋
+        props.put(ConsumerConfig.ENABLE_AUTO_COMMIT_CONFIG, false);
         props.put(ConsumerConfig.KEY_DESERIALIZER_CLASS_CONFIG, StringDeserializer.class);
         props.put(ConsumerConfig.VALUE_DESERIALIZER_CLASS_CONFIG, StringDeserializer.class);
         return new DefaultKafkaConsumerFactory<>(props);
@@ -83,6 +94,33 @@ public class KafkaConfig {
         factory.setConsumerFactory(consumerFactory());
         return factory;
     }
+
+    /**
+     * 실패 처리 정책:
+     * - 재시도(지수 백오프)
+     * - 최대 초과 시 <원본토픽>.DLT 로 전송
+     *
+     * 예) store-requests.DLT
+     */
+    /*@Bean
+    public DefaultErrorHandler errorHandler(KafkaTemplate<String, String> template) {
+        DeadLetterPublishingRecoverer recoverer = new DeadLetterPublishingRecoverer(
+                template,
+                (record, ex) -> new TopicPartition(record.topic() + ".DLT", record.partition())
+        );
+
+        ExponentialBackOffWithMaxRetries backOff = new ExponentialBackOffWithMaxRetries(6);
+        backOff.setInitialInterval(1_000L);
+        backOff.setMultiplier(2.0);
+        backOff.setMaxInterval(30_000L);
+
+        DefaultErrorHandler handler = new DefaultErrorHandler(recoverer, backOff);
+
+        // 재시도 의미 없는 예외는 즉시 DLT로 보내고 싶으면 여기에 추가
+        // handler.addNotRetryableExceptions(IllegalArgumentException.class);
+
+        return handler;
+    }*/
 
     @Bean
     public NewTopic orderEventsTopic() {
