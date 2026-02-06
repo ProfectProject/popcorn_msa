@@ -1,5 +1,6 @@
 package com.popcorn.payment.client
 
+import com.fasterxml.jackson.annotation.JsonProperty
 import com.popcorn.payment.dto.OrderInfoResponse
 import com.popcorn.payment.util.SystemPassportGenerator
 import kotlinx.coroutines.reactor.awaitSingle
@@ -97,6 +98,7 @@ data class OrderApiResponse(
 )
 
 data class OrderDetailData(
+    @JsonProperty("orderId")
     val id: UUID,
     val orderNo: String,
     val customerId: Long,
