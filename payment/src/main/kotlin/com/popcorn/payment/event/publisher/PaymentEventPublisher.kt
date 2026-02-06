@@ -122,7 +122,10 @@ class BasePaymentEventPublisherImpl(
         orderNo: String,
         amount: Int,
         paymentMethod: String,
-        customerId: Long?
+        customerId: Long?,
+        status: String? = null,
+        createdAt: java.time.LocalDateTime? = null,
+        popupId: String? = null
     ) {
         val event = PaymentCreatedEvent(
             _paymentId = paymentId,
@@ -130,7 +133,10 @@ class BasePaymentEventPublisherImpl(
             orderNo = orderNo,
             amount = amount,
             paymentMethod = paymentMethod,
-            customerId = customerId
+            status = status,
+            createdAt = createdAt,
+            customerId = customerId,
+            popupId = popupId
         )
         publish(event)
     }
@@ -146,7 +152,9 @@ class BasePaymentEventPublisherImpl(
         paymentMethod: String,
         paymentKey: String?,
         approvedAt: java.time.LocalDateTime,
-        customerId: Long?
+        customerId: Long?,
+        popupId: String? = null,
+        storeId: String? = null
     ) {
         val event = PaymentApprovedEvent(
             _paymentId = paymentId,
@@ -156,7 +164,9 @@ class BasePaymentEventPublisherImpl(
             paymentMethod = paymentMethod,
             paymentKey = paymentKey,
             approvedAt = approvedAt,
-            customerId = customerId
+            customerId = customerId,
+            popupId = popupId,
+            storeId = storeId
         )
         publish(event)
     }
@@ -171,7 +181,10 @@ class BasePaymentEventPublisherImpl(
         amount: Int,
         paymentMethod: String,
         failureReason: String,
-        customerId: Long?
+        customerId: Long?,
+        popupId: String? = null,
+        storeId: String? = null,
+        failedAt: java.time.LocalDateTime = java.time.LocalDateTime.now()
     ) {
         val event = PaymentFailedEvent(
             _paymentId = paymentId,
@@ -180,7 +193,10 @@ class BasePaymentEventPublisherImpl(
             amount = amount,
             paymentMethod = paymentMethod,
             failureReason = failureReason,
-            customerId = customerId
+            customerId = customerId,
+            popupId = popupId,
+            storeId = storeId,
+            failedAt = failedAt
         )
         publish(event)
     }
@@ -194,7 +210,10 @@ class BasePaymentEventPublisherImpl(
         orderNo: String,
         cancelAmount: Int,
         cancelReason: String,
-        customerId: Long?
+        customerId: Long?,
+        popupId: String? = null,
+        storeId: String? = null,
+        cancelledAt: java.time.LocalDateTime = java.time.LocalDateTime.now()
     ) {
         val event = PaymentCancelledEvent(
             _paymentId = paymentId,
@@ -202,7 +221,10 @@ class BasePaymentEventPublisherImpl(
             orderNo = orderNo,
             cancelAmount = cancelAmount,
             cancelReason = cancelReason,
-            customerId = customerId
+            customerId = customerId,
+            popupId = popupId,
+            storeId = storeId,
+            cancelledAt = cancelledAt
         )
         publish(event)
     }

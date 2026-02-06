@@ -1,7 +1,7 @@
 -- Outbox 이벤트 테이블 (Transactional Outbox Pattern)
 -- checkIns 스키마 기본 사용 (default_schema=checkIns)
 
-CREATE TABLE IF NOT EXISTS outbox_events (
+CREATE TABLE IF NOT EXISTS checkIns.outbox_events (
     id             BIGSERIAL PRIMARY KEY,
 
     event_id       UUID          NOT NULL,
@@ -21,7 +21,7 @@ CREATE TABLE IF NOT EXISTS outbox_events (
     CONSTRAINT uq_outbox_event_id UNIQUE (event_id)
 );
 
-CREATE INDEX IF NOT EXISTS idx_outbox_created_at ON outbox_events (created_at);
-CREATE INDEX IF NOT EXISTS idx_outbox_aggregate ON outbox_events (aggregate_type, aggregate_id);
-CREATE INDEX IF NOT EXISTS idx_outbox_event_type ON outbox_events (event_type);
-CREATE INDEX IF NOT EXISTS idx_outbox_partition_key ON outbox_events (partition_key);
+CREATE INDEX IF NOT EXISTS idx_outbox_created_at ON checkIns.outbox_events (created_at);
+CREATE INDEX IF NOT EXISTS idx_outbox_aggregate ON checkIns.outbox_events (aggregate_type, aggregate_id);
+CREATE INDEX IF NOT EXISTS idx_outbox_event_type ON checkIns.outbox_events (event_type);
+CREATE INDEX IF NOT EXISTS idx_outbox_partition_key ON checkIns.outbox_events (partition_key);

@@ -30,7 +30,7 @@ public class QrCodeRepository {
 	public Optional<QrCodeRow> findLatestByOrderId(UUID orderId) {
 		List<QrCodeRow> rows = jdbcTemplate.query(
 				"""
-				SELECT qr_id, order_id, qr_code, expires_at, created_at
+				SELECT qr_id, order_id, qr_code, expires_at, created_at, store_id, popup_id, order_goods_id
 				FROM qr.qr_order_qr_codes
 				WHERE order_id = ?
 				ORDER BY created_at DESC
@@ -41,7 +41,10 @@ public class QrCodeRepository {
 						UUID.fromString(rs.getString("order_id")),
 						rs.getString("qr_code"),
 						toLocalDateTime(rs.getTimestamp("expires_at")),
-						toLocalDateTime(rs.getTimestamp("created_at"))
+						toLocalDateTime(rs.getTimestamp("created_at")),
+						rs.getString("store_id") != null ? UUID.fromString(rs.getString("store_id")) : null,
+						rs.getString("popup_id") != null ? UUID.fromString(rs.getString("popup_id")) : null,
+						rs.getString("order_goods_id") != null ? UUID.fromString(rs.getString("order_goods_id")) : null
 				),
 				orderId
 		);
@@ -52,7 +55,7 @@ public class QrCodeRepository {
 	public Optional<QrCodeRow> findLatestByQrCode(String qrCode) {
 		List<QrCodeRow> rows = jdbcTemplate.query(
 				"""
-				SELECT qr_id, order_id, qr_code, expires_at, created_at
+				SELECT qr_id, order_id, qr_code, expires_at, created_at, store_id, popup_id, order_goods_id
 				FROM qr.qr_order_qr_codes
 				WHERE qr_code = ?
 				ORDER BY created_at DESC
@@ -63,7 +66,10 @@ public class QrCodeRepository {
 						UUID.fromString(rs.getString("order_id")),
 						rs.getString("qr_code"),
 						toLocalDateTime(rs.getTimestamp("expires_at")),
-						toLocalDateTime(rs.getTimestamp("created_at"))
+						toLocalDateTime(rs.getTimestamp("created_at")),
+						rs.getString("store_id") != null ? UUID.fromString(rs.getString("store_id")) : null,
+						rs.getString("popup_id") != null ? UUID.fromString(rs.getString("popup_id")) : null,
+						rs.getString("order_goods_id") != null ? UUID.fromString(rs.getString("order_goods_id")) : null
 				),
 				qrCode
 		);
@@ -75,15 +81,18 @@ public class QrCodeRepository {
 		jdbcTemplate.update(
 				"""
 				INSERT INTO qr.qr_order_qr_codes
-					(qr_id, order_id, qr_code, expires_at, created_at, created_by)
-				VALUES (?, ?, ?, ?, ?, ?)
+					(qr_id, order_id, qr_code, expires_at, created_at, created_by, store_id, popup_id, order_goods_id)
+				VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
 				""",
 				row.qrId(),
 				row.orderId(),
 				row.qrCode(),
 				toTimestamp(row.expiresAt()),
 				toTimestamp(row.createdAt()),
-				null
+				null,
+				row.storeId(),
+				row.popupId(),
+				row.orderGoodsId()
 		);
 	}
 
@@ -93,7 +102,7 @@ public class QrCodeRepository {
 	public List<QrCodeRow> findAllByOrderId(UUID orderId) {
 		return jdbcTemplate.query(
 				"""
-				SELECT qr_id, order_id, qr_code, expires_at, created_at
+				SELECT qr_id, order_id, qr_code, expires_at, created_at, store_id, popup_id, order_goods_id
 				FROM qr.qr_order_qr_codes
 				WHERE order_id = ?
 				ORDER BY created_at DESC
@@ -103,7 +112,10 @@ public class QrCodeRepository {
 						UUID.fromString(rs.getString("order_id")),
 						rs.getString("qr_code"),
 						toLocalDateTime(rs.getTimestamp("expires_at")),
-						toLocalDateTime(rs.getTimestamp("created_at"))
+						toLocalDateTime(rs.getTimestamp("created_at")),
+						rs.getString("store_id") != null ? UUID.fromString(rs.getString("store_id")) : null,
+						rs.getString("popup_id") != null ? UUID.fromString(rs.getString("popup_id")) : null,
+						rs.getString("order_goods_id") != null ? UUID.fromString(rs.getString("order_goods_id")) : null
 				),
 				orderId
 		);

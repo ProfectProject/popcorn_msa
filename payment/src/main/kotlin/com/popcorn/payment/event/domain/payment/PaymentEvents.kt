@@ -30,6 +30,8 @@ data class PaymentCreatedEvent(
     val orderNo: String,
     val amount: Int,
     val paymentMethod: String,
+    val status: String? = null,
+    val createdAt: LocalDateTime? = null,
     val customerId: Long?,
     val popupId: String? = null,
     val hasReservation: Boolean? = null,
@@ -50,7 +52,9 @@ data class PaymentCreatedEvent(
         put("occurredAt", occurredAt.toString())
         put("customerId", customerId ?: "null")
 
-        popupId?.let { put("popupId", it) }
+        status?.let { put("status", it) }
+        createdAt?.let { put("createdAt", it.toString()) }
+        put("popupId", popupId ?: "null")
         hasReservation?.let { put("hasReservation", it) }
         hasGoods?.let { put("hasGoods", it) }
         lines?.let { put("lines", it) }
@@ -63,6 +67,8 @@ data class PaymentCreatedEvent(
             orderNo: String,
             amount: Int,
             paymentMethod: String,
+            status: String? = null,
+            createdAt: LocalDateTime? = null,
             customerId: Long?,
             popupId: String? = null,
             hasReservation: Boolean? = null,
@@ -75,6 +81,8 @@ data class PaymentCreatedEvent(
                 orderNo = orderNo,
                 amount = amount,
                 paymentMethod = paymentMethod,
+                status = status,
+                createdAt = createdAt,
                 customerId = customerId,
                 popupId = popupId,
                 hasReservation = hasReservation,
@@ -99,6 +107,7 @@ data class PaymentApprovedEvent(
     val approvedAt: LocalDateTime,
     val customerId: Long?,
     val popupId: String? = null,
+    val storeId: String? = null,
     val hasReservation: Boolean? = null,
     val hasGoods: Boolean? = null,
     val lines: List<EventLineItem>? = null,
@@ -119,7 +128,8 @@ data class PaymentApprovedEvent(
         put("occurredAt", occurredAt.toString())
         put("customerId", customerId ?: "null")
 
-        popupId?.let { put("popupId", it) }
+        put("popupId", popupId ?: "null")
+        put("storeId", storeId ?: "null")
         hasReservation?.let { put("hasReservation", it) }
         hasGoods?.let { put("hasGoods", it) }
         lines?.let { put("lines", it) }
@@ -136,6 +146,7 @@ data class PaymentApprovedEvent(
             approvedAt: LocalDateTime,
             customerId: Long?,
             popupId: String? = null,
+            storeId: String? = null,
             hasReservation: Boolean? = null,
             hasGoods: Boolean? = null,
             lines: List<EventLineItem>? = null
@@ -150,6 +161,7 @@ data class PaymentApprovedEvent(
                 approvedAt = approvedAt,
                 customerId = customerId,
                 popupId = popupId,
+                storeId = storeId,
                 hasReservation = hasReservation,
                 hasGoods = hasGoods,
                 lines = lines
@@ -170,6 +182,9 @@ data class PaymentFailedEvent(
     val paymentMethod: String,
     val failureReason: String,
     val customerId: Long?,
+    val popupId: String? = null,
+    val storeId: String? = null,
+    val failedAt: LocalDateTime = LocalDateTime.now(),
     val occurredAt: LocalDateTime = LocalDateTime.now()
 ) : BasePaymentEvent(
     paymentId = _paymentId,
@@ -183,6 +198,9 @@ data class PaymentFailedEvent(
         "amount" to amount,
         "paymentMethod" to paymentMethod,
         "failureReason" to failureReason,
+        "popupId" to (popupId ?: "null"),
+        "storeId" to (storeId ?: "null"),
+        "failedAt" to failedAt.toString(),
         "occurredAt" to occurredAt.toString(),
         "customerId" to (customerId ?: "null")
     )
@@ -199,6 +217,9 @@ data class PaymentCancelledEvent(
     val cancelAmount: Int,
     val cancelReason: String,
     val customerId: Long?,
+    val popupId: String? = null,
+    val storeId: String? = null,
+    val cancelledAt: LocalDateTime = LocalDateTime.now(),
     val occurredAt: LocalDateTime = LocalDateTime.now()
 ) : BasePaymentEvent(
     paymentId = _paymentId,
@@ -211,6 +232,9 @@ data class PaymentCancelledEvent(
         "orderNo" to orderNo,
         "cancelAmount" to cancelAmount,
         "cancelReason" to cancelReason,
+        "popupId" to (popupId ?: "null"),
+        "storeId" to (storeId ?: "null"),
+        "cancelledAt" to cancelledAt.toString(),
         "occurredAt" to occurredAt.toString(),
         "customerId" to (customerId ?: "null")
     )
@@ -228,6 +252,8 @@ data class PaymentCancelFailedEvent(
     val failureReason: String,
     val retryCount: Int = 0,
     val customerId: Long?,
+    val lastError: String? = null,
+    val lastTriedAt: LocalDateTime = LocalDateTime.now(),
     val occurredAt: LocalDateTime = LocalDateTime.now()
 ) : BasePaymentEvent(
     paymentId = _paymentId,
@@ -240,7 +266,9 @@ data class PaymentCancelFailedEvent(
         "orderNo" to orderNo,
         "cancelReason" to cancelReason,
         "failureReason" to failureReason,
+        "lastError" to (lastError ?: failureReason),
         "retryCount" to retryCount,
+        "lastTriedAt" to lastTriedAt.toString(),
         "occurredAt" to occurredAt.toString(),
         "customerId" to (customerId ?: "null")
     )
@@ -329,6 +357,9 @@ data class PaymentUserCancelledEvent(
     val amount: Int,
     val cancelReason: String,
     val customerId: Long?,
+    val popupId: String? = null,
+    val storeId: String? = null,
+    val cancelledAt: LocalDateTime = LocalDateTime.now(),
     val occurredAt: LocalDateTime = LocalDateTime.now()
 ) : BasePaymentEvent(
     paymentId = _paymentId,
@@ -341,6 +372,9 @@ data class PaymentUserCancelledEvent(
         "orderNo" to orderNo,
         "amount" to amount,
         "cancelReason" to cancelReason,
+        "popupId" to (popupId ?: "null"),
+        "storeId" to (storeId ?: "null"),
+        "cancelledAt" to cancelledAt.toString(),
         "occurredAt" to occurredAt.toString(),
         "customerId" to (customerId ?: "null")
     )
@@ -357,6 +391,8 @@ data class PaymentCancelSucceededEvent(
     val cancelAmount: Int,
     val cancelReason: String,
     val customerId: Long?,
+    val popupId: String? = null,
+    val storeId: String? = null,
     val cancelledAt: LocalDateTime = LocalDateTime.now(),
     val occurredAt: LocalDateTime = LocalDateTime.now()
 ) : BasePaymentEvent(
@@ -370,6 +406,8 @@ data class PaymentCancelSucceededEvent(
         "orderNo" to orderNo,
         "cancelAmount" to cancelAmount,
         "cancelReason" to cancelReason,
+        "popupId" to (popupId ?: "null"),
+        "storeId" to (storeId ?: "null"),
         "cancelledAt" to cancelledAt.toString(),
         "occurredAt" to occurredAt.toString(),
         "customerId" to (customerId ?: "null")
@@ -603,6 +641,11 @@ data class OrderInfoResponseEvent(
     val actualPopupId: String? = null,
 
     /**
+     * 실제 storeId (호환성)
+     */
+    val actualStoreId: String? = null,
+
+    /**
      * 예약 포함 여부 (호환성)
      */
     val actualHasReservation: Boolean? = null,
@@ -632,6 +675,7 @@ data class OrderInfoResponseEvent(
         actualOrderNo?.let { put("actualOrderNo", it) }
         actualUserId?.let { put("actualUserId", it) }
         actualPopupId?.let { put("actualPopupId", it) }
+        actualStoreId?.let { put("actualStoreId", it) }
         actualHasReservation?.let { put("actualHasReservation", it) }
         actualHasGoods?.let { put("actualHasGoods", it) }
         put("respondedAt", respondedAt.toString())

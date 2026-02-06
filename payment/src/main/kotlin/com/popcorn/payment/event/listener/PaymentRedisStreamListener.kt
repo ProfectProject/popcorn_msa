@@ -278,6 +278,7 @@ class PaymentRedisStreamListener(
                 actualOrderNo = normalizeString(values["actualOrderNo"]),
                 actualUserId = normalizeString(values["actualUserId"])?.toLongOrNull(),
                 actualPopupId = normalizeString(values["actualPopupId"]),
+                actualStoreId = normalizeString(values["actualStoreId"]),
                 actualHasReservation = normalizeString(values["actualHasReservation"])?.toBoolean(),
                 actualHasGoods = normalizeString(values["actualHasGoods"])?.toBoolean()
             )

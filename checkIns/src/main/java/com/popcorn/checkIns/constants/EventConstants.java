@@ -25,6 +25,9 @@ public final class EventConstants {
         public static final String QR_CHECKIN_REQUESTED = "QR_CHECKIN_REQUESTED";
         public static final String QR_CHECKIN_COMPLETED = "QR_CHECKIN_COMPLETED";
 
+        // ================ External Domain Events ================
+        public static final String PAYMENT_APPROVED = "PAYMENT_APPROVED";
+
         private EventTypes() {}
     }
 
@@ -35,6 +38,7 @@ public final class EventConstants {
         public static final String CHECKIN_EVENTS = "checkin-events";
         public static final String CHECKIN_REQUESTS = "checkin-requests";
         public static final String STANDARD_CHECKINS_EVENTS = "standard-checkins-events";
+        public static final String QR_EVENTS = "qr-events";
 
         // External streams that CheckIns service subscribes to
         public static final String PAYMENT_EVENTS = "payment-events";
@@ -59,6 +63,7 @@ public final class EventConstants {
         public static final String CHECKIN_EVENTS_CONSUMER = "checkin-events-consumer-1";
         public static final String CHECKIN_REQUESTS_CONSUMER = "checkin-requests-consumer-1";
         public static final String STANDARD_CONSUMER = "standard-consumer-1";
+        public static final String QR_EVENTS_CONSUMER = "qr-events-consumer-1";
 
         // External stream consumers
         public static final String PAYMENT_EVENTS_CONSUMER = "payment-events-consumer-1";

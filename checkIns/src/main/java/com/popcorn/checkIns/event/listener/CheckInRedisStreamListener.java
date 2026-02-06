@@ -61,7 +61,7 @@ public class CheckInRedisStreamListener implements StreamListener<String, MapRec
                 // === Standard 이벤트들 (기존) ===
 
                 // 표준 QR 생성 이벤트
-                case "QR_GENERATED":
+                case EventConstants.EventTypes.QR_GENERATED:
                     log.info("[CHECKINS] QR 생성 이벤트 수신 (Standard) - orderId: {}, qrCode: {}",
                             values.get(EventConstants.MetadataKeys.ORDER_ID),
                             values.get(EventConstants.MetadataKeys.QR_CODE));
@@ -69,7 +69,7 @@ public class CheckInRedisStreamListener implements StreamListener<String, MapRec
                     break;
 
                 // 표준 체크인 생성 이벤트
-                case "CHECKIN_CREATED":
+                case EventConstants.EventTypes.CHECKIN_CREATED:
                     log.info("[CHECKINS] 체크인 생성 이벤트 수신 (Standard) - checkinId: {}, orderId: {}",
                             values.get(EventConstants.MetadataKeys.CHECKIN_ID),
                             values.get(EventConstants.MetadataKeys.ORDER_ID));
@@ -79,33 +79,19 @@ public class CheckInRedisStreamListener implements StreamListener<String, MapRec
                 // === BaseEvent 기반 이벤트들 (신규) ===
 
                 // QR 생성 요청 이벤트 (Payment → CheckIn)
-                case "qr-generation-requested":
+                case EventConstants.EventTypes.QR_GENERATION_REQUESTED:
                     log.info("[CHECKINS] QR 생성 요청 수신 (BaseEvent) - orderId: {}, paymentId: {}",
                             values.get(EventConstants.MetadataKeys.ORDER_ID),
                             values.get(EventConstants.MetadataKeys.PAYMENT_ID));
                     handleQrGenerationRequested(values);
                     break;
 
-                // QR 생성 완료 이벤트 (BaseEvent 기반)
-                case "qr-generated":
-                    log.info("[CHECKINS] QR 생성 완료 (BaseEvent) - orderId: {}, qrId: {}",
-                            values.get(EventConstants.MetadataKeys.ORDER_ID),
-                            values.get(EventConstants.MetadataKeys.QR_ID));
-                    handleBaseQrGeneratedEvent(values);
-                    break;
-
-                // 체크인 생성 이벤트 (BaseEvent 기반)
-                case "checkin-created":
-                    log.info("[CHECKINS] 체크인 생성 완료 (BaseEvent) - orderId: {}, checkinId: {}",
-                            values.get(EventConstants.MetadataKeys.ORDER_ID),
-                            values.get(EventConstants.MetadataKeys.CHECKIN_ID));
-                    handleBaseCheckinCreatedEvent(values);
-                    break;
+                // BaseEvent 기반 QR/CheckIn 이벤트들은 표준 이벤트와 통합 처리됨
 
                 // === 외부 도메인 이벤트들 ===
 
                 // 결제 승인 시 QR 코드 생성 준비
-                case "payment-approved":
+                case EventConstants.EventTypes.PAYMENT_APPROVED:
                     log.info("[CHECKINS] 결제 승인 이벤트 수신 - paymentId: {}, orderId: {}",
                             values.get(EventConstants.MetadataKeys.PAYMENT_ID),
                             values.get(EventConstants.MetadataKeys.ORDER_ID));

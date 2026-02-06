@@ -151,9 +151,9 @@ public class CheckinsKafkaEventPublisher implements CheckinEventPublisher {
         return switch (event.getEventType()) {
             case EventConstants.EventTypes.QR_GENERATION_REQUESTED -> {
                 if (event instanceof QrGenerationRequestedEvent qrEvent) {
-                    yield "qr:" + qrEvent.getOrderId();
+                    yield "order:" + qrEvent.getOrderId();
                 }
-                yield "qr:" + event.getAggregateId();
+                yield "order:" + event.getAggregateId();
             }
             case EventConstants.EventTypes.QR_GENERATED -> {
                 if (event instanceof QrGeneratedEvent qrEvent) {
@@ -165,9 +165,9 @@ public class CheckinsKafkaEventPublisher implements CheckinEventPublisher {
                 if (event instanceof CheckinCreatedEvent checkinEvent) {
                     yield "order:" + checkinEvent.getOrderId();
                 }
-                yield "checkin:" + event.getAggregateId();
+                yield "order:" + event.getAggregateId();
             }
-            default -> "default:" + event.getAggregateId();
+            default -> "order:" + event.getAggregateId();
         };
     }
 

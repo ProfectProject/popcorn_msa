@@ -8,14 +8,13 @@ import com.popcorn.payment.event.domain.payment.EventLineItem
 import com.popcorn.payment.event.publisher.BasePaymentEventPublisherImpl
 import com.popcorn.payment.service.PaymentOrderInfoService
 import com.popcorn.payment.service.TossPaymentCoroutineService
-import com.popcorn.payment.service.kafka.KafkaIdempotencyService
+import com.popcorn.common.kafka.KafkaIdempotencyService
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.launch
 import org.slf4j.LoggerFactory
 import org.springframework.boot.autoconfigure.condition.ConditionalOnProperty
 import org.springframework.kafka.annotation.KafkaListener
-import org.springframework.kafka.core.KafkaTemplate
 import org.springframework.kafka.support.Acknowledgment
 import org.springframework.kafka.support.KafkaHeaders
 import org.springframework.messaging.handler.annotation.Header
@@ -35,33 +34,10 @@ class PaymentKafkaListener(
     private val paymentOrderInfoService: PaymentOrderInfoService,
     private val tossPaymentCoroutineService: TossPaymentCoroutineService,
     private val paymentEventPublisher: BasePaymentEventPublisherImpl,
-    private val kafkaIdempotencyService: KafkaIdempotencyService,
-    private val kafkaTemplate: KafkaTemplate<String, Any>
+    private val kafkaIdempotencyService: KafkaIdempotencyService
 ) {
     private val log = LoggerFactory.getLogger(PaymentKafkaListener::class.java)
     private val eventScope = CoroutineScope(Dispatchers.Default)
-
-    // 상수 정의
-    companion object {
-        private const val DEFAULT_RETRY_ATTEMPT = 1
-        private const val DEFAULT_MAX_RETRIES = 3
-    }
-
-    /**
-     * 메시지 처리 데이터 클래스 (매개변수 수 줄이기용)
-     */
-    private data class MessageProcessingData(
-        val originalTopic: String,
-        val partition: Int,
-        val offset: Long,
-        val eventData: Map<String, Any>,
-        val exception: Exception,
-        val eventType: String? = null,
-        val eventId: String? = null,
-        val retryAttempt: Int = DEFAULT_RETRY_ATTEMPT,
-        val maxRetries: Int = DEFAULT_MAX_RETRIES
-    )
-
 
     /**
      * Payment Events 토픽 구독
@@ -70,8 +46,7 @@ class PaymentKafkaListener(
      */
     @KafkaListener(
         topics = [EventConstants.Streams.PAYMENT_EVENTS],
-        groupId = EventConstants.ConsumerGroups.PAYMENT_SERVICE_GROUP,
-        concurrency = "6"
+        groupId = EventConstants.ConsumerGroups.PAYMENT_SERVICE_GROUP
     )
     fun handlePaymentEvents(
         @Payload eventData: Map<String, Any>,
@@ -111,12 +86,12 @@ class PaymentKafkaListener(
             // Redis에 성공적으로 처리된 이벤트 기록
             if (eventId != null) {
                 kafkaIdempotencyService.recordProcessedEvent(
-                    eventId = eventId,
-                    eventType = eventType,
-                    topic = topic,
-                    partition = partition,
-                    offset = offset,
-                    processingTimeMs = processingTime
+                    eventId,
+                    eventType,
+                    topic,
+                    partition,
+                    offset,
+                    processingTime
                 )
             }
             acknowledgment.acknowledge()
@@ -125,22 +100,8 @@ class PaymentKafkaListener(
             val processingTime = System.currentTimeMillis() - startTime
             log.error("🚨 [PAYMENT] Payment 이벤트 처리 실패 - topic: {}, partition: {}, offset: {}, 처리시간: {}ms, error: {}",
                 topic, partition, offset, processingTime, e.message, e)
-
-            // 실패한 메시지를 재시도 큐로 전송 (Exponential Backoff)
-            val processingData = MessageProcessingData(
-                originalTopic = topic,
-                partition = partition,
-                offset = offset,
-                eventData = eventData,
-                exception = e,
-                eventType = eventType,
-                eventId = eventId,
-                retryAttempt = DEFAULT_RETRY_ATTEMPT,
-                maxRetries = DEFAULT_MAX_RETRIES
-            )
-            sendToRetryQueue(processingData)
-
-            acknowledgment.acknowledge()
+            // 공통 DefaultErrorHandler가 재시도/ DLQ 처리
+            throw e
         }
     }
 
@@ -150,8 +111,7 @@ class PaymentKafkaListener(
      */
     @KafkaListener(
         topics = [EventConstants.Streams.PAYMENT_REQUESTS],
-        groupId = EventConstants.ConsumerGroups.PAYMENT_SERVICE_GROUP,
-        concurrency = "6"
+        groupId = EventConstants.ConsumerGroups.PAYMENT_SERVICE_GROUP
     )
     fun handlePaymentRequests(
         @Payload eventData: Map<String, Any>,
@@ -186,12 +146,12 @@ class PaymentKafkaListener(
             // Redis에 성공적으로 처리된 이벤트 기록
             if (eventId != null) {
                 kafkaIdempotencyService.recordProcessedEvent(
-                    eventId = eventId,
-                    eventType = eventType,
-                    topic = topic,
-                    partition = partition,
-                    offset = offset,
-                    processingTimeMs = processingTime
+                    eventId,
+                    eventType,
+                    topic,
+                    partition,
+                    offset,
+                    processingTime
                 )
             }
             acknowledgment.acknowledge()
@@ -200,22 +160,8 @@ class PaymentKafkaListener(
             val processingTime = System.currentTimeMillis() - startTime
             log.error("🚨 [PAYMENT] Payment 요청 처리 실패 - topic: {}, partition: {}, offset: {}, 처리시간: {}ms, error: {}",
                 topic, partition, offset, processingTime, e.message, e)
-
-            // 실패한 메시지를 재시도 큐로 전송
-            val processingData = MessageProcessingData(
-                originalTopic = topic,
-                partition = partition,
-                offset = offset,
-                eventData = eventData,
-                exception = e,
-                eventType = eventType,
-                eventId = eventId,
-                retryAttempt = DEFAULT_RETRY_ATTEMPT,
-                maxRetries = DEFAULT_MAX_RETRIES
-            )
-            sendToRetryQueue(processingData)
-
-            acknowledgment.acknowledge()
+            // 공통 DefaultErrorHandler가 재시도/ DLQ 처리
+            throw e
         }
     }
 
@@ -225,8 +171,7 @@ class PaymentKafkaListener(
      */
     @KafkaListener(
         topics = [EventConstants.Streams.ORDER_REQUESTS],
-        groupId = EventConstants.ConsumerGroups.PAYMENT_SERVICE_GROUP,
-        concurrency = "6"
+        groupId = EventConstants.ConsumerGroups.PAYMENT_SERVICE_GROUP
     )
     fun handleOrderRequests(
         @Payload eventData: Map<String, Any>,
@@ -263,12 +208,12 @@ class PaymentKafkaListener(
             // Redis에 성공적으로 처리된 이벤트 기록
             if (eventId != null) {
                 kafkaIdempotencyService.recordProcessedEvent(
-                    eventId = eventId,
-                    eventType = eventType,
-                    topic = topic,
-                    partition = partition,
-                    offset = offset,
-                    processingTimeMs = processingTime
+                    eventId,
+                    eventType,
+                    topic,
+                    partition,
+                    offset,
+                    processingTime
                 )
             }
             acknowledgment.acknowledge()
@@ -277,22 +222,8 @@ class PaymentKafkaListener(
             val processingTime = System.currentTimeMillis() - startTime
             log.error("🚨 [PAYMENT] Order 요청 처리 실패 - topic: {}, partition: {}, offset: {}, 처리시간: {}ms, error: {}",
                 topic, partition, offset, processingTime, e.message, e)
-
-            // 실패한 메시지를 재시도 큐로 전송
-            val processingData = MessageProcessingData(
-                originalTopic = topic,
-                partition = partition,
-                offset = offset,
-                eventData = eventData,
-                exception = e,
-                eventType = eventType,
-                eventId = eventId,
-                retryAttempt = DEFAULT_RETRY_ATTEMPT,
-                maxRetries = DEFAULT_MAX_RETRIES
-            )
-            sendToRetryQueue(processingData)
-
-            acknowledgment.acknowledge()
+            // 공통 DefaultErrorHandler가 재시도/ DLQ 처리
+            throw e
         }
     }
 
@@ -548,6 +479,7 @@ class PaymentKafkaListener(
                 actualOrderNo = normalizeString(eventData["actualOrderNo"]),
                 actualUserId = normalizeString(eventData["actualUserId"])?.toLongOrNull(),
                 actualPopupId = normalizeString(eventData["actualPopupId"]),
+                actualStoreId = normalizeString(eventData["actualStoreId"]),
                 actualHasReservation = normalizeString(eventData["actualHasReservation"])?.toBoolean(),
                 actualHasGoods = normalizeString(eventData["actualHasGoods"])?.toBoolean()
             )
@@ -639,112 +571,6 @@ class PaymentKafkaListener(
             log.error("❌ [DEBUG] EventLineItem JSON 파싱 실패 - rawLines: {}, error: {}", rawLines, e.message, e)
             emptyList()
         }
-    }
-
-    /**
-     * 실패한 메시지를 DLQ로 라우팅
-     * - 원본 메시지 정보와 에러 정보를 포함하여 DLQ 토픽으로 전송
-     * - 관리자 모니터링 및 수동 재처리를 위해 사용
-     */
-    private fun sendToDlq(data: MessageProcessingData) {
-        try {
-            val dlqTopic = "${data.originalTopic}-dlq"
-
-            val dlqMessage = buildDlqMessage(data)
-
-            kafkaTemplate.send(dlqTopic, data.eventId ?: "unknown", dlqMessage)
-                .thenAccept { result ->
-                    log.info("✅ [DLQ] 메시지 DLQ 전송 완료: topic={} eventType={} eventId={} partition={} offset={}",
-                        dlqTopic, data.eventType, data.eventId,
-                        result.recordMetadata.partition(), result.recordMetadata.offset())
-                }
-                .exceptionally { dlqError ->
-                    log.error("❌ [DLQ] DLQ 전송 실패: topic={} eventType={} eventId={} error={}",
-                        dlqTopic, data.eventType, data.eventId, dlqError.message, dlqError)
-                    null
-                }
-
-        } catch (e: Exception) {
-            log.error("❌ [DLQ] DLQ 메시지 생성 실패: originalTopic={} eventType={} eventId={} error={}",
-                data.originalTopic, data.eventType, data.eventId, e.message, e)
-        }
-    }
-
-    /**
-     * DLQ 메시지 빌더 (중복 제거)
-     */
-    private fun buildDlqMessage(data: MessageProcessingData): Map<String, Any> {
-        return mapOf(
-            "originalTopic" to data.originalTopic,
-            "partition" to data.partition,
-            "offset" to data.offset,
-            EventConstants.MetadataKeys.EVENT_TYPE to (data.eventType ?: "UNKNOWN"),
-            EventConstants.MetadataKeys.EVENT_ID to (data.eventId ?: "UNKNOWN"),
-            "originalMessage" to data.eventData,
-            "error" to mapOf(
-                "message" to (data.exception.message ?: "Unknown error"),
-                "type" to data.exception.javaClass.simpleName,
-                "stackTrace" to data.exception.stackTrace.take(10).map { it.toString() }
-            ),
-            EventConstants.MetadataKeys.TIMESTAMP to System.currentTimeMillis(),
-            "service" to "payment-service",
-            "retryAttempt" to data.retryAttempt
-        )
-    }
-
-    /**
-     * Exponential Backoff 재시도를 위한 Retry 큐로 메시지 전송
-     * - DLQ 전송 전에 지정된 횟수만큼 재시도
-     */
-    private fun sendToRetryQueue(data: MessageProcessingData) {
-        try {
-            if (data.retryAttempt >= data.maxRetries) {
-                log.warn("⚠️ [RETRY] 최대 재시도 횟수 초과 - DLQ로 전송: eventType={} eventId={} attempts={}",
-                    data.eventType, data.eventId, data.retryAttempt)
-                sendToDlq(data)
-                return
-            }
-
-            val retryTopic = "${data.originalTopic}-retry"
-            val delayMillis = calculateRetryDelay(data.retryAttempt) // Exponential backoff
-
-            val retryMessage = mapOf(
-                "originalTopic" to data.originalTopic,
-                "partition" to data.partition,
-                "offset" to data.offset,
-                EventConstants.MetadataKeys.EVENT_TYPE to (data.eventType ?: "UNKNOWN"),
-                EventConstants.MetadataKeys.EVENT_ID to (data.eventId ?: "UNKNOWN"),
-                "originalMessage" to data.eventData,
-                "retryAttempt" to data.retryAttempt,
-                "maxRetries" to data.maxRetries,
-                "nextRetryAt" to System.currentTimeMillis() + delayMillis,
-                "lastError" to data.exception.message,
-                EventConstants.MetadataKeys.TIMESTAMP to System.currentTimeMillis()
-            )
-
-            // 딜레이 후 재시도 토픽으로 전송 (실제로는 Kafka Streams나 스케줄러 필요)
-            kafkaTemplate.send(retryTopic, data.eventId ?: "unknown", retryMessage)
-                .thenAccept { _ ->
-                    log.info("🔄 [RETRY] 재시도 큐로 전송 완료: eventType={} eventId={} attempt={}/{} delay={}ms",
-                        data.eventType, data.eventId, data.retryAttempt, data.maxRetries, delayMillis)
-                }
-
-        } catch (e: Exception) {
-            log.error("❌ [RETRY] 재시도 큐 전송 실패 - DLQ로 전송: eventType={} eventId={} error={}",
-                data.eventType, data.eventId, e.message, e)
-            sendToDlq(data)
-        }
-    }
-
-    /**
-     * Exponential Backoff 딜레이 계산
-     * - 1초 시작, 최대 5분, 2배씩 증가
-     */
-    private fun calculateRetryDelay(attempt: Int): Long {
-        val baseDelayMs = 1000L // 1초
-        val maxDelayMs = 300000L // 5분
-        val exponentialDelay = baseDelayMs * (1L shl attempt) // 2^attempt
-        return minOf(exponentialDelay, maxDelayMs)
     }
 
     /**

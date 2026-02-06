@@ -49,6 +49,9 @@ public class KafkaConfig {
     @Value("${kafka.consumer.concurrency:3}")
     private int concurrency;
 
+    @Value("${kafka.consumer.group-instance-id:}")
+    private String groupInstanceId;
+
     // === Producer 설정 ===
 
     @Bean
@@ -100,6 +103,10 @@ public class KafkaConfig {
         props.put(ConsumerConfig.AUTO_OFFSET_RESET_CONFIG, "earliest");
         props.put(ConsumerConfig.ENABLE_AUTO_COMMIT_CONFIG, false);
         props.put(ConsumerConfig.ISOLATION_LEVEL_CONFIG, "read_committed");
+        // 멱등 처리 전제에서 중복을 줄이기 위해 static member id 부여 (옵션)
+        if (groupInstanceId != null && !groupInstanceId.isBlank()) {
+            props.put(ConsumerConfig.GROUP_INSTANCE_ID_CONFIG, groupInstanceId);
+        }
 
         // 성능 설정
         props.put(ConsumerConfig.FETCH_MIN_BYTES_CONFIG, 1024);

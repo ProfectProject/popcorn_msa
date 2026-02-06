@@ -61,6 +61,11 @@ public class QrCodeService {
 
 	@Transactional
 	public QrCodeResponse issue(UUID orderId) {
+		return issue(orderId, null, null, null);
+	}
+
+	@Transactional
+	public QrCodeResponse issue(UUID orderId, UUID storeId, UUID popupId, UUID orderGoodsId) {
 		String orderStatus = qrCodeRepository.findOrderStatus(orderId)
 				.orElseThrow(QrException::orderNotFound);
 
@@ -80,7 +85,10 @@ public class QrCodeService {
 				orderId,
 				UUID.randomUUID().toString(),
 				now.plus(DEFAULT_TTL),
-				now
+				now,
+				storeId,
+				popupId,
+				orderGoodsId
 		);
 
 		qrCodeRepository.insert(created);
@@ -97,6 +105,11 @@ public class QrCodeService {
 	 */
 	@Transactional
 	public QrCodeResponse issueFromPaymentEvent(UUID orderId) {
+		return issueFromPaymentEvent(orderId, null, null, null);
+	}
+
+	@Transactional
+	public QrCodeResponse issueFromPaymentEvent(UUID orderId, UUID storeId, UUID popupId, UUID orderGoodsId) {
 		// 주문 존재 여부 확인 (상태는 검증하지 않음)
 		qrCodeRepository.findOrderStatus(orderId)
 				.orElseThrow(QrException::orderNotFound);
@@ -116,7 +129,10 @@ public class QrCodeService {
 				orderId,
 				UUID.randomUUID().toString(),
 				now.plus(DEFAULT_TTL),
-				now
+				now,
+				storeId,
+				popupId,
+				orderGoodsId
 		);
 
 		qrCodeRepository.insert(created);
@@ -392,10 +408,26 @@ public class QrCodeService {
 		String orderId,
 		String additionalId
 	) {
+		publishEventToBothSystems(event, redisPublisher, eventDescription, orderId, additionalId, null, null);
+	}
+
+	private void publishEventToBothSystems(
+		BaseCheckinEvent event,
+		Runnable redisPublisher,
+		String eventDescription,
+		String orderId,
+		String additionalId,
+		UUID popupId,
+		UUID orderGoodsId
+	) {
 		long startTime = System.currentTimeMillis();
 
 		// 0. Outbox 기록 (트랜잭션 내부)
-		outboxWriter.record(event);
+		if (popupId != null || orderGoodsId != null) {
+			outboxWriter.record(event, popupId, orderGoodsId);
+		} else {
+			outboxWriter.record(event);
+		}
 
 		// 1. Redis 발행 (기존 방식 유지)
 		try {

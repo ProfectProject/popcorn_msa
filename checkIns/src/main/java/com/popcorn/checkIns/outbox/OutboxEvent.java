@@ -72,6 +72,12 @@ public class OutboxEvent {
     @Column(name = "created_at", nullable = false, updatable = false)
     private Instant createdAt;
 
+    @Column(name = "popup_id")
+    private UUID popupId;
+
+    @Column(name = "order_goods_id")
+    private UUID orderGoodsId;
+
     @Builder
     private OutboxEvent(
         UUID eventId,
@@ -82,7 +88,9 @@ public class OutboxEvent {
         Integer schemaVersion,
         Map<String, Object> eventData,
         Map<String, Object> headers,
-        Instant occurredAt
+        Instant occurredAt,
+        UUID popupId,
+        UUID orderGoodsId
     ) {
         this.eventId = (eventId != null) ? eventId : UUID.randomUUID();
         this.aggregateType = aggregateType;
@@ -94,6 +102,8 @@ public class OutboxEvent {
         this.headers = headers;
         this.occurredAt = (occurredAt != null) ? occurredAt : Instant.now();
         this.createdAt = Instant.now();
+        this.popupId = popupId;
+        this.orderGoodsId = orderGoodsId;
     }
 
     public static OutboxEvent of(
@@ -110,6 +120,27 @@ public class OutboxEvent {
             .partitionKey(aggregateId)
             .eventData(payload)
             .headers(headers)
+            .build();
+    }
+
+    public static OutboxEvent of(
+        String aggregateType,
+        String aggregateId,
+        String eventType,
+        Map<String, Object> payload,
+        Map<String, Object> headers,
+        UUID popupId,
+        UUID orderGoodsId
+    ) {
+        return OutboxEvent.builder()
+            .aggregateType(aggregateType)
+            .aggregateId(aggregateId)
+            .eventType(eventType)
+            .partitionKey(aggregateId)
+            .eventData(payload)
+            .headers(headers)
+            .popupId(popupId)
+            .orderGoodsId(orderGoodsId)
             .build();
     }
 }

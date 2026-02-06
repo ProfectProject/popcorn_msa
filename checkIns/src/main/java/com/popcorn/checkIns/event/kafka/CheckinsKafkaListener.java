@@ -3,6 +3,7 @@ package com.popcorn.checkIns.event.kafka;
 import com.popcorn.checkIns.service.QrCodeService;
 import com.popcorn.checkIns.constants.EventConstants;
 import com.popcorn.checkIns.metrics.CheckInsMetricsService;
+import com.popcorn.common.kafka.KafkaIdempotencyService;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.boot.autoconfigure.condition.ConditionalOnProperty;
@@ -39,7 +40,7 @@ public class CheckinsKafkaListener {
     private static final String ORDER_ID_KEY = "orderId";
 
     private final QrCodeService qrCodeService;
-    private final CheckinsKafkaIdempotencyService idempotencyService;
+    private final KafkaIdempotencyService idempotencyService;
     private final CheckInsMetricsService metricsService;
 
      /**
@@ -49,8 +50,7 @@ public class CheckinsKafkaListener {
      */
     @KafkaListener(
             topics = EventConstants.Streams.CHECKIN_REQUESTS,
-            groupId = EventConstants.ConsumerGroups.CHECKIN_SERVICE_GROUP,
-            concurrency = "3"
+            groupId = EventConstants.ConsumerGroups.CHECKIN_SERVICE_GROUP
     )
     public void handleCheckinRequests(
             @Payload Map<String, Object> eventData,
@@ -107,10 +107,8 @@ public class CheckinsKafkaListener {
             // Kafka 메시지 처리 에러 메트릭 기록
             metricsService.recordKafkaMessageError(topic, eventType, e.getClass().getSimpleName());
             metricsService.recordKafkaMessageCompleted();
-
-            // 에러 발생시에도 acknowledge (무한 재시도 방지)
-            // 실제 운영에서는 DLQ로 보내거나 별도 에러 처리 로직 필요
-            acknowledgment.acknowledge();
+            // 공통 DefaultErrorHandler가 재시도/ DLQ 처리
+            throw e;
         }
     }
 
@@ -188,8 +186,7 @@ public class CheckinsKafkaListener {
      */
     @KafkaListener(
             topics = EventConstants.Streams.PAYMENT_EVENTS,
-            groupId = EventConstants.ConsumerGroups.CHECKIN_SERVICE_GROUP,
-            concurrency = "3"
+            groupId = EventConstants.ConsumerGroups.CHECKIN_SERVICE_GROUP
     )
     public void handlePaymentEvents(
             @Payload Map<String, Object> eventData,
@@ -231,7 +228,8 @@ public class CheckinsKafkaListener {
         } catch (Exception e) {
             log.error("❌ [KAFKA-IN] Payment 이벤트 처리 실패: eventType={} eventId={} error={}",
                     eventType, eventId, e.getMessage(), e);
-            acknowledgment.acknowledge();
+            // 공통 DefaultErrorHandler가 재시도/ DLQ 처리
+            throw e;
         }
     }
 
@@ -242,8 +240,7 @@ public class CheckinsKafkaListener {
      */
     @KafkaListener(
             topics = EventConstants.Streams.ORDER_EVENTS,
-            groupId = EventConstants.ConsumerGroups.CHECKIN_SERVICE_GROUP,
-            concurrency = "3"
+            groupId = EventConstants.ConsumerGroups.CHECKIN_SERVICE_GROUP
     )
     public void handleOrderEvents(
             @Payload Map<String, Object> eventData,
@@ -287,7 +284,8 @@ public class CheckinsKafkaListener {
         } catch (Exception e) {
             log.error("❌ [KAFKA-IN] Order 이벤트 처리 실패: eventType={} eventId={} error={}",
                     eventType, eventId, e.getMessage(), e);
-            acknowledgment.acknowledge();
+            // 공통 DefaultErrorHandler가 재시도/ DLQ 처리
+            throw e;
         }
     }
 

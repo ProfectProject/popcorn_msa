@@ -106,6 +106,7 @@ class PaymentOrderInfoService(
             log.info("  - actualOrderNo: {}", response.actualOrderNo)
             log.info("  - actualUserId: {}", response.actualUserId)
             log.info("  - actualPopupId: {}", response.actualPopupId)
+            log.info("  - actualStoreId: {}", response.actualStoreId)
             log.info("  - actualHasReservation: {}", response.actualHasReservation)
             log.info("  - actualHasGoods: {}", response.actualHasGoods)
 

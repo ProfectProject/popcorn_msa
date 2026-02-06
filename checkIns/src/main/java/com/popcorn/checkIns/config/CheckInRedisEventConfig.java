@@ -43,6 +43,7 @@ public class CheckInRedisEventConfig {
     private static final String ORDER_EVENTS_STREAM = EventConstants.Streams.ORDER_EVENTS;
     private static final String CHECKIN_REQUESTS_STREAM = EventConstants.Streams.CHECKIN_REQUESTS;
     private static final String CHECKIN_EVENTS_STREAM = EventConstants.Streams.CHECKIN_EVENTS;
+    private static final String QR_EVENTS_STREAM = EventConstants.Streams.QR_EVENTS;
 
     // Consumer Group 이름
     private static final String CHECKIN_CONSUMER_GROUP = EventConstants.ConsumerGroups.CHECKIN_SERVICE_GROUP;
@@ -51,6 +52,7 @@ public class CheckInRedisEventConfig {
     private static final String ORDER_CONSUMER_NAME = EventConstants.Consumers.ORDER_EVENTS_CONSUMER;
     private static final String CHECKIN_REQUESTS_CONSUMER_NAME = EventConstants.Consumers.CHECKIN_REQUESTS_CONSUMER;
     private static final String CHECKIN_EVENTS_CONSUMER_NAME = EventConstants.Consumers.CHECKIN_EVENTS_CONSUMER;
+    private static final String QR_EVENTS_CONSUMER_NAME = EventConstants.Consumers.QR_EVENTS_CONSUMER;
     private static final String CONSUMER_REGISTER_LOG = "📝 Redis Stream Consumer 등록: {} - {}";
 
     @PostConstruct
@@ -64,8 +66,9 @@ public class CheckInRedisEventConfig {
             // 새로운 BaseEvent 기반 Consumer Group 생성
             createConsumerGroupIfNotExists(CHECKIN_REQUESTS_STREAM);
             createConsumerGroupIfNotExists(CHECKIN_EVENTS_STREAM);
+            createConsumerGroupIfNotExists(QR_EVENTS_STREAM);
 
-            log.info("✅ CheckIns Service Redis Stream Consumer Groups 초기화 완료 (총 5개 스트림)");
+            log.info("✅ CheckIns Service Redis Stream Consumer Groups 초기화 완료 (총 6개 스트림)");
         } catch (Exception e) {
             log.warn("⚠️ Redis Stream 초기화 중 오류 (정상 동작 가능): {}", e.getMessage());
         }
@@ -164,6 +167,14 @@ public class CheckInRedisEventConfig {
                 checkInRedisStreamListener
         );
         log.info(CONSUMER_REGISTER_LOG, CHECKIN_EVENTS_STREAM, CHECKIN_EVENTS_CONSUMER_NAME);
+
+        // QR 이벤트 Stream 구독 (Payment → CheckIn QR 생성 요청)
+        checkInContainer.receive(
+                Consumer.from(CHECKIN_CONSUMER_GROUP, QR_EVENTS_CONSUMER_NAME),
+                StreamOffset.create(QR_EVENTS_STREAM, ReadOffset.lastConsumed()),
+                checkInRedisStreamListener
+        );
+        log.info(CONSUMER_REGISTER_LOG, QR_EVENTS_STREAM, QR_EVENTS_CONSUMER_NAME);
 
         try {
             checkInContainer.start();

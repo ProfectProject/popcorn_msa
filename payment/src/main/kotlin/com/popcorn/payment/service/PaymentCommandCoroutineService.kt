@@ -270,6 +270,8 @@ class PaymentCommandCoroutineService(
                 orderNo = generateTempOrderNo(payment.orderId), // 임시 주문번호 생성
                 amount = payment.amount,
                 paymentMethod = payment.paymentMethod.name,
+                status = payment.status.name,
+                createdAt = payment.createdAt,
                 customerId = null,  // Order 이벤트로부터 수신하여 보완 예정
                 popupId = null, // Order 이벤트로부터 수신하여 보완 예정
                 hasReservation = null,
@@ -314,6 +316,7 @@ class PaymentCommandCoroutineService(
                         approvedAt = payment.approvedAt ?: java.time.LocalDateTime.now(),
                         customerId = orderInfo.actualUserId,   // 실제 사용자 ID
                         popupId = orderInfo.actualPopupId,
+                        storeId = orderInfo.actualStoreId,
                         hasReservation = orderInfo.actualHasReservation,
                         hasGoods = orderInfo.actualHasGoods,
                         lines = orderInfo.actualLines ?: emptyList()
@@ -332,6 +335,7 @@ class PaymentCommandCoroutineService(
                         approvedAt = payment.approvedAt ?: java.time.LocalDateTime.now(),
                         customerId = null,
                         popupId = null,
+                        storeId = null,
                         hasReservation = null,
                         hasGoods = null,
                         lines = emptyList()

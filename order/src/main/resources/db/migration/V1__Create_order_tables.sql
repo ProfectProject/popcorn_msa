@@ -2,7 +2,7 @@
 -- Hibernate Entity와 100% 호환되는 구조
 
 -- Users and schema already created manually
--- CREATE SCHEMA IF NOT EXISTS orders AUTHORIZATION order_migrator;
+CREATE SCHEMA IF NOT EXISTS orders AUTHORIZATION order_migrator;
 
 SET search_path TO orders;
 
