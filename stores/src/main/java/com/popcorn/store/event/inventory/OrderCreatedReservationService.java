@@ -5,6 +5,7 @@ import com.popcorn.store.domain.goods.entity.ReservationStatus;
 import com.popcorn.store.domain.goods.entity.ReservationType;
 import com.popcorn.store.domain.goods.service.GoodsOrderReservationService;
 import com.popcorn.store.domain.goods.service.GoodsService;
+import com.popcorn.store.domain.popup.service.ScheduleInventoryApiService;
 import com.popcorn.store.event.kafka.KafkaPublisher;
 import com.popcorn.store.event.order.OrderCreatedEvent;
 import com.popcorn.store.event.standard.EventLineItem;
@@ -12,7 +13,6 @@ import com.popcorn.store.inventory.redis.InventoryEventIdempotencyService;
 import com.popcorn.store.inventory.redis.InventoryRedisHoldService;
 import com.popcorn.store.inventory.redis.InventoryRedisHoldService.GoodsHoldItem;
 import com.popcorn.store.inventory.redis.InventoryRedisHoldService.HoldResult;
-import com.popcorn.store.event.StoreRedisEventPublisher;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.scheduling.TaskScheduler;
@@ -30,9 +30,9 @@ import java.util.stream.Collectors;
 
 /**
  * ORDER_CREATED 이벤트를 직접 처리하여
- * - Redis/DB 기반 굿즈 HOLD 생성
- * - 예약 결과(Store 이벤트) 전파
- * - TTL 만료시 예약 만료 이벤트 발행
+ * - Redis 기반 goods/schedule HOLD 생성
+ * - Kafka 기반 예약 결과 전파
+ * - TTL 만료시 reservation-expired 이벤트 발행
  */
 @Component
 @RequiredArgsConstructor
@@ -40,13 +40,15 @@ import java.util.stream.Collectors;
 public class OrderCreatedReservationService {
 
     private static final String ORDER_CREATED_SCOPE = "order-created-goods";
+    private static final String ORDER_CREATED_SCHEDULE_SCOPE = "order-created-schedule";
     private static final String RESERVATION_TYPE_GOODS = "GOODS";
+    private static final String RESERVATION_TYPE_SCHEDULE = "SCHEDULE";
 
     private final InventoryEventIdempotencyService idempotencyService;
     private final InventoryRedisHoldService inventoryHoldService;
     private final GoodsOrderReservationService reservationService;
     private final GoodsService goodsService;
-    private final StoreRedisEventPublisher redisEventPublisher;
+    private final ScheduleInventoryApiService scheduleInventoryApiService;
     private final KafkaPublisher kafkaPublisher;
     private final TaskScheduler taskScheduler;
 
@@ -55,24 +57,36 @@ public class OrderCreatedReservationService {
             log.warn("ORDER_CREATED 이벤트 필수 정보 누락");
             return;
         }
-        if (!Boolean.TRUE.equals(event.getHasGoods())) {
-            log.debug("ORDER_CREATED에 goods 항목 없음 - orderId={}", event.getOrderId());
-            return;
-        }
-        if (!idempotencyService.registerEvent(event.getEventId(), event.getOrderId(), ORDER_CREATED_SCOPE)) {
-            log.info("중복 ORDER_CREATED 이벤트 스킵 - orderId={}, eventId={}", event.getOrderId(), event.getEventId());
-            return;
-        }
 
         List<EventLineItem> goodsLines = filterGoodsItems(event.getLines());
-        if (goodsLines.isEmpty()) {
-            log.debug("goods 항목 리스트 비어있음 - orderId={}", event.getOrderId());
+        List<EventLineItem> scheduleLines = filterScheduleItems(event.getLines());
+        boolean hasGoods = !goodsLines.isEmpty();
+        boolean hasSchedule = !scheduleLines.isEmpty();
+
+        if (!hasGoods && !hasSchedule) {
+            log.debug("ORDER_CREATED에 goods/schedule 항목 없음 - orderId={}", event.getOrderId());
             return;
         }
 
-        UUID popupId = resolvePopupId(event, goodsLines);
+        UUID popupId = event.getPopupId();
+        if (popupId == null && hasGoods) {
+            popupId = resolvePopupId(event, goodsLines);
+        }
+
+        if (hasGoods) {
+            handleGoodsOnly(event, popupId, goodsLines);
+        }
+        if (hasSchedule) {
+            handleScheduleOnly(event, popupId, scheduleLines);
+        }
+    }
+
+    private void handleGoodsOnly(OrderCreatedEvent event, UUID popupId, List<EventLineItem> goodsLines) {
+        if (!registerGoodsEvent(event)) {
+            return;
+        }
         if (popupId == null) {
-            log.warn("팝업 정보 확보 실패 - orderId={}", event.getOrderId());
+            log.warn("ORDER_CREATED goods 처리 중 팝업 정보 누락 - orderId={}", event.getOrderId());
             return;
         }
 
@@ -87,26 +101,90 @@ public class OrderCreatedReservationService {
                 .collect(Collectors.toList());
 
         initializeAvailabilityKeys(popupId, holdItems);
+
         try {
-            HoldResult holdResult = inventoryHoldService.holdGoods(
-                    event.getOrderId(), popupId, holdItems
-            );
+            HoldResult holdResult = inventoryHoldService.holdGoods(event.getOrderId(), popupId, holdItems);
             if (!holdResult.isSuccess()) {
                 handleHoldFailure(event, aggregated, popupId, holdResult.getDetail());
                 return;
             }
-
-            handleHoldSuccess(event, popupId, aggregated, holdItems);
-
+            handleHoldSuccess(event, popupId, holdItems);
         } catch (Exception e) {
-            log.error("ORDER_CREATED 재고 HOLD 실패 - orderId={} error={}", event.getOrderId(), e.getMessage(), e);
+            log.error("ORDER_CREATED goods HOLD 실패 - orderId={} error={}", event.getOrderId(), e.getMessage(), e);
             handleHoldFailure(event, aggregated, popupId, e.getMessage());
+        }
+    }
+
+    private void handleScheduleOnly(OrderCreatedEvent event, UUID popupId, List<EventLineItem> scheduleLines) {
+        if (!registerScheduleEvent(event)) {
+            return;
+        }
+        if (popupId == null) {
+            log.warn("ORDER_CREATED schedule 처리 중 팝업 정보 누락 - orderId={}", event.getOrderId());
+            return;
+        }
+        if (scheduleLines.isEmpty()) {
+            log.debug("schedule 항목 없음 - orderId={}", event.getOrderId());
+            return;
+        }
+        EventLineItem scheduleLine = scheduleLines.get(0);
+        if (scheduleLine == null || scheduleLine.getScheduleId() == null || scheduleLine.getQty() == null
+                || scheduleLine.getQty() <= 0) {
+            log.warn("ORDER_CREATED schedule 정보 유효하지 않음 - orderId={}", event.getOrderId());
+            return;
+        }
+
+        UUID scheduleId = scheduleLine.getScheduleId();
+        int quantity = scheduleLine.getQty();
+        scheduleInventoryApiService.ensureScheduleKey(popupId, scheduleId);
+
+        HoldResult holdResult;
+        try {
+            holdResult = inventoryHoldService.holdSchedule(event.getOrderId(), popupId, scheduleId, quantity);
+        } catch (Exception e) {
+            log.error("ORDER_CREATED schedule HOLD 실패 - orderId={} error={}", event.getOrderId(), e.getMessage(), e);
+            publishScheduleReservationFailure(event.getOrderId(), scheduleId, safeReason(e));
+            return;
+        }
+
+        if (!holdResult.isSuccess()) {
+            publishScheduleReservationFailure(event.getOrderId(), scheduleId, holdResult.getDetail());
+            return;
+        }
+
+        GoodsOrderReservation reservation = null;
+        try {
+            reservation = reservationService.createScheduleReservation(
+                    event.getOrderId(), event.getOrderNo(), popupId, scheduleId, quantity
+            );
+
+            LocalDateTime expiresAt = LocalDateTime.now().plus(inventoryHoldService.getHoldDuration());
+            kafkaPublisher.publishScheduleReservationSucceeded(
+                    event.getOrderId(),
+                    scheduleId,
+                    quantity,
+                    expiresAt
+            );
+
+            scheduleExpiration(
+                    event.getOrderId(),
+                    popupId,
+                    List.of(reservation),
+                    ReservationType.SCHEDULE,
+                    RESERVATION_TYPE_SCHEDULE
+            );
+        } catch (Exception e) {
+            log.error("ORDER_CREATED schedule 이벤트 처리 실패 - orderId={} error={}", event.getOrderId(), e.getMessage(), e);
+            inventoryHoldService.releaseHold(event.getOrderId());
+            if (reservation != null) {
+                reservationService.updateStatus(reservation, ReservationStatus.FAILED, e.getMessage());
+            }
+            publishScheduleReservationFailure(event.getOrderId(), scheduleId, safeReason(e));
         }
     }
 
     private void handleHoldSuccess(OrderCreatedEvent event,
                                    UUID popupId,
-                                   Map<UUID, Integer> aggregated,
                                    List<GoodsHoldItem> holdItems) {
 
         LocalDateTime expiresAt = LocalDateTime.now().plus(inventoryHoldService.getHoldDuration());
@@ -118,14 +196,6 @@ public class OrderCreatedReservationService {
             );
             reservations.add(reservation);
 
-            redisEventPublisher.publishGoodsReservedEvent(
-                    event.getOrderId(),
-                    event.getOrderNo(),
-                    popupId,
-                    item.getGoodsId(),
-                    item.getQuantity()
-            );
-
             kafkaPublisher.publishGoodsReservationSucceeded(
                     event.getOrderId(),
                     item.getGoodsId(),
@@ -134,7 +204,7 @@ public class OrderCreatedReservationService {
             );
         }
 
-        scheduleExpiration(event.getOrderId(), popupId, reservations);
+        scheduleExpiration(event.getOrderId(), popupId, reservations, ReservationType.GOODS, RESERVATION_TYPE_GOODS);
     }
 
     private void handleHoldFailure(OrderCreatedEvent event,
@@ -142,21 +212,16 @@ public class OrderCreatedReservationService {
                                    UUID popupId,
                                    String reason) {
         inventoryHoldService.releaseHold(event.getOrderId());
-
-        aggregated.forEach((goodsId, qty) -> {
-            redisEventPublisher.publishGoodsReservationFailedEvent(
-                    event.getOrderId(),
-                    popupId,
-                    goodsId,
-                    qty,
-                    0,
-                    reason
-            );
-            kafkaPublisher.publishGoodsReservationFailed(event.getOrderId(), goodsId, reason);
-        });
+        aggregated.forEach((goodsId, qty) ->
+                kafkaPublisher.publishGoodsReservationFailed(event.getOrderId(), goodsId, safeReason(reason))
+        );
     }
 
-    private void scheduleExpiration(UUID orderId, UUID popupId, List<GoodsOrderReservation> reservations) {
+    private void scheduleExpiration(UUID orderId,
+                                    UUID popupId,
+                                    List<GoodsOrderReservation> reservations,
+                                    ReservationType reservationType,
+                                    String reservationTypeName) {
         Duration ttl = inventoryHoldService.getHoldDuration();
         if (ttl == null || ttl.isZero() || reservations.isEmpty()) {
             return;
@@ -164,16 +229,20 @@ public class OrderCreatedReservationService {
 
         List<String> reservationIds = reservations.stream()
                 .map(res -> res.getId().toString())
-                .toList();
+                .collect(Collectors.toList());
 
         taskScheduler.schedule(
-                () -> publishExpiration(orderId, popupId, reservationIds),
+                () -> publishExpiration(orderId, popupId, reservationIds, reservationType, reservationTypeName),
                 Instant.now().plus(ttl)
         );
     }
 
-    private void publishExpiration(UUID orderId, UUID popupId, List<String> reservationIds) {
-        List<GoodsOrderReservation> heldReservations = reservationService.findByOrderIdAndType(orderId, ReservationType.GOODS).stream()
+    private void publishExpiration(UUID orderId,
+                                   UUID popupId,
+                                   List<String> reservationIds,
+                                   ReservationType reservationType,
+                                   String reservationTypeName) {
+        List<GoodsOrderReservation> heldReservations = reservationService.findByOrderIdAndType(orderId, reservationType).stream()
                 .filter(reservation -> ReservationStatus.HELD == reservation.getStatus())
                 .collect(Collectors.toList());
 
@@ -185,7 +254,7 @@ public class OrderCreatedReservationService {
         inventoryHoldService.releaseHold(orderId);
         heldReservations.forEach(res -> reservationService.updateStatus(res, ReservationStatus.RELEASED, "TTL expired"));
 
-        kafkaPublisher.publishReservationExpired(orderId, popupId, RESERVATION_TYPE_GOODS, reservationIds, LocalDateTime.now());
+        kafkaPublisher.publishReservationExpired(orderId, popupId, reservationTypeName, reservationIds, LocalDateTime.now());
     }
 
     private List<EventLineItem> filterGoodsItems(List<EventLineItem> lines) {
@@ -195,6 +264,16 @@ public class OrderCreatedReservationService {
         return lines.stream()
                 .filter(line -> line != null && RESERVATION_TYPE_GOODS.equalsIgnoreCase(line.getItemType()))
                 .filter(line -> line.getGoodsId() != null && line.getQty() != null && line.getQty() > 0)
+                .collect(Collectors.toList());
+    }
+
+    private List<EventLineItem> filterScheduleItems(List<EventLineItem> lines) {
+        if (lines == null) {
+            return List.of();
+        }
+        return lines.stream()
+                .filter(line -> line != null && RESERVATION_TYPE_SCHEDULE.equalsIgnoreCase(line.getItemType()))
+                .filter(line -> line.getScheduleId() != null && line.getQty() != null && line.getQty() > 0)
                 .collect(Collectors.toList());
     }
 
@@ -232,5 +311,37 @@ public class OrderCreatedReservationService {
             aggregated.merge(line.getGoodsId(), line.getQty(), Integer::sum);
         }
         return aggregated;
+    }
+
+    private boolean registerGoodsEvent(OrderCreatedEvent event) {
+        boolean registered = idempotencyService.registerEvent(
+                event.getEventId(), event.getOrderId(), ORDER_CREATED_SCOPE);
+        if (!registered) {
+            log.info("중복 ORDER_CREATED goods 이벤트 스킵 - orderId={}, eventId={}", event.getOrderId(), event.getEventId());
+        }
+        return registered;
+    }
+
+    private boolean registerScheduleEvent(OrderCreatedEvent event) {
+        boolean registered = idempotencyService.registerEvent(
+                event.getEventId(), event.getOrderId(), ORDER_CREATED_SCHEDULE_SCOPE);
+        if (!registered) {
+            log.info("중복 ORDER_CREATED schedule 이벤트 스킵 - orderId={}, eventId={}", event.getOrderId(), event.getEventId());
+        }
+        return registered;
+    }
+
+    private void publishScheduleReservationFailure(UUID orderId, UUID scheduleId, String reason) {
+        if (scheduleId == null) {
+            return;
+        }
+        kafkaPublisher.publishScheduleReservationFailed(orderId, scheduleId, safeReason(reason));
+    }
+
+    private String safeReason(Object value) {
+        if (value == null) {
+            return "unknown";
+        }
+        return value.toString();
     }
 }

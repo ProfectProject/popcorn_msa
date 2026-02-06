@@ -19,7 +19,10 @@ import java.util.UUID;
 @AllArgsConstructor
 public abstract class StandardBaseEvent {
 
+    private String topic;
+
     // === 📦 공통 Event Payload (모든 이벤트 공통) ===
+
 
     /**
      * 이벤트 고유 ID
@@ -101,6 +104,8 @@ public abstract class StandardBaseEvent {
     public java.util.Map<String, String> toStreamMap() {
         java.util.Map<String, String> map = new java.util.HashMap<>();
 
+        if (topic != null) map.put("topic", topic);
+
         // 공통 필드
         if (eventId != null) map.put("eventId", eventId);
         if (eventType != null) map.put("eventType", eventType.getValue());
@@ -128,6 +133,18 @@ public abstract class StandardBaseEvent {
             map.put("lines", "[]");
         }
 
+        return map;
+    }
+
+    public java.util.Map<String, Object> toOutboxMap() {
+        java.util.Map<String, Object> map = new java.util.HashMap<>();
+        if (topic != null) map.put("topic", topic);
+        if (eventId != null) map.put("eventId", eventId);
+        if (eventType != null) map.put("eventType", eventType.getValue());
+        if (occurredAt != null) map.put("occurredAt", occurredAt.toString());
+        if (producer != null) map.put("producer", producer);
+        if (popupId != null) map.put("popupId", popupId.toString());
+        if (storeId != null) map.put("storeId", storeId.toString());
         return map;
     }
 }

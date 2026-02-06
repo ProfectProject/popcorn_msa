@@ -101,6 +101,9 @@ public class StoreInventoryEventPublisher {
 
         // 2. Redis로 외부 마이크로서비스들에게 발행
         redisEventPublisher.publishStockDeductionSuccessEvent(event);
+
+        // 3. Kafka로 store-events에 전파
+        kafkaPublisher.publishStockDeductionSucceeded(orderId, event.getStockDetails(), event.getSucceededAt());
     }
 
     public void publishStockDeductionFailedEvent(UUID orderId, String orderNo, UUID popupId,
@@ -120,5 +123,35 @@ public class StoreInventoryEventPublisher {
 
         // 2. Redis로 외부 마이크로서비스들에게 발행
         redisEventPublisher.publishStockDeductionFailedEvent(event);
+
+        // 3. Kafka로 store-events에 전파
+        kafkaPublisher.publishStockDeductionFailed(orderId, event.getReason(),
+                isRetryable(event.getFailureCode()), event.getFailedAt());
+    }
+
+    public void publishScheduleConfirmationSuccessEvent(UUID orderId, String orderNo,
+                                                       UUID popupId, String details) {
+        log.info("📅 [STORES] 스케줄 확정 성공 이벤트 발행 - orderId={}", orderId);
+        kafkaPublisher.publishScheduleConfirmationSucceeded(orderId, details, LocalDateTime.now());
+    }
+
+    public void publishScheduleConfirmationFailedEvent(UUID orderId, String orderNo,
+                                                      UUID popupId, String reason) {
+        log.warn("📅 [STORES] 스케줄 확정 실패 이벤트 발행 - orderId={}, reason={}", orderId, reason);
+        kafkaPublisher.publishScheduleConfirmationFailed(orderId, reason, true, LocalDateTime.now());
+    }
+
+    public void publishStockReleasedEvent(UUID orderId, LocalDateTime releasedAt) {
+        log.info("♻️ [STORES] 재고 릴리즈 이벤트 발행 - orderId={}", orderId);
+        kafkaPublisher.publishStockReleased(orderId, releasedAt);
+    }
+
+    public void publishScheduleReleasedEvent(UUID orderId, LocalDateTime releasedAt) {
+        log.info("♻️ [STORES] 스케줄 릴리즈 이벤트 발행 - orderId={}", orderId);
+        kafkaPublisher.publishScheduleReleased(orderId, releasedAt);
+    }
+
+    private boolean isRetryable(String failureCode) {
+        return failureCode == null || !"INSUFFICIENT_STOCK".equals(failureCode);
     }
 }

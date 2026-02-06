@@ -38,6 +38,12 @@ public class KafkaConfig {
     @Value("${popcorn.kafka.partitions.storeEvents:12}")
     private int storeEventsPartitions;
 
+    @Value("${popcorn.kafka.topics.storeRequests:store-requests}")
+    private String storeRequestsTopic;
+
+    @Value("${popcorn.kafka.partitions.storeRequests:6}")
+    private int storeRequestsPartitions;
+
     @Value("${popcorn.kafka.topic.replicas:1}")
     private short replicas;
 
@@ -50,7 +56,7 @@ public class KafkaConfig {
 
         props.put(ProducerConfig.BOOTSTRAP_SERVERS_CONFIG, bootstrapServers);
 
-        // 운영 권장 (너희 전략)
+
         props.put(ProducerConfig.ACKS_CONFIG, "all");
         props.put(ProducerConfig.ENABLE_IDEMPOTENCE_CONFIG, true);
 
@@ -147,6 +153,17 @@ public class KafkaConfig {
     public NewTopic storeEventsTopic() {
         return TopicBuilder.name(storeEventsTopic)
                 .partitions(storeEventsPartitions)
+                .replicas(replicas)
+                .config(TopicConfig.RETENTION_MS_CONFIG, "86400000")
+                .config(TopicConfig.COMPRESSION_TYPE_CONFIG, "snappy")
+                .build();
+    }
+
+    @Bean
+    @Profile("local")
+    public NewTopic storeRequestsTopic() {
+        return TopicBuilder.name(storeRequestsTopic)
+                .partitions(storeRequestsPartitions)
                 .replicas(replicas)
                 .config(TopicConfig.RETENTION_MS_CONFIG, "86400000")
                 .config(TopicConfig.COMPRESSION_TYPE_CONFIG, "snappy")

@@ -83,16 +83,15 @@ public class StoreRedisEventPublisher {
             log.info("🚀 [STORES] 재고 차감 실패 이벤트 Stream 발행 시작 - orderId: {}, eventId: {}",
                     event.getOrderId(), event.getEventId());
 
-            Map<String, Object> eventData = Map.of(
-                "eventType", EventConstants.EventTypes.STOCK_DEDUCTION_FAILED,
-                "eventId", event.getEventId(),
-                "orderId", event.getOrderId().toString(),
-                "orderNo", event.getOrderNo(),
-                "reason", event.getReason(),
-                "failureCode", event.getFailureCode() != null ? event.getFailureCode() : "",
-                "failedAt", event.getFailedAt().toString(),
-                "eventTime", java.time.LocalDateTime.now().toString()
-            );
+            Map<String, Object> eventData = new java.util.LinkedHashMap<>();
+            eventData.put("eventType", EventConstants.EventTypes.STOCK_DEDUCTION_FAILED);
+            eventData.put("eventId", event.getEventId());
+            eventData.put("orderId", event.getOrderId().toString());
+            eventData.put("orderNo", event.getOrderNo() != null ? event.getOrderNo() : "");
+            eventData.put("reason", event.getReason() != null ? event.getReason() : "");
+            eventData.put("failureCode", event.getFailureCode() != null ? event.getFailureCode() : "");
+            eventData.put("failedAt", event.getFailedAt() != null ? event.getFailedAt().toString() : "");
+            eventData.put("eventTime", java.time.LocalDateTime.now().toString());
 
             // Map<String, Object>를 Map<String, String>으로 변환
             Map<String, String> stringEventData = eventData.entrySet().stream()

@@ -1,5 +1,6 @@
 package com.popcorn.store.event.standard;
 
+import com.fasterxml.jackson.annotation.JsonAlias;
 import lombok.AllArgsConstructor;
 import lombok.Builder;
 import lombok.Data;
@@ -63,6 +64,7 @@ public class EventLineItem {
     /**
      * 수량
      */
+    @JsonAlias("quantity")
     private Integer qty;
 
     /**
