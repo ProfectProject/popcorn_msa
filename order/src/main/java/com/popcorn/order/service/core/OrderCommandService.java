@@ -30,7 +30,7 @@ import com.popcorn.order.event.order.OrderStatusChangedEvent;
 //import com.popcorn.order.event.TestProducer;
 import com.popcorn.order.event.order.OrderCancelledEvent;
 import com.popcorn.order.event.publisher.OrderEventPublisher;
-import com.popcorn.order.kafka.event.OrderEventProducer;
+import com.popcorn.order.kafka.producer.OrderEventProducer;
 import com.popcorn.order.repository.OrderRepository;
 import com.popcorn.order.repository.OrderItemRepository;
 import com.popcorn.order.repository.OrderStatusHistoryRepository;
@@ -197,7 +197,9 @@ public class OrderCommandService {
 
         // 즉시 응답: 예약과 동시에 결제 URL 생성
         Order latestOrder = orderRepository.findById(savedOrder.getId()).orElse(savedOrder);
-        latestOrder.setOrderItems(orderItemRepository.findByOrderId(latestOrder.getId()));
+        List<OrderItem> latestOrderItems = orderItemRepository.findByOrderId(latestOrder.getId());
+        latestOrder.setOrderItems(latestOrderItems);
+        //latestOrder.setOrderItems(orderItemRepository.findByOrderId(latestOrder.getId()););
         String paymentMethod = determinePaymentMethod(latestOrder);
 
         // 즉시 결제 URL 생성
@@ -229,8 +231,12 @@ public class OrderCommandService {
 
         // 주문 생성 이벤트 발행 (중복 제거 완료)
         eventPublisher.publishEvent(new OrderCreatedEvent(latestOrder, null));
-        /*kafka 이벤트 발행 */
-        orderEventProducer.publishOrderCreated(latestOrder,hasGoodsItems,hasReservationItems);
+        
+        /*
+        * kafka 이벤트 발행
+        */
+        orderEventProducer.publishOrderCreated(latestOrder,latestOrderItems,hasGoodsItems,hasReservationItems);
+
         orderCacheService.evictMyOrdersCache(latestOrder.getCustomerId());
 
         // 성능 모니터링 완료
@@ -437,6 +443,12 @@ public class OrderCommandService {
         // 5. 상태 변경 및 저장
         order.setStatus(newStatus);
         Order savedOrder = orderRepository.save(order);
+        
+        boolean hasGoodsItems = savedOrder.getOrderItems().stream()
+            .anyMatch(item -> ItemType.GOODS.equals(item.getOrderItemType()));
+        boolean hasReservationItems = savedOrder.getOrderItems().stream()
+            .anyMatch(item -> ItemType.RESERVATION.equals(item.getOrderItemType()));
+
 
         // 6. 상태 변경 이력 저장
         OrderStatusHistory statusHistory = OrderStatusHistory.builder()
@@ -462,6 +474,13 @@ public class OrderCommandService {
             List<OrderItem> orderItems = orderItemRepository.findByOrderId(savedOrder.getId());
             savedOrder.setOrderItems(orderItems);
             orderEventPublisher.publishOrderPaidEvent(savedOrder);
+
+            /*
+            * kafka : order-paid 발행
+            * boolean hasGoodsItems = savedOrder.getOrderItems().stream()
+             */
+            orderEventProducer.publishOrderPaid(savedOrder,hasGoodsItems,hasReservationItems);
+
         }
 
         // 8. 특별한 상태 변경시 추가 이벤트
