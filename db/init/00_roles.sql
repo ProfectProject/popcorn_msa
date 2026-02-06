@@ -39,7 +39,7 @@ END $$;
 
 DO $$ BEGIN
     IF NOT EXISTS (SELECT 1 FROM pg_roles WHERE rolname = 'user_auth_app') THEN
-        CREATE ROLE user_auth_app LOGIN PASSWORD 'user123';
+        CREATE ROLE user_auth_app LOGIN PASSWORD 'user_auth123';
     END IF;
 END $$;
 

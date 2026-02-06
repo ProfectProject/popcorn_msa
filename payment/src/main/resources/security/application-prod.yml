@@ -4,6 +4,10 @@ server:
   tomcat:
     uri-encoding: UTF-8
 
+# 프론트엔드 기본 URL 설정
+frontend:
+  base-url: ${FRONTEND_BASE_URL}
+
 spring:
   config:
     activate:
@@ -64,7 +68,7 @@ spring:
       port: ${REDIS_PORT}
       password: ${REDIS_PASSWORD}
       timeout: 5000ms
-      database: 2  # Payment 서비스 전용 DB
+      database: 0  # Order, Stores 서비스와 동일한 database 0 사용
       # 프로덕션 레디스 풀 설정
       lettuce:
         pool:

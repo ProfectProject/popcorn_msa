@@ -26,20 +26,19 @@
 # 📦 Order 도메인
 
 ## 🔹 `order-events`
-| eventType | 발행자 | 수신자 (Consumer Group) | 주요 Payload |
+| EventType | 발행자 | 수신자 (Consumer Group) | 주요 Payload |
 | --- | --- | --- | --- |
-| `order.created` | Order | Store(store-cg), User(user-cg), Payment(payment-cg), CheckIn(checkin-cg) | orderId, orderNo, userId, orderType, totalAmount |
-| `order.paid` | Order | Store, User, CheckIn | orderId, orderNo, paymentId, totalAmount |
-| `order.status.updated` | Order | Store, Payment | orderId, orderNo, fromStatus, toStatus |
+| `ORDER_CREATED` (주문 생성) :테스트 완료 | Order | Store(store-cg) Payment(payment-cg), CheckIn(checkin-cg) | eventId, orderId, orderNo, userId, orderType, popupId, hasReservation, hasGoods, lines[], totalAmount, createdAt |
+| `ORDER_PAID` (상태 변경) : service 추가 , 테스트 | Order | Store, Payment, Query | eventId, orderId, popupId, fromStatus, toStatus, hasReservation, hasGoods, updatedAt |
+| `ORDER_COMPLETED` |  |  |  |
 
 ---
 
 ## 🔹 `order-requests`
-| eventType | 발행자 | 수신자 | 주요 Payload |
+| EventType | 발행자 | 수신자 | 주요 Payload |
 | --- | --- | --- | --- |
-| `order.info.requested` | Payment | Order(order-cg) | orderId, correlationId |
-| `order.query.requested` | Payment | Order | orderId, correlationId |
-| `order.status.update.requested` | Payment | Order | orderId, newStatus, reason |
+| `ORDER_INFO_REQUESTED` | Payment | Order(order-cg) | eventId, orderId, correlationId |
+| `ORDER_QUERY_REQUESTED` | Payment | Order | eventId, orderId, correlationId |
 
 ---
 

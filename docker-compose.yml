@@ -2,6 +2,7 @@ services:
   db:
     image: postgres:15-alpine
     container_name: popcorn-db
+    command: ["postgres", "-c", "wal_level=logical", "-c", "max_replication_slots=4", "-c", "max_wal_senders=4"]
     environment:
       POSTGRES_DB: ${DB_NAME:-popcorn_db}
       POSTGRES_USER: ${DB_USERNAME:-postgres}
@@ -10,6 +11,7 @@ services:
       - "5432:5432"
       - "5430:5432"
     volumes:
+      - db_data:/var/lib/postgresql/data
       - ./db/init:/docker-entrypoint-initdb.d:ro
     healthcheck:
       test: ["CMD-SHELL", "pg_isready -U ${DB_USERNAME:-postgres} -d ${DB_NAME:-popcorn_db}"]
@@ -56,7 +58,7 @@ services:
       KAFKA_OFFSETS_TOPIC_REPLICATION_FACTOR: 3
       KAFKA_TRANSACTION_STATE_LOG_REPLICATION_FACTOR: 3
       KAFKA_TRANSACTION_STATE_LOG_MIN_ISR: 2
-      KAFKA_MIN_INSYNC_REPLICAS: 2
+      KAFKA_MIN_INSYNC_REPLICAS: 1
       KAFKA_GROUP_INITIAL_REBALANCE_DELAY_MS: 0
 
       # 토픽 자동 생성 설정
@@ -103,7 +105,7 @@ services:
       KAFKA_OFFSETS_TOPIC_REPLICATION_FACTOR: 3
       KAFKA_TRANSACTION_STATE_LOG_REPLICATION_FACTOR: 3
       KAFKA_TRANSACTION_STATE_LOG_MIN_ISR: 2
-      KAFKA_MIN_INSYNC_REPLICAS: 2
+      KAFKA_MIN_INSYNC_REPLICAS: 1
       KAFKA_GROUP_INITIAL_REBALANCE_DELAY_MS: 0
       KAFKA_AUTO_CREATE_TOPICS_ENABLE: 'true'
       KAFKA_NUM_PARTITIONS: 6
@@ -142,7 +144,7 @@ services:
       KAFKA_OFFSETS_TOPIC_REPLICATION_FACTOR: 3
       KAFKA_TRANSACTION_STATE_LOG_REPLICATION_FACTOR: 3
       KAFKA_TRANSACTION_STATE_LOG_MIN_ISR: 2
-      KAFKA_MIN_INSYNC_REPLICAS: 2
+      KAFKA_MIN_INSYNC_REPLICAS: 1
       KAFKA_GROUP_INITIAL_REBALANCE_DELAY_MS: 0
       KAFKA_AUTO_CREATE_TOPICS_ENABLE: 'true'
       KAFKA_NUM_PARTITIONS: 6
@@ -203,7 +205,7 @@ services:
     restart: unless-stopped
 
   kafka-connect:
-    image: confluentinc/cp-kafka-connect:7.4.0
+    image: debezium/connect:2.7.3.Final
     container_name: kafka-connect
     depends_on:
       - kafka-1
@@ -211,41 +213,23 @@ services:
       - kafka-3
     ports:
       - "8088:8083"
-    command:
-      - bash
-      - -c
-      - |
-        echo "Installing Elasticsearch connector..."
-        confluent-hub install --no-prompt confluentinc/kafka-connect-elasticsearch:14.0.0
-        echo "Starting Kafka Connect..."
-        /etc/confluent/docker/run &
-        wait
     environment:
-      CONNECT_BOOTSTRAP_SERVERS: kafka-1:9092,kafka-2:9092,kafka-3:9092
-      CONNECT_REST_ADVERTISED_HOST_NAME: kafka-connect
-      CONNECT_REST_PORT: 8083
-      CONNECT_GROUP_ID: popcorn-connect-group
-      CONNECT_CONFIG_STORAGE_TOPIC: popcorn-connect-configs
-      CONNECT_CONFIG_STORAGE_REPLICATION_FACTOR: 3
-      CONNECT_OFFSET_STORAGE_TOPIC: popcorn-connect-offsets
-      CONNECT_OFFSET_STORAGE_REPLICATION_FACTOR: 3
-      CONNECT_STATUS_STORAGE_TOPIC: popcorn-connect-status
-      CONNECT_STATUS_STORAGE_REPLICATION_FACTOR: 3
-      CONNECT_KEY_CONVERTER: org.apache.kafka.connect.json.JsonConverter
-      CONNECT_VALUE_CONVERTER: org.apache.kafka.connect.json.JsonConverter
-      CONNECT_KEY_CONVERTER_SCHEMAS_ENABLE: 'false'
-      CONNECT_VALUE_CONVERTER_SCHEMAS_ENABLE: 'false'
-      CONNECT_INTERNAL_KEY_CONVERTER: org.apache.kafka.connect.json.JsonConverter
-      CONNECT_INTERNAL_VALUE_CONVERTER: org.apache.kafka.connect.json.JsonConverter
-      CONNECT_LOG4J_ROOT_LOGLEVEL: INFO
-      CONNECT_PLUGIN_PATH: /usr/share/java,/usr/share/confluent-hub-components
-    restart: unless-stopped
-
-  zipkin:
-    image: openzipkin/zipkin:latest
-    container_name: zipkin
-    ports:
-      - "9411:9411"
+      BOOTSTRAP_SERVERS: kafka-1:9092,kafka-2:9092,kafka-3:9092
+      GROUP_ID: popcorn-connect-group
+      CONFIG_STORAGE_TOPIC: popcorn-connect-configs
+      OFFSET_STORAGE_TOPIC: popcorn-connect-offsets
+      STATUS_STORAGE_TOPIC: popcorn-connect-status
+      CONFIG_STORAGE_REPLICATION_FACTOR: 1
+      OFFSET_STORAGE_REPLICATION_FACTOR: 1
+      STATUS_STORAGE_REPLICATION_FACTOR: 1
+      KEY_CONVERTER: org.apache.kafka.connect.json.JsonConverter
+      VALUE_CONVERTER: org.apache.kafka.connect.json.JsonConverter
+      KEY_CONVERTER_SCHEMAS_ENABLE: "false"
+      VALUE_CONVERTER_SCHEMAS_ENABLE: "false"
+      REST_ADVERTISED_HOST_NAME: kafka-connect
+      REST_PORT: 8083
+      LOG_LEVEL: INFO
+      KAFKA_LOG4J_LOGGERS: "io.debezium.connector.postgresql=DEBUG,io.debezium.transforms.outbox=DEBUG,org.apache.kafka.connect.runtime.Worker=INFO"
     restart: unless-stopped
 
   gateway:
@@ -279,6 +263,8 @@ services:
       DB_HOST: db
       DB_PORT: 5432
       REDIS_HOST: redis
+      SPRING_DATA_REDIS_HOST: redis
+      SPRING_DATA_REDIS_PORT: 6379
       KAFKA_BOOTSTRAP_SERVERS: kafka-1:9092,kafka-2:9092,kafka-3:9092
     depends_on:
       db:
@@ -291,6 +277,8 @@ services:
         condition: service_healthy
       kafka-3:
         condition: service_healthy
+    ports:
+      - "8082:8082"
     restart: always
 
   stores:
@@ -337,6 +325,12 @@ services:
         condition: service_healthy
       kafka-3:
         condition: service_healthy
+    healthcheck:
+      test: ["CMD-SHELL", "curl -f http://localhost:8086/actuator/health || exit 1"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 40s
     restart: always
 
   order:
@@ -393,6 +387,7 @@ services:
 
 
 volumes:
+  db_data:
   redis-data:
   kafka_data_1:
   kafka_data_2:

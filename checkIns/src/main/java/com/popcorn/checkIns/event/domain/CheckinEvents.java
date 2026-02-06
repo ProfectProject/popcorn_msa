@@ -42,15 +42,14 @@ public class CheckinEvents {
 
         @Override
         public Map<String, Object> getEventPayload() {
-            return Map.of(
-                    "qrId", getCheckinId(),
-                    "orderId", orderId,
-                    "paymentId", paymentId,
-                    "orderNo", orderNo,
-                    "storeId", storeId,
-                    "popupId", popupId,
-                    "requestedAt", requestedAt.toString()
-            );
+            Map<String, Object> payload = new java.util.HashMap<>(basePayload());
+            payload.put("orderId", orderId);
+            payload.put("paymentId", paymentId);
+            payload.put("requestedAt", requestedAt.toString());
+            if (orderNo != null) {
+                payload.put("orderNo", orderNo);
+            }
+            return payload;
         }
 
         // Getters
@@ -98,15 +97,12 @@ public class CheckinEvents {
 
         @Override
         public Map<String, Object> getEventPayload() {
-            Map<String, Object> payload = new java.util.HashMap<>();
-            payload.put("qrId", getCheckinId());
+            Map<String, Object> payload = new java.util.HashMap<>(basePayload());
             payload.put("orderId", orderId);
-            payload.put("orderNo", orderNo != null ? orderNo : "null");
             payload.put("qrToken", qrToken != null ? qrToken : "null");
             payload.put("qrUrl", qrUrl != null ? qrUrl : "null");
             payload.put("expiresAt", expiresAt != null ? expiresAt.toString() : "null");
             payload.put("generatedAt", generatedAt != null ? generatedAt.toString() : "null");
-            payload.put("ttlSeconds", ttlSeconds != null ? ttlSeconds.toString() : "null");
             return payload;
         }
 
@@ -159,17 +155,13 @@ public class CheckinEvents {
 
         @Override
         public Map<String, Object> getEventPayload() {
-            return Map.of(
-                    "checkinId", getCheckinId(),
-                    "orderId", orderId,
-                    "orderGoodsId", orderGoodsId,
-                    "popupId", popupId,
-                    "storeId", storeId,
-                    "qrId", qrId,
-                    "qrToken", qrToken != null ? qrToken : "null",
-                    "checkinAt", checkinAt.toString(),
-                    "checkinLocation", checkinLocation != null ? checkinLocation : "null"
-            );
+            Map<String, Object> payload = new java.util.HashMap<>(basePayload());
+            payload.put("checkinId", getCheckinId());
+            payload.put("orderId", orderId);
+            payload.put("orderGoodsId", orderGoodsId);
+            payload.put("popupId", popupId);
+            payload.put("checkinAt", checkinAt.toString());
+            return payload;
         }
 
         // Getters

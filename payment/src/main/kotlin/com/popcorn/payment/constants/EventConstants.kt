@@ -22,6 +22,7 @@ object EventConstants {
             const val PAYMENT_CANCEL_FAILED = "PAYMENT_CANCEL_FAILED"
             const val PAYMENT_EXPIRED = "PAYMENT_EXPIRED"
             const val PAYMENT_SUCCESS = "PAYMENT_SUCCESS"
+            const val PAYMENT_URL_CREATED = "PAYMENT_URL_CREATED"
         }
 
         // ================ Payment Request Events ================
@@ -42,8 +43,16 @@ object EventConstants {
             const val QR_INVALIDATION_REQUESTED = "QR_INVALIDATION_REQUESTED"
             const val ORDER_STATUS_UPDATE_REQUESTED = "ORDER_STATUS_UPDATE_REQUESTED"
             const val INVENTORY_CONFIRMATION_REQUESTED = "INVENTORY_CONFIRMATION_REQUESTED"
-            const val ORDER_INFO_REQUEST = "ORDER_INFO_REQUEST"
+            const val ORDER_INFO_REQUESTED = "ORDER_INFO_REQUESTED"
+            const val ORDER_QUERY_REQUESTED = "ORDER_QUERY_REQUESTED"
             const val ORDER_INFO_RESPONSE = "ORDER_INFO_RESPONSE"
+        }
+
+        // ================ Order Domain Events (Consumed by Payment) ================
+        object OrderDomain {
+            const val ORDER_CREATED = "ORDER_CREATED"
+            const val ORDER_PAID = "ORDER_PAID"
+            const val ORDER_COMPLETED = "ORDER_COMPLETED"
         }
 
         // ================ Compensation Events ================

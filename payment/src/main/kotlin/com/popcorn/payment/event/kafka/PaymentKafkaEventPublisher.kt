@@ -244,7 +244,8 @@ class PaymentKafkaEventPublisher(
                 val topic = when (event.eventType) {
                     EventConstants.EventTypes.PaymentRequest.PAYMENT_CREATE_REQUESTED,
                     EventConstants.EventTypes.PaymentRequest.PAYMENT_CANCEL_REQUESTED -> EventConstants.Streams.PAYMENT_REQUESTS
-                    EventConstants.EventTypes.Integration.ORDER_INFO_REQUEST -> EventConstants.Streams.ORDER_INFO_REQUESTS
+                    EventConstants.EventTypes.Integration.ORDER_INFO_REQUESTED,
+                    EventConstants.EventTypes.Integration.ORDER_QUERY_REQUESTED -> EventConstants.Streams.ORDER_REQUESTS
                     else -> EventConstants.Streams.PAYMENT_EVENTS
                 }
                 Triple(

@@ -1,5 +1,6 @@
 package com.popcorn.payment.service
 
+import com.popcorn.payment.client.UserServiceClient
 import com.popcorn.payment.event.domain.payment.EventLineItem
 import com.popcorn.payment.repository.ExternalDbQueryException
 import com.popcorn.payment.repository.ExternalStoreRepository
@@ -19,37 +20,34 @@ import org.springframework.beans.factory.annotation.Autowired
 @Service
 class HybridValidationService(
     @Autowired(required = false) private val externalUserRepository: ExternalUserRepository?,
-    @Autowired(required = false) private val externalStoreRepository: ExternalStoreRepository?
+    @Autowired(required = false) private val externalStoreRepository: ExternalStoreRepository?,
+    private val userServiceClient: UserServiceClient
 ) {
 
     private val log = LoggerFactory.getLogger(HybridValidationService::class.java)
 
     /**
-     * 사용자 주소 검증 (Hybrid 방식)
-     * 외부 Repository가 없으면 간단한 검증으로 fallback
+     * 사용자 주소 검증 (HTTP 통신 방식)
+     * User 서비스의 REST API를 호출하여 주소 정보 조회
      */
     suspend fun validateUserAddressHybrid(userId: Long): Boolean {
         return try {
-            log.info("🔍 [DB] 사용자 주소 검증 시작 - userId: {}", userId)
+            log.info("🔍 [HTTP] 사용자 주소 검증 시작 - userId: {}", userId)
 
-            if (externalUserRepository == null) {
-                log.info("🔧 [DB] 외부 사용자 Repository 없음 - 간단한 검증으로 fallback - userId: {}", userId)
-                return userId > 0 // 간단한 검증
-            }
-
-            // 1차: DB 직접 조회 (10-50ms)
-            val hasDefaultAddress = externalUserRepository.hasDefaultAddress(userId)
+            // HTTP API 호출로 기본 주소 존재 여부 확인
+            val hasDefaultAddress = userServiceClient.hasDefaultAddress(userId)
 
             if (hasDefaultAddress) {
-                log.info("✅ [DB] 사용자 주소 검증 성공 - userId: {}, 처리시간: ~20ms", userId)
+                log.info("✅ [HTTP] 사용자 주소 검증 성공 - userId: {}, 빠른 HTTP 응답", userId)
             } else {
-                log.warn("❌ [DB] 사용자 기본 주소 없음 - userId: {}", userId)
+                log.warn("❌ [HTTP] 사용자 기본 주소 없음 - userId: {}", userId)
             }
 
             hasDefaultAddress
-        } catch (e: ExternalDbQueryException) {
-            log.error("❌ [DB] 사용자 주소 검증 실패 - userId: {}, error: {}", userId, e.message, e)
-            throw e
+        } catch (e: Exception) {
+            log.error("❌ [HTTP] 사용자 주소 검증 실패 - userId: {}, error: {}", userId, e.message, e)
+            // HTTP 통신 실패 시 기본값으로 false 반환
+            false
         }
     }
 
@@ -416,6 +414,68 @@ class HybridValidationService(
      * 완전한 결제 전 검증 (Enhanced Hybrid 방식)
      * 주소 검증 + 가격 검증을 병렬로 수행하여 최대 성능을 달성
      */
+    /**
+     * 기본 결제 검증 (HTTP 통신용)
+     * Order 정보와 결제 금액 검증
+     */
+    suspend fun validateBasicPaymentRequest(
+        orderId: UUID,
+        userId: Long,
+        expectedAmount: Int,
+        actualOrderAmount: Int
+    ): BasicValidationResult {
+        return try {
+            log.debug("🔍 [HTTP] 기본 결제 검증 시작 - orderId: {}, userId: {}, expected: {}, actual: {}",
+                orderId, userId, expectedAmount, actualOrderAmount)
+
+            // 1. 사용자 주소 검증 (HTTP 통신)
+            val addressValid = validateUserAddressHybrid(userId)
+
+            // 2. 가격 검증 (HTTP로 받은 Order 금액 vs 결제 요청 금액)
+            val priceValid = (expectedAmount == actualOrderAmount)
+
+            if (!priceValid) {
+                log.warn("❌ [HTTP] 가격 불일치 - expected: {}, actual: {}", expectedAmount, actualOrderAmount)
+            }
+
+            val isValid = addressValid && priceValid
+
+            log.info("🔍 [HTTP] 기본 검증 결과 - address: {}, price: {}, valid: {}",
+                addressValid, priceValid, isValid)
+
+            BasicValidationResult(
+                isValid = isValid,
+                addressValid = addressValid,
+                priceValid = priceValid,
+                userId = userId,
+                expectedAmount = expectedAmount,
+                actualAmount = actualOrderAmount
+            )
+        } catch (e: Exception) {
+            log.error("❌ [HTTP] 기본 결제 검증 실패 - orderId: {}, error: {}", orderId, e.message, e)
+            BasicValidationResult(
+                isValid = false,
+                addressValid = false,
+                priceValid = false,
+                userId = userId,
+                expectedAmount = expectedAmount,
+                actualAmount = actualOrderAmount
+            )
+        }
+    }
+
+    /**
+     * 기본 검증 결과 DTO
+     */
+    data class BasicValidationResult(
+        val isValid: Boolean,
+        val addressValid: Boolean,
+        val priceValid: Boolean,
+        val userId: Long,
+        val expectedAmount: Int,
+        val actualAmount: Int
+    )
+
     /**
      * 향상된 검증 결과 DTO
      */

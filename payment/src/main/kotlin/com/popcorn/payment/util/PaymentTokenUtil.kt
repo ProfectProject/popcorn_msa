@@ -8,6 +8,7 @@ import org.slf4j.LoggerFactory
 import org.springframework.beans.factory.annotation.Value
 import org.springframework.stereotype.Component
 import java.util.*
+import java.nio.charset.StandardCharsets
 
 /**
  * 결제 토큰 JWT 파싱 유틸리티 (기존 backend 호환)
@@ -22,6 +23,47 @@ class PaymentTokenUtil {
     private lateinit var secretKey: String
 
     private val log = LoggerFactory.getLogger(PaymentTokenUtil::class.java)
+
+    companion object {
+        private const val TOKEN_VALIDITY_MINUTES = 30L // 30분 유효
+    }
+
+    /**
+     * 결제 정보를 JWT 토큰으로 암호화 (Order 서비스와 동일한 방식)
+     */
+    fun generatePaymentToken(
+        orderId: UUID,
+        orderNo: String,
+        amount: Int,
+        orderName: String,
+        customerKey: String,
+        paymentMethod: String
+    ): String {
+        try {
+            val now = Date()
+            val expiry = Date(now.time + TOKEN_VALIDITY_MINUTES * 60 * 1000)
+
+            val token = Jwts.builder()
+                .setSubject("p") // "payment" → "p" (더 짧게)
+                .setIssuedAt(now)
+                .setExpiration(expiry)
+                .claim("i", orderId.toString()) // "orderId" → "i"
+                .claim("o", orderNo) // "orderNo" → "o"
+                .claim("a", amount) // "amount" → "a"
+                .claim("c", customerKey) // "customerKey" → "c"
+                .claim("p", null) // "paymentId" → "p" (아직 결제 기록 없음)
+                // successUrl, failUrl 제거 (프론트엔드에서 설정)
+                .signWith(SignatureAlgorithm.HS256, secretKey.toByteArray(StandardCharsets.UTF_8))
+                .compact()
+
+            log.info("💳 JWT 결제 토큰 생성 완료 - 주문번호: {}, 토큰 길이: {}", orderNo, token.length)
+            return token
+
+        } catch (e: Exception) {
+            log.error("❌ JWT 결제 토큰 생성 실패 - 주문번호: {}, 에러: {}", orderNo, e.message, e)
+            throw RuntimeException("결제 토큰 생성에 실패했습니다", e)
+        }
+    }
 
     /**
      * JWT 토큰을 복호화하여 결제 정보 반환

@@ -25,9 +25,9 @@ class PaymentOrderInfoService(
     private val pendingRequests = ConcurrentHashMap<String, CompletableFuture<OrderInfoResponseEvent>>()
 
     /**
-     * Order 정보 요청 (이벤트 기반 - Redis Stream) - 🚀 타이밍 최적화
+     * Order 정보 요청 (이벤트 기반 - Redis Stream) - 🚀 타이밍 최적화 (15초 → 25초)
      */
-    suspend fun requestOrderInfo(orderId: UUID, timeoutMs: Long = 15000): CompletableFuture<OrderInfoResponseEvent?> {
+    suspend fun requestOrderInfo(orderId: UUID, timeoutMs: Long = 25000): CompletableFuture<OrderInfoResponseEvent?> {
         val request = OrderInfoRequestPaymentEvent.create(orderId)
         val requestId = request.requestId
         val future = CompletableFuture<OrderInfoResponseEvent>()

@@ -54,4 +54,14 @@ abstract class BasePaymentEvent(
         additionalData?.let { baseMetadata.putAll(it) }
         return baseMetadata
     }
+
+    protected fun basePayload(): MutableMap<String, Any> = mutableMapOf(
+        "eventId" to eventId.toString(),
+        "eventType" to eventType,
+        "producer" to "payment-service",
+        "occurredAt" to timestamp.toString(),
+        "schemaVersion" to eventVersion,
+        "traceId" to correlationId.toString(),
+        "correlationId" to correlationId.toString()
+    )
 }

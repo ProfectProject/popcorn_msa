@@ -49,6 +49,15 @@ public abstract class BaseCheckinEvent extends BaseEvent {
                 getEventType(), getCheckinId(), getUserId());
     }
 
+    protected Map<String, Object> basePayload() {
+        Map<String, Object> payload = new java.util.HashMap<>();
+        payload.put("eventId", getEventId().toString());
+        payload.put("eventType", getEventType());
+        payload.put("occurredAt", getTimestamp().toString());
+        payload.put("producer", "checkin-service");
+        return payload;
+    }
+
     /**
      * CheckIn 관련 메타데이터 추가를 위한 헬퍼 메서드
      */

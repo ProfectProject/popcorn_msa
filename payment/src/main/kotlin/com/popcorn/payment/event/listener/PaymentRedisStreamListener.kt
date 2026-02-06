@@ -3,10 +3,13 @@ package com.popcorn.payment.event.listener
 import com.fasterxml.jackson.databind.ObjectMapper
 import com.popcorn.payment.constants.EventConstants
 import com.popcorn.payment.service.PaymentOrderInfoService
+import com.popcorn.payment.service.PaymentCreateResult
 import com.popcorn.payment.event.domain.payment.OrderInfoResponseEvent
 import com.popcorn.payment.service.TossPaymentCoroutineService
 import com.popcorn.payment.event.domain.payment.PaymentCancelFailedEvent
+import com.popcorn.payment.event.domain.payment.PaymentUrlCreatedEvent
 import com.popcorn.payment.event.domain.payment.EventLineItem
+import java.util.UUID
 import com.popcorn.payment.event.publisher.BasePaymentEventPublisherImpl
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
@@ -89,13 +92,17 @@ class PaymentRedisStreamListener(
         try {
             when (eventType) {
                 // 주문 관련 이벤트
-                "ORDER_CREATED" -> {
+                EventConstants.EventTypes.OrderDomain.ORDER_CREATED -> {
                     log.info("📦 [PAYMENT] 주문 생성 이벤트 수신 - orderId: {}", values["orderId"])
                     // 결제 준비 로직 등
                 }
-                "ORDER_PAID" -> {
+                EventConstants.EventTypes.OrderDomain.ORDER_PAID -> {
                     log.info("💳 [PAYMENT] 주문 결제 완료 이벤트 수신 - orderId: {}", values["orderId"])
                     // 결제 완료 후속 처리 등
+                }
+                EventConstants.EventTypes.OrderDomain.ORDER_COMPLETED -> {
+                    log.info("✅ [PAYMENT] 주문 완료 이벤트 수신 - orderId: {}", values["orderId"])
+                    // 완료 후속 처리 등
                 }
 
                 // 결제 관련 이벤트 (자체 모니터링)
@@ -231,19 +238,62 @@ class PaymentRedisStreamListener(
     private fun handlePaymentCreateRequested(values: Map<String, Any>) {
         try {
             val orderIdRaw = values["orderId"]?.toString()?.trim()?.trim('"')
-            val orderNo = values["orderNo"]?.toString()?.trim()?.trim('"')
+            val orderNo = values["orderNo"]?.toString()?.trim()?.trim('"') ?: "ORDER-${System.currentTimeMillis()}"
             val amountRaw = values["amount"]?.toString()?.trim()?.trim('"')
             val paymentMethod = values["paymentMethod"]?.toString()?.trim()?.trim('"') ?: "CARD"
             val customerIdRaw = values["customerId"]?.toString()?.trim()?.trim('"')
+            val orderName = values["orderName"]?.toString()?.trim()?.trim('"') ?: orderNo
 
             if (orderIdRaw.isNullOrBlank() || amountRaw.isNullOrBlank()) {
                 log.warn("⚠️ [PAYMENT] 결제 생성 요청 필수 데이터 누락 - values: {}", values)
                 return
             }
 
-            log.info("📝 [PAYMENT] 결제 생성 요청 수신(대기) - orderId={}, method={}, amount={}원, orderNo={}, customerId={}",
-                orderIdRaw, paymentMethod, amountRaw, orderNo, customerIdRaw)
-            log.info("🕒 [PAYMENT] 결제 기록 생성은 승인 시점에 처리됩니다 - orderId={}", orderIdRaw)
+            val orderId = orderIdRaw
+            val amount = amountRaw.toIntOrNull() ?: 0
+            val customerId = customerIdRaw?.toLongOrNull()
+
+            if (amount <= 0) {
+                log.warn("⚠️ [PAYMENT] 잘못된 금액 - orderId: {}, amount: {}", orderId, amount)
+                return
+            }
+
+            log.info("💳 [PAYMENT] Redis Stream 결제 생성 요청 처리 시작 - orderId={}, method={}, amount={}원, orderNo={}, customerId={}",
+                orderId, paymentMethod, amount, orderNo, customerId)
+
+            // 비동기로 결제 URL 생성 처리
+            eventScope.launch {
+                try {
+                    // Toss 결제 URL 생성
+                    val customerKey = customerId?.toString() ?: "guest-${System.currentTimeMillis()}"
+                    val createResult = tossPaymentCoroutineService.createPaymentRequest(
+                        orderId = orderId,
+                        amount = amount,
+                        orderName = orderName,
+                        customerKey = customerKey
+                    )
+
+                    // PaymentUrlCreatedEvent 생성
+                    val urlCreatedEvent = PaymentUrlCreatedEvent.create(
+                        orderId = UUID.fromString(orderId),
+                        orderNo = orderNo,
+                        paymentUrl = createResult.paymentUrl,
+                        amount = amount,
+                        paymentMethod = paymentMethod,
+                        customerId = customerId,
+                        expiresAt = createResult.expiresAt
+                    )
+
+                    // 이벤트 발행
+                    paymentEventPublisher.publish(urlCreatedEvent)
+
+                    log.info("✅ [PAYMENT] Redis Stream 결제 URL 생성 및 이벤트 발행 완료 - orderId={}, paymentUrl={}, expiresAt={}",
+                        orderId, createResult.paymentUrl, createResult.expiresAt)
+
+                } catch (e: Exception) {
+                    log.error("❌ [PAYMENT] Redis Stream 결제 URL 생성 실패 - orderId={}, error={}", orderId, e.message, e)
+                }
+            }
 
         } catch (e: Exception) {
             log.error("🚨 [PAYMENT] 결제 생성 요청 처리 실패 - values: {}, error: {}", values, e.message, e)

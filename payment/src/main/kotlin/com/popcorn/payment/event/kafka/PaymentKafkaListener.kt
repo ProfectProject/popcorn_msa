@@ -4,10 +4,13 @@ import com.fasterxml.jackson.databind.ObjectMapper
 import com.popcorn.payment.constants.EventConstants
 import com.popcorn.payment.event.domain.payment.OrderInfoResponseEvent
 import com.popcorn.payment.event.domain.payment.PaymentCancelFailedEvent
+import com.popcorn.payment.event.domain.payment.PaymentUrlCreatedEvent
 import com.popcorn.payment.event.domain.payment.EventLineItem
+import java.util.UUID
 import com.popcorn.payment.event.publisher.BasePaymentEventPublisherImpl
 import com.popcorn.payment.service.PaymentOrderInfoService
 import com.popcorn.payment.service.TossPaymentCoroutineService
+import com.popcorn.payment.service.PaymentCreateResult
 import com.popcorn.common.kafka.KafkaIdempotencyService
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
@@ -234,11 +237,14 @@ class PaymentKafkaListener(
         try {
             when (eventType) {
                 // 주문 관련 이벤트
-                "ORDER_CREATED" -> {
+                EventConstants.EventTypes.OrderDomain.ORDER_CREATED -> {
                     log.info("📦 [PAYMENT] 주문 생성 이벤트 수신 - orderId: {}", eventData["orderId"])
                 }
-                "ORDER_PAID" -> {
+                EventConstants.EventTypes.OrderDomain.ORDER_PAID -> {
                     log.info("💳 [PAYMENT] 주문 결제 완료 이벤트 수신 - orderId: {}", eventData["orderId"])
+                }
+                EventConstants.EventTypes.OrderDomain.ORDER_COMPLETED -> {
+                    log.info("✅ [PAYMENT] 주문 완료 이벤트 수신 - orderId: {}", eventData["orderId"])
                 }
 
                 // 결제 관련 이벤트 (자체 모니터링)
@@ -432,19 +438,65 @@ class PaymentKafkaListener(
     private fun handlePaymentCreateRequested(eventData: Map<String, Any>) {
         try {
             val orderIdRaw = eventData["orderId"]?.toString()?.trim()?.trim('"')
-            val orderNo = eventData["orderNo"]?.toString()?.trim()?.trim('"')
+            val orderNo = eventData["orderNo"]?.toString()?.trim()?.trim('"') ?: "ORDER-${System.currentTimeMillis()}"
             val amountRaw = eventData["amount"]?.toString()?.trim()?.trim('"')
             val paymentMethod = eventData["paymentMethod"]?.toString()?.trim()?.trim('"') ?: "CARD"
             val customerIdRaw = eventData["customerId"]?.toString()?.trim()?.trim('"')
+            val orderName = eventData["orderName"]?.toString()?.trim()?.trim('"') ?: orderNo
 
             if (orderIdRaw.isNullOrBlank() || amountRaw.isNullOrBlank()) {
                 log.warn("⚠️ [PAYMENT] 결제 생성 요청 필수 데이터 누락 - eventData: {}", eventData)
                 return
             }
 
-            log.info("📝 [PAYMENT] 결제 생성 요청 수신(대기) - orderId={}, method={}, amount={}원, orderNo={}, customerId={}",
-                orderIdRaw, paymentMethod, amountRaw, orderNo, customerIdRaw)
-            log.info("🕒 [PAYMENT] 결제 기록 생성은 승인 시점에 처리됩니다 - orderId={}", orderIdRaw)
+            val orderId = orderIdRaw
+            val amount = amountRaw.toIntOrNull() ?: 0
+            val customerId = customerIdRaw?.toLongOrNull()
+
+            if (amount <= 0) {
+                log.warn("⚠️ [PAYMENT] 잘못된 금액 - orderId: {}, amount: {}", orderId, amount)
+                return
+            }
+
+            log.info("💳 [PAYMENT] 결제 생성 요청 처리 시작 - orderId={}, method={}, amount={}원, orderNo={}, customerId={}",
+                orderId, paymentMethod, amount, orderNo, customerId)
+
+            // 비동기로 결제 URL 생성 처리
+            eventScope.launch {
+                try {
+                    // Toss 결제 URL 생성
+                    val customerKey = customerId?.toString() ?: "guest-${System.currentTimeMillis()}"
+                    val createResult = tossPaymentCoroutineService.createPaymentRequest(
+                        orderId = orderId,
+                        amount = amount,
+                        orderName = orderName,
+                        customerKey = customerKey
+                    )
+
+                    // PaymentUrlCreatedEvent 생성
+                    val urlCreatedEvent = PaymentUrlCreatedEvent.create(
+                        orderId = UUID.fromString(orderId),
+                        orderNo = orderNo,
+                        paymentUrl = createResult.paymentUrl,
+                        amount = amount,
+                        paymentMethod = paymentMethod,
+                        customerId = customerId,
+                        expiresAt = createResult.expiresAt
+                    )
+
+                    // 이벤트 발행
+                    paymentEventPublisher.publish(urlCreatedEvent)
+
+                    log.info("✅ [PAYMENT] 결제 URL 생성 및 이벤트 발행 완료 - orderId={}, paymentUrl={}, expiresAt={}",
+                        orderId, createResult.paymentUrl, createResult.expiresAt)
+
+                } catch (e: Exception) {
+                    log.error("❌ [PAYMENT] 결제 URL 생성 실패 - orderId={}, error={}", orderId, e.message, e)
+
+                    // 실패 시 PaymentFailedEvent 발행 (선택적)
+                    // TODO: 결제 생성 실패 이벤트 발행 로직 추가 고려
+                }
+            }
 
         } catch (e: Exception) {
             log.error("🚨 [PAYMENT] 결제 생성 요청 처리 실패 - eventData: {}, error: {}", eventData, e.message, e)
