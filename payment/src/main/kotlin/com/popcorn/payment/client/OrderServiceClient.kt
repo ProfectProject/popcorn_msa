@@ -1,6 +1,7 @@
 package com.popcorn.payment.client
 
 import com.popcorn.payment.dto.OrderInfoResponse
+import com.popcorn.payment.util.SystemPassportGenerator
 import kotlinx.coroutines.reactor.awaitSingle
 import org.slf4j.LoggerFactory
 import org.springframework.beans.factory.annotation.Qualifier
@@ -18,11 +19,12 @@ import java.util.*
 @Service
 class OrderServiceClient(
     @Qualifier("defaultWebClient")
-    private val webClient: WebClient
+    private val webClient: WebClient,
+    private val systemPassportGenerator: SystemPassportGenerator
 ) {
     private val log = LoggerFactory.getLogger(OrderServiceClient::class.java)
 
-    @Value("\${order.service.base-url:http://popcorn-order:8084}")
+    @Value("\${order.service.base-url:http://popcorn-gateway:8080}")
     private lateinit var orderServiceBaseUrl: String
 
     /**
@@ -32,11 +34,14 @@ class OrderServiceClient(
         return try {
             log.debug("🔍 [HTTP] Order 서비스 API 호출 시작 - orderId: {}", orderId)
 
+            val systemPassport = systemPassportGenerator.generateSystemPassport()
+
             val response = webClient
                 .get()
-                .uri("$orderServiceBaseUrl/api/order/v1/orders/{orderId}", orderId)
-                .header("X-Internal-Service", "payment-service")
+                .uri("$orderServiceBaseUrl/api/orders/v1/{orderId}", orderId)
+                .header("X-Passport", systemPassport)
                 .header("X-Internal-Call", "true")
+                .header("X-Internal-Service", "payment-service")
                 .retrieve()
                 .bodyToMono(OrderApiResponse::class.java)
                 .awaitSingle()

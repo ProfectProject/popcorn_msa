@@ -1,5 +1,6 @@
 package com.popcorn.payment.client
 
+import com.popcorn.payment.util.SystemPassportGenerator
 import kotlinx.coroutines.reactor.awaitSingle
 import org.slf4j.LoggerFactory
 import org.springframework.beans.factory.annotation.Qualifier
@@ -16,11 +17,12 @@ import org.springframework.web.reactive.function.client.WebClientResponseExcepti
 @Service
 class UserServiceClient(
     @Qualifier("defaultWebClient")
-    private val webClient: WebClient
+    private val webClient: WebClient,
+    private val systemPassportGenerator: SystemPassportGenerator
 ) {
     private val log = LoggerFactory.getLogger(UserServiceClient::class.java)
 
-    @Value("\${user.service.base-url:http://popcorn-user:8081}")
+    @Value("\${user.service.base-url:http://popcorn-gateway:8080}")
     private lateinit var userServiceBaseUrl: String
 
     /**
@@ -30,11 +32,14 @@ class UserServiceClient(
         return try {
             log.debug("🔍 [HTTP] User 서비스 주소 API 호출 시작 - userId: {}", userId)
 
+            val systemPassport = systemPassportGenerator.generateSystemPassport()
+
             val response = webClient
                 .get()
-                .uri("$userServiceBaseUrl/api/user/v1/users/{userId}/addresses", userId)
-                .header("X-Internal-Service", "payment-service")
+                .uri("$userServiceBaseUrl/api/users/v1/users/{userId}/addresses", userId)
+                .header("X-Passport", systemPassport)
                 .header("X-Internal-Call", "true")
+                .header("X-Internal-Service", "payment-service")
                 .retrieve()
                 .bodyToFlux(UserAddressResponse::class.java)
                 .collectList()
