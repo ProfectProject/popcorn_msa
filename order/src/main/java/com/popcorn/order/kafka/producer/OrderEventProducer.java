@@ -19,6 +19,7 @@ import org.springframework.stereotype.Component;
 
 import java.time.Instant;
 import java.time.LocalDateTime;
+import java.time.ZoneOffset;
 import java.util.List;
 import java.util.Map;
 import java.util.UUID;
@@ -104,23 +105,20 @@ public class OrderEventProducer {
                                 boolean hasGoods, boolean hasReservation) {
 
         OrderStatusUpdatedEvent event = OrderStatusUpdatedEvent.builder()
-                .meta(MetaEvent.builder()
-                        .eventId(UUID.randomUUID())
-                        .correlationId(UUID.randomUUID())
-                        .timestamp(LocalDateTime.now())
-                        .eventType("ORDER_STATUS_UPDATED")
-                        .eventVersion("1.0")
-                        .producer("order-service")
-                        .aggregateType("Order")
-                        .metadata(Map.of())
-                        .build())
+                .eventId(UUID.randomUUID())
+                .correlationId(UUID.randomUUID())
+                .timestamp(Instant.now())
+                .eventType("ORDER_STATUS_UPDATED")
+                .eventVersion("1.0")
+                .producer("order-service")
                 .orderId(order.getId())
                 .popupId(order.getPopupId())
                 .fromStatus(fromStatus)
                 .toStatus(toStatus)
                 .hasReservation(hasReservation)
                 .hasGoods(hasGoods)
-                .updatedAt(order.getPaidAt())
+                //.updatedAt(order.getUpdatedAt())
+                .updatedAt(order.getUpdatedAt().toInstant(ZoneOffset.UTC))
                 .build();
 
         // key 전략: orderId (같은 주문 이벤트는 같은 파티션으로)
@@ -160,24 +158,24 @@ public class OrderEventProducer {
     /* 
     * ORDER_CANCELLED
     */
-    public void publishOrderCancelled(Order order,
+    public void publishOrderCancelled(Order order,List<OrderItem> orderItems,
                                 boolean hasGoods, boolean hasReservation) {
+        List<OrderLine> lines = orderItems.stream()
+            .map(this::toLine)
+            .toList();
 
         OrderCANCELLEDEvent event = OrderCANCELLEDEvent.builder()
-                .meta(MetaEvent.builder()
-                        .eventId(UUID.randomUUID())
-                        .correlationId(UUID.randomUUID())
-                        .timestamp(LocalDateTime.now())
-                        .eventType("ORDER_CANCELLED")
-                        .eventVersion("1.0")
-                        .producer("order-service")
-                        .aggregateType("Order")
-                        .metadata(Map.of())
-                        .build())
+                .eventId(UUID.randomUUID())
+                .correlationId(UUID.randomUUID())
+                .timestamp(Instant.now())
+                .eventType("ORDER_CANCELLED")
+                .eventVersion("1.0")
+                .producer("order-service")
                 .orderId(order.getId())
                 .popupId(order.getPopupId())
                 .hasReservation(hasReservation)
                 .hasGoods(hasGoods)
+                .lines(lines)
                 .cancelledAt(order.getCanceledAt())
                 .build();
 

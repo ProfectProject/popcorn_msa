@@ -460,6 +460,11 @@ public class OrderCommandService {
                 .build();
         orderStatusHistoryRepository.save(statusHistory);
 
+        /*
+        *  kafka order_status_update 발행
+        */
+        orderEventProducer.publishOrderStatusUpdate(savedOrder,currentStatus,newStatus,hasGoodsItems,hasReservationItems);
+
         // 7. 이벤트 발행
         eventPublisher.publishEvent(new OrderStatusChangedEvent(
                 savedOrder.getId(),
@@ -485,6 +490,7 @@ public class OrderCommandService {
 
         // 8. 특별한 상태 변경시 추가 이벤트
         if (newStatus == OrderStatus.CANCELLED) {
+            List<OrderItem> orderItems = orderItemRepository.findByOrderId(savedOrder.getId());
             eventPublisher.publishEvent(new OrderCancelledEvent(
                     savedOrder.getId(),
                     savedOrder.getCustomerId(),
@@ -493,6 +499,11 @@ public class OrderCommandService {
                     "SYSTEM",
                     null // 환불 금액은 별도 계산 필요
             ));
+
+            /*
+            * kafka order_cancelled 발행
+            */
+            orderEventProducer.publishOrderCancelled(savedOrder,orderItems,hasGoodsItems,hasReservationItems);
         }
 
         log.info("주문 상태 변경 완료 - 주문ID: {}, {} → {}", orderId, currentStatus, newStatus);
