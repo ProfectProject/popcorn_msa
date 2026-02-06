@@ -34,6 +34,7 @@ class UserServiceClient(
                 .get()
                 .uri("$userServiceBaseUrl/api/user/v1/users/{userId}/addresses", userId)
                 .header("X-Internal-Service", "payment-service")
+                .header("X-Internal-Call", "true")
                 .retrieve()
                 .bodyToFlux(UserAddressResponse::class.java)
                 .collectList()

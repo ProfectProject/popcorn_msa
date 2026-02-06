@@ -36,6 +36,7 @@ class OrderServiceClient(
                 .get()
                 .uri("$orderServiceBaseUrl/api/order/v1/orders/{orderId}", orderId)
                 .header("X-Internal-Service", "payment-service")
+                .header("X-Internal-Call", "true")
                 .retrieve()
                 .bodyToMono(OrderApiResponse::class.java)
                 .awaitSingle()
