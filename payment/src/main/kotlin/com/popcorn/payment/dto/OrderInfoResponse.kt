@@ -12,7 +12,8 @@ data class OrderInfoResponse(
     val status: String,
     val totalAmount: Int,
     val success: Boolean = true,
-    val errorMessage: String? = null
+    val errorMessage: String? = null,
+    val hasGoods: Boolean = false  // 굿즈 포함 여부 (배송 주소 검증용)
 ) {
     companion object {
         fun failure(orderId: UUID, errorMessage: String): OrderInfoResponse {

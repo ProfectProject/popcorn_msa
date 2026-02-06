@@ -93,6 +93,29 @@ spring:
                   factor: 2
                   basedOnPreviousValue: true
 
+        # Payment 서비스에서 User API 호출용 라우팅
+        - id: user-api
+          uri: ${USER_SERVICE_URL}     # User 서비스
+          predicates:
+            - Path=/api/user/**          # user (단수형)
+          filters:
+            # 1) CircuitBreaker (Resilience4j 인스턴스명 연결)
+            - name: CircuitBreaker
+              args:
+                name: cbUserService
+                fallbackUri: forward:/fallback/user-service
+            # 2) Retry (Gateway 필터로만 적용) --> 서버 5xx / 502/504 만 재시도
+            - name: Retry
+              args:
+                retries: 2
+                methods: GET
+                statuses: BAD_GATEWAY,GATEWAY_TIMEOUT,INTERNAL_SERVER_ERROR,SERVICE_UNAVAILABLE
+                backoff:
+                  firstBackoff: 80ms
+                  maxBackoff: 200ms
+                  factor: 2
+                  basedOnPreviousValue: true
+
         - id: stores
           uri: ${STORE_SERVICE_URL}
           predicates:
@@ -126,6 +149,29 @@ spring:
             - RewritePath=^/api/orders/(?<remaining>v3/api-docs.*), /${remaining}
             - RewritePath=^/api/orders/(?<remaining>swagger-ui.*), /${remaining}
             - RewritePath=^/api/orders/(?<remaining>webjars.*), /${remaining}
+            # 1) CircuitBreaker (Resilience4j 인스턴스명 연결)
+            - name: CircuitBreaker
+              args:
+                name: cbOrderService
+                fallbackUri: forward:/fallback/order-service
+            # 2) Retry (Gateway 필터로만 적용) --> 서버 5xx / 502/504 만 재시도
+            - name: Retry
+              args:
+                retries: 2
+                methods: GET
+                statuses: BAD_GATEWAY,GATEWAY_TIMEOUT,INTERNAL_SERVER_ERROR,SERVICE_UNAVAILABLE
+                backoff:
+                  firstBackoff: 80ms
+                  maxBackoff: 200ms
+                  factor: 2
+                  basedOnPreviousValue: true
+
+        # Payment 서비스에서 Order API 호출용 라우팅
+        - id: order-api
+          uri: ${ORDER_SERVICE_URL}    # Order 서비스
+          predicates:
+            - Path=/api/order/**         # order (단수형)
+          filters:
             # 1) CircuitBreaker (Resilience4j 인스턴스명 연결)
             - name: CircuitBreaker
               args:

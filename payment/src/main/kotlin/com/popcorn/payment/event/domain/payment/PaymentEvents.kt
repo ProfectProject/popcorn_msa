@@ -552,7 +552,7 @@ data class OrderInfoRequestPaymentEvent(
         "eventType" to eventType,
         "occurredAt" to occurredAt.toString(),
         "producer" to "payment-service",
-        "orderId" to requestedOrderId,
+        "requestedOrderId" to requestedOrderId,  // 수정: orderId → requestedOrderId
         "correlationId" to correlationId.toString(),
         "requestId" to paymentId,
         "requestedAt" to requestedAt.toString()

@@ -66,10 +66,10 @@ class UserServiceClient(
     suspend fun hasDefaultAddress(userId: Long): Boolean {
         return try {
             val addresses = getUserAddresses(userId)
-            val hasDefault = addresses.any { it.isDefault }
+            val hasDefault = addresses.any { it.isDefault == true }  // nullable Boolean 처리
 
-            log.debug("🔍 [HTTP] 기본 주소 존재 여부 - userId: {}, hasDefault: {}",
-                userId, hasDefault)
+            log.debug("🔍 [HTTP] 기본 주소 존재 여부 - userId: {}, 전체주소: {}개, hasDefault: {}",
+                userId, addresses.size, hasDefault)
 
             hasDefault
         } catch (e: Exception) {
@@ -83,11 +83,11 @@ class UserServiceClient(
  * User 주소 응답 DTO
  */
 data class UserAddressResponse(
-    val addrId: Long,
+    val addrId: String,        // UUID는 String으로 받음
     val userId: Long,
     val addrName: String,
     val address1: String,
     val address2: String?,
     val postalCode: String,
-    val isDefault: Boolean
+    val isDefault: Boolean?    // nullable Boolean
 )

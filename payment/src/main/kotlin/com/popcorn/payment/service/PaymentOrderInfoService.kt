@@ -1,23 +1,20 @@
 package com.popcorn.payment.service
 
-import com.popcorn.payment.event.domain.payment.OrderInfoRequestPaymentEvent
-import com.popcorn.payment.event.domain.payment.OrderInfoResponseEvent
-import com.popcorn.payment.event.base.BasePaymentEventPublisher
+import com.popcorn.payment.client.OrderServiceClient
+import com.popcorn.payment.dto.OrderInfoResponse
+import kotlinx.coroutines.*
 import org.slf4j.LoggerFactory
 import org.springframework.stereotype.Service
 import java.util.UUID
-import java.util.concurrent.CompletableFuture
-import java.util.concurrent.ConcurrentHashMap
-import java.util.concurrent.TimeUnit
 
 /**
- * Payment 서비스에서 Order 정보를 요청/응답 받는 서비스
- * Redis Stream을 통한 비동기 요청/응답 패턴
+ * Payment 서비스에서 Order 정보를 HTTP로 직접 조회하는 서비스
+ * 코루틴 기반 병렬 처리로 성능 최적화
  */
 @Service
 class PaymentOrderInfoService(
-    private val paymentEventPublisher: BasePaymentEventPublisher,
-    private val redisTemplate: org.springframework.data.redis.core.RedisTemplate<String, Any>
+    private val orderServiceClient: OrderServiceClient,
+    private val hybridValidationService: HybridValidationService
 ) {
     private val log = LoggerFactory.getLogger(PaymentOrderInfoService::class.java)
 

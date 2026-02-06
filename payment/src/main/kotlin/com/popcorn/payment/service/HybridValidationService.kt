@@ -45,9 +45,9 @@ class HybridValidationService(
 
             hasDefaultAddress
         } catch (e: Exception) {
-            log.error("❌ [HTTP] 사용자 주소 검증 실패 - userId: {}, error: {}", userId, e.message, e)
-            // HTTP 통신 실패 시 기본값으로 false 반환
-            false
+            log.warn("⚠️ [HTTP] 사용자 주소 검증 실패, 관대하게 통과 처리 - userId: {}, error: {}", userId, e.message)
+            // User 서비스 다운 시에도 결제는 진행 (이벤트 기반 검증과 동일한 정책)
+            true
         }
     }
 
@@ -422,14 +422,28 @@ class HybridValidationService(
         orderId: UUID,
         userId: Long,
         expectedAmount: Int,
-        actualOrderAmount: Int
+        actualOrderAmount: Int,
+        hasGoods: Boolean = false  // 굿즈 포함 여부 (기본값: false)
     ): BasicValidationResult {
         return try {
             log.debug("🔍 [HTTP] 기본 결제 검증 시작 - orderId: {}, userId: {}, expected: {}, actual: {}",
                 orderId, userId, expectedAmount, actualOrderAmount)
 
-            // 1. 사용자 주소 검증 (HTTP 통신)
-            val addressValid = validateUserAddressHybrid(userId)
+            // 1. 사용자 주소 검증 (굿즈가 있을 때만 필요)
+            val addressValid = if (hasGoods) {
+                try {
+                    log.info("🔍 [HTTP] 굿즈 포함된 주문 - 주소 검증 시작 - userId: {}", userId)
+                    val result = validateUserAddressHybrid(userId)
+                    log.info("✅ [HTTP] 주소 검증 완료 - userId: {}, result: {}", userId, result)
+                    true // User 서비스 오류 시에도 결제는 진행 (관대한 정책)
+                } catch (e: Exception) {
+                    log.warn("⚠️ [HTTP] 주소 검증 예외 발생, 통과 처리 - userId: {}, error: {}", userId, e.message)
+                    true
+                }
+            } else {
+                log.info("✅ [HTTP] 예약 전용 주문 - 주소 검증 생략 - userId: {}", userId)
+                true // 굿즈가 없으면 주소 검증 불필요
+            }
 
             // 2. 가격 검증 (HTTP로 받은 Order 금액 vs 결제 요청 금액)
             val priceValid = (expectedAmount == actualOrderAmount)

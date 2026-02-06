@@ -47,9 +47,12 @@ class OrderServiceClient(
                 .bodyToMono(OrderApiResponse::class.java)
                 .awaitSingle()
 
-            if (response.success && response.data != null) {
+            if (isSuccessResponse(response) && response.data != null) {
                 log.info("✅ [HTTP] Order 정보 조회 성공 - orderId: {}, orderNo: {}",
                     orderId, response.data.orderNo)
+
+                val hasGoods = hasGoodsItems(response.data)
+                log.info("🔍 [HTTP] 굿즈 포함 여부 확인 - orderId: {}, hasGoods: {}", orderId, hasGoods)
 
                 OrderInfoResponse(
                     orderId = response.data.id,
@@ -57,11 +60,12 @@ class OrderServiceClient(
                     customerId = response.data.customerId,
                     status = response.data.status,
                     totalAmount = response.data.totalAmount,
-                    success = true
+                    success = true,
+                    hasGoods = hasGoods
                 )
             } else {
-                log.warn("❌ [HTTP] Order 정보 조회 실패 - orderId: {}, message: {}",
-                    orderId, response.message)
+                log.warn("❌ [HTTP] Order 정보 조회 실패 - orderId: {}, code: {}, message: {}",
+                    orderId, response.code, response.message)
                 null
             }
         } catch (ex: WebClientResponseException) {
@@ -86,15 +90,33 @@ class OrderServiceClient(
     private fun isPayableStatus(status: String): Boolean {
         return status in listOf("REQUESTED", "RESERVED", "PAYMENT_PENDING")
     }
+
+    /**
+     * 주문에 굿즈가 포함되어 있는지 확인
+     * 굿즈가 있으면 배송 주소 검증이 필요함
+     */
+    fun hasGoodsItems(orderData: OrderDetailData): Boolean {
+        return orderData.items?.any { item ->
+            item.goodsId != null || item.orderItemType == "GOODS"
+        } ?: false
+    }
+
+    /**
+     * Order 서비스 응답이 성공인지 확인
+     * 2xxx 코드는 성공 응답
+     */
+    private fun isSuccessResponse(response: OrderApiResponse): Boolean {
+        return response.code in 2000..2999
+    }
 }
 
 /**
- * Order API 응답 DTO
+ * Order API 응답 DTO (Order 서비스의 BaseResponse 구조에 맞춤)
  */
 data class OrderApiResponse(
-    val success: Boolean,
-    val data: OrderDetailData?,
-    val message: String?
+    val code: Int,
+    val message: String,
+    val data: OrderDetailData?
 )
 
 data class OrderDetailData(
@@ -103,5 +125,17 @@ data class OrderDetailData(
     val orderNo: String,
     val customerId: Long,
     val status: String,
-    val totalAmount: Int
+    val totalAmount: Int,
+    val orderType: String? = null,
+    val items: List<OrderItemData>? = null
+)
+
+data class OrderItemData(
+    val itemId: UUID? = null,
+    val orderItemType: String? = null,
+    val qty: Int? = null,
+    val unitPrice: Int? = null,
+    val lineAmount: Int? = null,
+    val sessionOptionId: UUID? = null,
+    val goodsId: UUID? = null
 )
