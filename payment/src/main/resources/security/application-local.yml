@@ -1,3 +1,25 @@
+# 🤖 Agent Configuration (Payment Service)
+agent:
+  health-check:
+    enabled: true
+    interval: 30s
+    auto-healing: true
+    critical-services: order-service,user-service,store-service,checkins-service
+
+  api-test:
+    enabled: true
+    interval: 60s
+    auto-fix: true
+    concurrent-requests: 10
+    target-endpoints: /api/v1/payments/health,/api/v1/payments/status,/actuator/health
+
+  log-analysis:
+    enabled: true
+    interval: 120s
+    auto-fix: true
+    error-threshold: 10
+    noise-threshold: 100
+
 server:
   port: ${SERVER_PORT:8085}
   shutdown: immediate
@@ -202,15 +224,7 @@ logging:
     org.hibernate.SQL: INFO
     org.springframework.security: WARN
 
-# 외부 서비스/DB 설정
-external:
-  services:
-    users:
-      base-url: ${USERS_SERVICE_BASE_URL:http://localhost:8082}
-    stores:
-      base-url: ${STORES_SERVICE_BASE_URL:http://localhost:8083}
-
-# HTTP 클라이언트 설정 - 게이트웨이를 통한 서비스 간 통신
+# HTTP 클라이언트 설정 - 게이트웨이를 통한 서비스 간 통신 (MSA 원칙 준수)
 order:
   service:
     base-url: ${ORDER_SERVICE_BASE_URL:http://popcorn-gateway:8080}
@@ -218,29 +232,6 @@ order:
 user:
   service:
     base-url: ${USER_SERVICE_BASE_URL:http://popcorn-gateway:8080}
-
-  # 외부 서비스 데이터베이스 직접 연결
-  database:
-    users:
-      jdbc-url: ${EXTERNAL_DATABASE_USERS_JDBC_URL:jdbc:postgresql://${DB_HOST:db}:${DB_PORT:5432}/${DB_NAME:popcorn_db}}
-      username: ${USER_AUTH_DB_USERNAME:user_auth_app}
-      password: ${USER_AUTH_DB_PASSWORD:user_auth123}
-      driver-class-name: org.postgresql.Driver
-      hikari:
-        maximum-pool-size: 5
-        minimum-idle: 2
-        connection-timeout: 3000ms
-        read-only: true
-    stores:
-      jdbc-url: ${EXTERNAL_DATABASE_STORES_JDBC_URL:jdbc:postgresql://${DB_HOST:db}:${DB_PORT:5432}/${DB_NAME:popcorn_db}}
-      username: ${STORE_DB_USERNAME:store_app}
-      password: ${STORE_DB_PASSWORD:store123}
-      driver-class-name: org.postgresql.Driver
-      hikari:
-        maximum-pool-size: 5
-        minimum-idle: 2
-        connection-timeout: 3000ms
-        read-only: true
 
 # Payment 서비스 설정
 payment:
@@ -251,6 +242,9 @@ payment:
   notification:
     enabled: ${PAYMENT_NOTIFICATION_ENABLED:true}
     retry-count: ${PAYMENT_NOTIFICATION_RETRY:3}
+  # 주문 조회 설정 - 타임아웃 최적화
+  order-query:
+    timeout-ms: ${PAYMENT_ORDER_QUERY_TIMEOUT:5000}  # 5초로 단축 (기존 15초)
   # Toss Payments 설정
   toss:
     base-url: ${TOSS_PAYMENTS_BASE_URL}

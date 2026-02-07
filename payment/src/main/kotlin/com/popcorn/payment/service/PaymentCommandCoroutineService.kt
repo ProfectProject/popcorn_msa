@@ -298,60 +298,57 @@ class PaymentCommandCoroutineService(
         try {
             log.info("🚀 [PAYMENT] PAYMENT_APPROVED 이벤트 발행 시작 - paymentId: {}", payment.id)
 
-            // Order 정보 비동기 조회 시도
-            val orderInfoFuture = paymentOrderInfoService.requestOrderInfo(payment.orderId)
-
-            orderInfoFuture.thenAccept { orderInfo ->
-                val event = if (orderInfo?.success == true) {
-                    log.info("🔄 Order 정보 조회 성공 - orderId: {}, actualOrderNo: {}",
-                        payment.orderId, orderInfo.actualOrderNo)
-
-                    PaymentApprovedEvent.create(
-                        paymentId = payment.id,
-                        orderId = payment.orderId,
-                        orderNo = orderInfo.actualOrderNo ?: generateTempOrderNo(payment.orderId), // 실제 주문번호 사용
-                        amount = payment.amount,
-                        paymentMethod = payment.paymentMethod.name,
-                        paymentKey = payment.paymentKey,
-                        approvedAt = payment.approvedAt ?: java.time.LocalDateTime.now(),
-                        customerId = orderInfo.actualUserId,   // 실제 사용자 ID
-                        popupId = orderInfo.actualPopupId,
-                        storeId = orderInfo.actualStoreId,
-                        hasReservation = orderInfo.actualHasReservation,
-                        hasGoods = orderInfo.actualHasGoods,
-                        lines = orderInfo.actualLines ?: emptyList()
-                    )
-                } else {
-                    log.warn("⚠️ Order 정보 조회 실패 - 기본값으로 이벤트 발행: orderId={}, orderInfo={}",
-                        payment.orderId, orderInfo)
-
-                    PaymentApprovedEvent.create(
-                        paymentId = payment.id,
-                        orderId = payment.orderId,
-                        orderNo = generateTempOrderNo(payment.orderId),
-                        amount = payment.amount,
-                        paymentMethod = payment.paymentMethod.name,
-                        paymentKey = payment.paymentKey,
-                        approvedAt = payment.approvedAt ?: java.time.LocalDateTime.now(),
-                        customerId = null,
-                        popupId = null,
-                        storeId = null,
-                        hasReservation = null,
-                        hasGoods = null,
-                        lines = emptyList()
-                    )
-                }
-
-                CoroutineScope(Dispatchers.Default).launch {
-                    paymentEventPublisher.publish(event)
-                    log.info("✅ [PAYMENT] PAYMENT_APPROVED 이벤트 발행 완료 - paymentId: {}, eventId: {}",
-                        payment.id, event.eventId)
-                }
-            }.exceptionally { error ->
+            // Order 정보 HTTP 조회
+            val orderInfo = try {
+                paymentOrderInfoService.getOrderInfo(payment.orderId)
+            } catch (e: Exception) {
                 log.error("❌ [PAYMENT] Order 정보 조회 중 오류 - paymentId: {}, error: {}",
-                    payment.id, error.message, error)
+                    payment.id, e.message, e)
                 null
             }
+
+            val event = if (orderInfo?.success == true) {
+                log.info("🔄 Order 정보 조회 성공 - orderId: {}, orderNo: {}",
+                    payment.orderId, orderInfo.orderNo)
+
+                PaymentApprovedEvent.create(
+                    paymentId = payment.id,
+                    orderId = payment.orderId,
+                    orderNo = orderInfo.orderNo ?: generateTempOrderNo(payment.orderId), // 실제 주문번호 사용
+                    amount = payment.amount,
+                    paymentMethod = payment.paymentMethod.name,
+                    paymentKey = payment.paymentKey,
+                    approvedAt = payment.approvedAt ?: java.time.LocalDateTime.now(),
+                    customerId = orderInfo.customerId,   // 실제 사용자 ID
+                    popupId = null, // OrderInfoResponse에는 popupId가 없음
+                    storeId = null, // OrderInfoResponse에는 storeId가 없음
+                    hasReservation = !orderInfo.hasGoods, // 굿즈가 없으면 예약만 있음
+                    hasGoods = orderInfo.hasGoods,
+                    lines = emptyList() // OrderInfoResponse에는 lines가 없음
+                )
+            } else {
+                log.warn("⚠️ Order 정보 조회 실패 - 기본값으로 이벤트 발행: orderId={}", payment.orderId)
+
+                PaymentApprovedEvent.create(
+                    paymentId = payment.id,
+                    orderId = payment.orderId,
+                    orderNo = generateTempOrderNo(payment.orderId),
+                    amount = payment.amount,
+                    paymentMethod = payment.paymentMethod.name,
+                    paymentKey = payment.paymentKey,
+                    approvedAt = payment.approvedAt ?: java.time.LocalDateTime.now(),
+                    customerId = null,
+                    popupId = null,
+                    storeId = null,
+                    hasReservation = null,
+                    hasGoods = null,
+                    lines = emptyList()
+                )
+            }
+
+            paymentEventPublisher.publish(event)
+            log.info("✅ [PAYMENT] PAYMENT_APPROVED 이벤트 발행 완료 - paymentId: {}, eventId: {}",
+                payment.id, event.eventId)
 
         } catch (e: Exception) {
             log.error("❌ [PAYMENT] PAYMENT_APPROVED 이벤트 발행 실패 - paymentId: {}, error: {}",

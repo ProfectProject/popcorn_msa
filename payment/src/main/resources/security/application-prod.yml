@@ -155,15 +155,7 @@ logging:
       max-history: 30
       total-size-cap: 3GB
 
-# 외부 서비스 설정 (프로덕션)
-external:
-  services:
-    users:
-      base-url: ${USERS_SERVICE_BASE_URL}
-    stores:
-      base-url: ${STORES_SERVICE_BASE_URL}
-
-# HTTP 클라이언트 설정 - 게이트웨이를 통한 서비스 간 통신
+# HTTP 클라이언트 설정 - 게이트웨이를 통한 서비스 간 통신 (MSA 원칙 준수)
 order:
   service:
     base-url: ${ORDER_SERVICE_BASE_URL:http://popcorn-gateway:8080}
@@ -171,29 +163,6 @@ order:
 user:
   service:
     base-url: ${USER_SERVICE_BASE_URL:http://popcorn-gateway:8080}
-
-  # 외부 서비스 데이터베이스 직접 연결 (프로덕션)
-  database:
-    users:
-      jdbc-url: jdbc:postgresql://${DB_HOST}:${DB_PORT}/${DB_NAME}
-      username: ${USER_AUTH_DB_USERNAME}
-      password: ${USER_AUTH_DB_PASSWORD}
-      driver-class-name: org.postgresql.Driver
-      hikari:
-        maximum-pool-size: 5    # 읽기 전용이므로 작은 풀 사용
-        minimum-idle: 2
-        connection-timeout: 3000ms
-        read-only: true         # 읽기 전용 연결
-    stores:
-      jdbc-url: jdbc:postgresql://${DB_HOST}:${DB_PORT}/${DB_NAME}
-      username: ${STORE_DB_USERNAME}
-      password: ${STORE_DB_PASSWORD}
-      driver-class-name: org.postgresql.Driver
-      hikari:
-        maximum-pool-size: 5    # 읽기 전용이므로 작은 풀 사용
-        minimum-idle: 2
-        connection-timeout: 3000ms
-        read-only: true         # 읽기 전용 연결
 
 # 프로덕션 Payment 서비스 비즈니스 설정
 payment:
@@ -205,6 +174,9 @@ payment:
     enabled: ${PAYMENT_NOTIFICATION_ENABLED:true}
     retry-count: ${PAYMENT_NOTIFICATION_RETRY:5}  # 프로덕션에서는 더 많은 재시도
     timeout: 5000  # 알림 타임아웃 5초
+  # 주문 조회 설정 - 타임아웃 최적화
+  order-query:
+    timeout-ms: ${PAYMENT_ORDER_QUERY_TIMEOUT:5000}  # 5초로 단축 (기존 15초)
   # Toss Payments 설정
   toss:
     base-url: ${TOSS_PAYMENTS_BASE_URL}

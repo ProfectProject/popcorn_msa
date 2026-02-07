@@ -1,3 +1,25 @@
+# 🤖 Agent Configuration (CheckIns Service)
+agent:
+  health-check:
+    enabled: true
+    interval: 30s
+    auto-healing: true
+    critical-services: order-service,user-service,store-service,payment-service
+
+  api-test:
+    enabled: true
+    interval: 60s
+    auto-fix: true
+    concurrent-requests: 10
+    target-endpoints: /api/v1/qr/health,/api/v1/checkins/status,/actuator/health
+
+  log-analysis:
+    enabled: true
+    interval: 120s
+    auto-fix: true
+    error-threshold: 10
+    noise-threshold: 100
+
 server:
   port: ${SERVER_PORT:8086}
   shutdown: immediate

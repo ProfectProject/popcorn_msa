@@ -469,30 +469,23 @@ class TossPaymentCoroutineService(
     }
 
     /**
-     * 결제 전 검증 수행 (Hybrid Validation 적용)
+     * 결제 전 검증 수행 (HTTP API 기반 - 타임아웃 문제 해결)
+     * - HTTP API 직접 호출로 Redis Stream 타임아웃 문제 해결
      * - 사용자 주소 검증 (HybridValidationService 사용)
      * - 주문 상태 검증
-     * - 성능 최적화: DB 직접 조회 우선, HTTP fallback
+     * - 성능 최적화: HTTP API 직접 조회로 안정성 향상
      *
-     * 예상 성능 개선: 200-500ms → 10-50ms
+     * 예상 성능 개선: 15초 타임아웃 → 2-5초 안정적 응답
      */
     private suspend fun performPrePaymentValidation(orderId: String, amount: Int) {
         try {
-            log.debug("🔍 결제 전 검증 수행 (Hybrid 방식) - orderId: {}", orderId)
+            log.debug("🔍 결제 전 검증 수행 (HTTP API 기반) - orderId: {}", orderId)
 
-            // 1. 주문 정보 조회
-            val order = orderQueryService.getOrder(UUID.fromString(orderId))
-
-            // 2. 주문 상태 검증 - REQUESTED 상태도 결제 허용 (초기 주문 생성 후 즉시 결제 가능)
-            if (order.status != "REQUESTED" && order.status != "RESERVED" && order.status != "PAYMENT_PENDING") {
-                throw PaymentException.validationFailed("결제 가능한 주문 상태가 아닙니다. 현재 상태: ${order.status}")
-            }
-
-            // 3. Order 직접 DB 조회로 상세 검증 - 🚀 이벤트 기반 → 직접 쿼리로 변경 (타임아웃 해결)
-            val orderDetail = httpOrderQueryService.getOrderForPayment(order.id)
+            // 1. HTTP API를 통한 직접 주문 정보 조회 (Redis Stream 타임아웃 문제 해결)
+            val orderDetail = httpOrderQueryService.getOrderForPayment(UUID.fromString(orderId))
 
             // 🔍 Order 정보 직접 조회 결과 로깅
-            log.info("🔍 [HTTP] Order 정보 HTTP 조회 결과 - orderId: {}", orderId)
+            log.info("🔍 [HTTP] Order 정보 조회 결과 - orderId: {}", orderId)
             if (orderDetail != null) {
                 log.info("  ✅ 조회 성공")
                 log.info("  - orderNo: {}", orderDetail.orderNo)
@@ -502,6 +495,11 @@ class TossPaymentCoroutineService(
             } else {
                 log.error("  ❌ 조회 실패 - 주문 정보가 없거나 결제 불가 상태")
                 throw PaymentException.validationFailed("주문 정보를 찾을 수 없거나 결제할 수 없는 상태입니다.")
+            }
+
+            // 2. 주문 상태 검증 - REQUESTED 상태도 결제 허용 (초기 주문 생성 후 즉시 결제 가능)
+            if (orderDetail.status != "REQUESTED" && orderDetail.status != "RESERVED" && orderDetail.status != "PAYMENT_PENDING") {
+                throw PaymentException.validationFailed("결제 가능한 주문 상태가 아닙니다. 현재 상태: ${orderDetail.status}")
             }
 
 

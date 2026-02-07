@@ -31,7 +31,7 @@ import java.util.concurrent.CompletableFuture
 class OrderQueryCoroutineService(
     private val redisTemplate: RedisTemplate<String, String>,
     private val objectMapper: ObjectMapper,
-    @Value("\${payment.order-query.timeout-ms:15000}")
+    @Value("\${payment.order-query.timeout-ms:5000}")
     private val queryTimeoutMs: Long
 ) {
 
@@ -41,7 +41,7 @@ class OrderQueryCoroutineService(
         private const val ORDER_QUERY_STREAM = "order:query:stream"
         private const val ORDER_UPDATE_STREAM = "order:update:stream"
         private const val ORDER_CACHE_PREFIX = "order:cache:"
-        private const val POLL_INTERVAL_MS = 100L
+        private const val POLL_INTERVAL_MS = 200L
     }
 
 

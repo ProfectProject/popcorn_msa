@@ -75,7 +75,7 @@ public class OptimizedRedisConfig {
                 .poolConfig(poolConfig)
                 .clientOptions(clientOptions)
                 .clientResources(clientResources)
-                .commandTimeout(Duration.ofMillis(2000))  // 명령 타임아웃
+                .commandTimeout(Duration.ofMillis(10000))  // 명령 타임아웃 증가 (10초)
                 .build();
 
         // Redis 서버 설정

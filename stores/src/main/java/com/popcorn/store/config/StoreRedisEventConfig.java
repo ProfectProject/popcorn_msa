@@ -112,7 +112,7 @@ public class StoreRedisEventConfig {
         var options = StreamMessageListenerContainer.StreamMessageListenerContainerOptions
                         .<String, MapRecord<String, String, String>>builder()
                         .batchSize(20)  // 배치 크기 상향
-                        .pollTimeout(Duration.ofMillis(1000))  // 폴링 타임아웃 상향
+                        .pollTimeout(Duration.ofMillis(5000))  // 폴링 타임아웃 증가 (5초)
                         .build();
 
         var container = StreamMessageListenerContainer.create(connectionFactory, options);

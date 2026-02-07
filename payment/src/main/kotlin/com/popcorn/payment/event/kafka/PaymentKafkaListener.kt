@@ -2,13 +2,11 @@ package com.popcorn.payment.event.kafka
 
 import com.fasterxml.jackson.databind.ObjectMapper
 import com.popcorn.payment.constants.EventConstants
-import com.popcorn.payment.event.domain.payment.OrderInfoResponseEvent
 import com.popcorn.payment.event.domain.payment.PaymentCancelFailedEvent
 import com.popcorn.payment.event.domain.payment.PaymentUrlCreatedEvent
 import com.popcorn.payment.event.domain.payment.EventLineItem
 import java.util.UUID
 import com.popcorn.payment.event.publisher.BasePaymentEventPublisherImpl
-import com.popcorn.payment.service.PaymentOrderInfoService
 import com.popcorn.payment.service.TossPaymentCoroutineService
 import com.popcorn.payment.service.PaymentCreateResult
 import com.popcorn.common.kafka.KafkaIdempotencyService
@@ -34,7 +32,6 @@ import org.springframework.stereotype.Component
 @ConditionalOnProperty(value = ["kafka.enabled"], havingValue = "true")
 class PaymentKafkaListener(
     private val objectMapper: ObjectMapper,
-    private val paymentOrderInfoService: PaymentOrderInfoService,
     private val tossPaymentCoroutineService: TossPaymentCoroutineService,
     private val paymentEventPublisher: BasePaymentEventPublisherImpl,
     private val kafkaIdempotencyService: KafkaIdempotencyService
@@ -198,11 +195,8 @@ class PaymentKafkaListener(
                 return
             }
 
-            // Order 정보 응답 처리
-            when (eventType) {
-                EventConstants.EventTypes.Integration.ORDER_INFO_RESPONSE -> handleOrderInfoResponse(eventData)
-                else -> log.info("🔔 [PAYMENT] 기타 Order 요청 - eventType: {}", eventType)
-            }
+            // Order 요청 처리 (HTTP 기반으로 변경되어 더 이상 이벤트 기반 Order 정보 응답 처리 안함)
+            log.info("🔔 [PAYMENT] Order 요청 수신 (HTTP 기반으로 변경) - eventType: {}", eventType)
 
             val processingTime = System.currentTimeMillis() - startTime
             log.debug("✅ [PAYMENT] Order 요청 처리 완료 - eventType: {}, eventId: {}, 처리시간: {}ms",
@@ -503,127 +497,6 @@ class PaymentKafkaListener(
         }
     }
 
-    /**
-     * Order 정보 응답 이벤트 처리 (기존 Redis 로직과 동일)
-     */
-    private fun handleOrderInfoResponse(eventData: Map<String, Any>) {
-        try {
-            log.info("📞 [PAYMENT] Order 정보 응답 처리 시작 - requestId: {}, success: {}",
-                eventData["requestId"], eventData["success"])
-
-            // Map을 OrderInfoResponseEvent로 변환
-            val customerIdValue = normalizeString(eventData["customerId"])
-                ?: normalizeString(eventData["actualUserId"])
-            val orderStatusValue = normalizeString(eventData["orderStatus"])
-                ?: normalizeString(eventData["status"])
-            val totalAmountValue = normalizeString(eventData["totalAmount"])
-                ?: normalizeString(eventData["amount"])
-
-            val response = OrderInfoResponseEvent(
-                requestId = normalizeString(eventData["requestId"]),
-                success = normalizeString(eventData["success"])?.toBoolean() ?: false,
-                errorMessage = normalizeString(eventData["errorMessage"])
-                    ?: normalizeString(eventData["message"]),
-                actualLines = parseOrderLineInfos(eventData["actualLines"]),
-                customerId = customerIdValue?.toLongOrNull(),
-                orderStatus = orderStatusValue,
-                totalAmount = totalAmountValue?.toIntOrNull(),
-                actualOrderNo = normalizeString(eventData["actualOrderNo"]),
-                actualUserId = normalizeString(eventData["actualUserId"])?.toLongOrNull(),
-                actualPopupId = normalizeString(eventData["actualPopupId"]),
-                actualStoreId = normalizeString(eventData["actualStoreId"]),
-                actualHasReservation = normalizeString(eventData["actualHasReservation"])?.toBoolean(),
-                actualHasGoods = normalizeString(eventData["actualHasGoods"])?.toBoolean()
-            )
-
-            // PaymentOrderInfoService에 응답 전달
-            paymentOrderInfoService.handleOrderInfoResponse(response)
-
-            log.info("✅ [PAYMENT] Order 정보 응답 처리 완료 - requestId: {}, success: {}",
-                response.requestId, response.success)
-
-        } catch (e: Exception) {
-            log.error("🚨 [PAYMENT] Order 정보 응답 처리 실패 - eventData: {}, error: {}", eventData, e.message, e)
-        }
-    }
-
-    // === 유틸리티 메서드들 (기존 Redis 로직과 동일) ===
-
-    private fun normalizeString(value: Any?): String? {
-        val raw = value as? String ?: return null
-        val trimmed = raw.trim()
-        return trimmed.trim('"')
-    }
-
-    private fun parseOrderLineInfos(rawLines: Any?): List<EventLineItem> {
-        log.info("🔍 [DEBUG] parseOrderLineInfos 시작 - rawLines type: {}, value: {}",
-            rawLines?.javaClass?.simpleName, rawLines)
-
-        if (rawLines == null) {
-            log.info("🔍 [DEBUG] rawLines is null, returning empty list")
-            return emptyList()
-        }
-
-        return try {
-            when (rawLines) {
-                is List<*> -> {
-                    log.info("🔍 [DEBUG] rawLines is List, size: {}", rawLines.size)
-                    rawLines.mapNotNull { item ->
-                        log.info("🔍 [DEBUG] Processing list item type: {}, value: {}",
-                            item?.javaClass?.simpleName, item)
-                        when (item) {
-                            is Map<*, *> -> {
-                                val result = objectMapper.convertValue(item, EventLineItem::class.java)
-                                log.info("🔍 [DEBUG] Converted map to EventLineItem: {}", result)
-                                result
-                            }
-                            else -> {
-                                log.warn("🔍 [DEBUG] Unexpected list item type: {}", item?.javaClass?.simpleName)
-                                null
-                            }
-                        }
-                    }
-                }
-                is String -> {
-                    log.info("🔍 [DEBUG] rawLines is String: '{}'", rawLines)
-                    var trimmed = rawLines.trim().trim('"')
-                    log.info("🔍 [DEBUG] After basic trimming: '{}'", trimmed)
-
-                    // 이중 이스케이프 처리
-                    if (trimmed.startsWith("[{\\\"") || trimmed.startsWith("{\\\"")) {
-                        log.info("🔍 [DEBUG] Detected escaped JSON, unescaping...")
-                        trimmed = trimmed.replace("\\\"", "\"").replace("\\\\", "\\")
-                        log.info("🔍 [DEBUG] After unescaping: '{}'", trimmed)
-                    }
-
-                    if (trimmed.isBlank() || trimmed == "[]") {
-                        log.info("🔍 [DEBUG] Empty or blank string, returning empty list")
-                        emptyList()
-                    } else {
-                        log.info("🔍 [DEBUG] Attempting to parse JSON string: '{}'", trimmed)
-                        val typeRef = object : com.fasterxml.jackson.core.type.TypeReference<List<EventLineItem>>() {}
-                        val result = objectMapper.readValue(trimmed, typeRef)
-                        log.info("🔍 [DEBUG] JSON parsing successful, result count: {}", result.size)
-                        result.forEachIndexed { index, item ->
-                            log.info("🔍 [DEBUG] Parsed item[{}]: itemType={}, qty={}, unitPrice={}, linePrice={}",
-                                index, item.itemType, item.qty, item.unitPrice, item.linePrice)
-                        }
-                        result
-                    }
-                }
-                else -> {
-                    log.info("🔍 [DEBUG] rawLines is other type: {}, attempting direct conversion", rawLines.javaClass.simpleName)
-                    val typeRef = object : com.fasterxml.jackson.core.type.TypeReference<List<EventLineItem>>() {}
-                    val result = objectMapper.convertValue(rawLines, typeRef)
-                    log.info("🔍 [DEBUG] Direct conversion successful, result count: {}", result.size)
-                    result
-                }
-            }
-        } catch (e: Exception) {
-            log.error("❌ [DEBUG] EventLineItem JSON 파싱 실패 - rawLines: {}, error: {}", rawLines, e.message, e)
-            emptyList()
-        }
-    }
 
     /**
      * Kafka 경로용 QR 생성 이벤트 발행

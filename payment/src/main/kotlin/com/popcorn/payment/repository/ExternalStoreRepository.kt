@@ -11,9 +11,10 @@ import java.sql.SQLException
 import javax.sql.DataSource
 
 /**
- * Stores DB 직접 조회 Repository
- * 성능 최적화를 위한 DB 직접 접근
+ * ❌ DEPRECATED: Stores DB 직접 조회 Repository
+ * MSA 원칙에 따라 OrderServiceClient HTTP API 사용으로 대체됨
  */
+@Deprecated("외부 DB 직접 연결 제거됨. OrderServiceClient 사용으로 대체.")
 @Repository
 @ConditionalOnBean(name = ["storesJdbcTemplate"])
 class ExternalStoreRepository(

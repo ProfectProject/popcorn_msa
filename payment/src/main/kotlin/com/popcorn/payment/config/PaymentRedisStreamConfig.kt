@@ -74,7 +74,7 @@ class PaymentRedisStreamConfig(
         val options = StreamMessageListenerContainer.StreamMessageListenerContainerOptions
             .builder()
             .batchSize(50)  // 배치 처리량 2.5배 증가 - 더 효율적 처리
-            .pollTimeout(Duration.ofMillis(500))  // 폴링 타임아웃 0.5초 - 성능과 안정성 균형
+            .pollTimeout(Duration.ofMillis(5000))  // 폴링 타임아웃 5초 - 안정성 향상
             .build()
 
         val container = StreamMessageListenerContainer.create(connectionFactory, options)
