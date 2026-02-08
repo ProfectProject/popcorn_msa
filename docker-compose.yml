@@ -97,8 +97,13 @@ services:
       environment:
         KAFKA_CLUSTERS_0_NAME: local
         KAFKA_CLUSTERS_0_BOOTSTRAPSERVERS: kafka:9092
+
+        KAFKA_CLUSTERS_0_KAFKACONNECT_0_NAME: connect
+        KAFKA_CLUSTERS_0_KAFKACONNECT_0_ADDRESS: http://kafka-connect:8083
+
       depends_on:
         - kafka
+        - kafka-connect
 
 
 volumes:

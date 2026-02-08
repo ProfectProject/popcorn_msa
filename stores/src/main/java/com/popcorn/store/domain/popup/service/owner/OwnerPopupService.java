@@ -545,6 +545,7 @@ public class OwnerPopupService {
             Map<String, Object> payload = event.toOutboxMap();
             Map<String, Object> headers = Map.of("producer", event.getProducer());
             OutboxEvent outbox = OutboxEvent.of(
+                    event.getTopic(),
                     EventConstants.AggregateTypes.POPUP,
                     popup.getId().toString(),
                     event.getEventType(),
@@ -585,6 +586,7 @@ public class OwnerPopupService {
             Map<String, Object> payload = event.toOutboxMap();
             Map<String, Object> headers = Map.of("producer", event.getProducer());
             OutboxEvent outbox = OutboxEvent.of(
+                    event.getTopic(),
                     EventConstants.AggregateTypes.POPUP,
                     popup.getId().toString(),
                     event.getEventType(),

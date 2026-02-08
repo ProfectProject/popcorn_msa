@@ -37,6 +37,27 @@ spring:
     schemas: order_query
     clean-disabled: false
 
+  kafka:
+    bootstrap-servers: ${KAFKA_BOOTSTRAP_SERVERS:localhost:29092}
+
+    consumer:
+      group-id: ${ORDER_QUERY_KAFKA_GROUP:order-query-cg}
+      auto-offset-reset: earliest
+      enable-auto-commit: false
+      key-deserializer: org.apache.kafka.common.serialization.StringDeserializer
+      value-deserializer: org.apache.kafka.common.serialization.StringDeserializer
+
+    listener:
+      ack-mode: manual
+      concurrency: ${KAFKA_LISTENER_CONCURRENCY:3}
+
+popcorn:
+    kafka:
+      topics:
+        order-events: ${KAFKA_TOPIC_ORDER_EVENTS:order-events}
+        payment-events: ${KAFKA_TOPIC_PAYMENT_EVENTS:payment-events}
+        store-events: ${KAFKA_TOPIC_STORE_EVENTS:store-events}
+        checkin-events: ${KAFKA_TOPIC_CHECKIN_EVENTS:checkin-events}
 springdoc:
   server-url: ${GATEWAY_SERVICE_URL:https://dev.goormpopcorn.shop}
 

@@ -1,5 +1,6 @@
 package com.popcorn.store.domain.popup.entity;
 
+import com.popcorn.store.constants.EventConstants;
 import com.popcorn.store.event.standard.StandardEventType;
 import jakarta.persistence.*;
 import lombok.*;
@@ -46,6 +47,9 @@ public class OutboxEvent {
     @Column(name = "event_type", nullable = false, updatable = false, length = 100)
     private StandardEventType eventType;
 
+    @Column(name = "topic", nullable = false, updatable = false, length = 255)
+    private String topic;
+
     @Column(name = "partition_key", nullable = false, updatable = false, length = 255)
     private String partitionKey;
 
@@ -73,6 +77,7 @@ public class OutboxEvent {
             String aggregateType,
             String aggregateId,
             StandardEventType eventType,
+            String topic,
             String partitionKey,
             Integer schemaVersion,
             Map<String, Object> eventData,
@@ -83,8 +88,9 @@ public class OutboxEvent {
         this.aggregateType = aggregateType;
         this.aggregateId = aggregateId;
         this.eventType = eventType;
+        this.topic = (topic != null) ? topic : EventConstants.Streams.STORE_EVENTS;
         this.partitionKey = partitionKey;
-        this.schemaVersion = (schemaVersion != null) ? schemaVersion : 1;
+        this.schemaVersion = (schemaVersion != null) ? schemaVersion : 4;
         this.eventData = eventData;
         this.headers = headers;
         this.occurredAt = (occurredAt != null) ? occurredAt : Instant.now();
@@ -92,6 +98,7 @@ public class OutboxEvent {
     }
 
     public static OutboxEvent of(
+            String topic,
             String aggregateType,
             String aggregateId,
             StandardEventType eventType,
@@ -99,6 +106,7 @@ public class OutboxEvent {
             Map<String, Object> headers
     ) {
         return OutboxEvent.builder()
+                .topic(topic)
                 .aggregateType(aggregateType)
                 .aggregateId(aggregateId)
                 .eventType(eventType)
