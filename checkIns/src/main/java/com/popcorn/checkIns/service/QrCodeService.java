@@ -110,11 +110,12 @@ public class QrCodeService {
 
 	@Transactional
 	public QrCodeResponse issueFromPaymentEvent(UUID orderId, UUID storeId, UUID popupId, UUID orderGoodsId) {
-		// 주문 존재 여부 확인 (상태는 검증하지 않음)
-		qrCodeRepository.findOrderStatus(orderId)
-				.orElseThrow(QrException::orderNotFound);
+		// 결제 완료 이벤트에서 호출 시에는 주문 상태 검증 생략
+		// (이미 결제 완료가 보장된 상태)
+		log.debug("🎯 [QR-FROM-PAYMENT] QR 발급 시작: orderId={}", orderId);
 
-		ensureReservationOrder(orderId);
+		// 예약 주문 확인도 생략 (결제 완료된 모든 주문에 QR 발급)
+		// ensureReservationOrder(orderId);
 
 		LocalDateTime now = LocalDateTime.now();
 		Optional<QrCodeRow> existing = qrCodeRepository.findLatestByOrderId(orderId)

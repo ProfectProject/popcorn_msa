@@ -311,9 +311,11 @@ class PaymentKafkaListener(
 
             eventScope.launch {
                 try {
-                    // QR 코드 생성 이벤트 발행 (예약 결제만, CheckIns 직결)
-                    if (hasReservation == true) {
+                    // QR 코드 생성 이벤트 발행 (예약 또는 굿즈 결제 시 생성)
+                    if (hasReservation == true || hasGoods == true) {
                         publishQrCodeGenerationEventKafka(paymentId, orderId, orderNo, customerId)
+                        log.info("✅ [KAFKA] QR 생성 요청: orderId={} hasReservation={} hasGoods={}",
+                            orderId, hasReservation, hasGoods)
                     } else {
                         log.info("🚫 [KAFKA] QR 생성 스킵: orderId={} hasReservation={} hasGoods={}",
                             orderId, hasReservation, hasGoods)

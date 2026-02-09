@@ -21,7 +21,7 @@ import org.hibernate.type.SqlTypes;
 @Entity
 @Table(
     name = "outbox_events",
-    schema = "\"checkIns\"",
+    schema = "checkins",
     indexes = {
         @Index(name = "idx_outbox_created_at", columnList = "created_at"),
         @Index(name = "idx_outbox_aggregate", columnList = "aggregate_type, aggregate_id"),

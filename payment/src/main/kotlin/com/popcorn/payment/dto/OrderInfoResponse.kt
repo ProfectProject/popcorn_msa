@@ -14,7 +14,9 @@ data class OrderInfoResponse(
     val success: Boolean = true,
     val errorMessage: String? = null,
     val hasGoods: Boolean = false,  // 굿즈 포함 여부 (배송 주소 검증용)
-    val lineItems: List<OrderLineItem>? = null  // 라인 아이템 정보 (가격 검증용)
+    val lineItems: List<OrderLineItem>? = null,  // 라인 아이템 정보 (가격 검증용)
+    val popupId: UUID? = null,  // 팝업스토어 ID
+    val storeId: UUID? = null   // 스토어 ID
 ) {
     companion object {
         fun failure(orderId: UUID, errorMessage: String): OrderInfoResponse {

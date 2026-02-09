@@ -68,7 +68,7 @@ spring:
           preferred_enum_jdbc_type: NAMED_ENUM
         format_sql: false
         show_sql: false
-        default_schema: checkIns
+        default_schema: checkins
         jdbc:
           batch_size: 20
         order_inserts: true
@@ -162,6 +162,12 @@ springdoc:
   swagger-ui:
     enabled: true
     path: /swagger-ui.html
+
+# 외부 서비스 API 설정 (Gateway 통해 호출)
+app:
+  order-service:
+    base-url: ${GATEWAY_SERVICE_URL:http://popcorn-gateway:8080}
+    timeout-ms: ${ORDER_API_TIMEOUT_MS:5000}
 
 # 모니터링 및 메트릭 설정
 management:

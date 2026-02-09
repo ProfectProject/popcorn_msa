@@ -320,8 +320,8 @@ class PaymentCommandCoroutineService(
                     paymentKey = payment.paymentKey,
                     approvedAt = payment.approvedAt ?: java.time.LocalDateTime.now(),
                     customerId = orderInfo.customerId,   // 실제 사용자 ID
-                    popupId = null, // OrderInfoResponse에는 popupId가 없음
-                    storeId = null, // OrderInfoResponse에는 storeId가 없음
+                    popupId = orderInfo.popupId, // Order에서 받은 실제 popupId
+                    storeId = orderInfo.storeId, // Order에서 받은 실제 storeId
                     hasReservation = !orderInfo.hasGoods, // 굿즈가 없으면 예약만 있음
                     hasGoods = orderInfo.hasGoods,
                     lines = emptyList() // OrderInfoResponse에는 lines가 없음
@@ -352,15 +352,13 @@ class PaymentCommandCoroutineService(
 
             // CheckIns로 QR 코드 생성 요청 이벤트 발행
             try {
-                paymentEventPublisher.publishQrCodeGenerationRequested(
+                val qrEvent = com.popcorn.payment.event.integration.request.QrCodeGenerationRequestedEvent.create(
                     paymentId = payment.id,
                     orderId = payment.orderId,
                     orderNo = orderInfo?.orderNo ?: payment.orderId.toString(),
-                    amount = payment.amount,
-                    customerId = orderInfo?.customerId,
-                    popupId = orderInfo?.popupId,
-                    storeId = orderInfo?.storeId
+                    customerId = orderInfo?.customerId
                 )
+                paymentEventPublisher.publish(qrEvent)
                 log.info("✅ [PAYMENT] QR 생성 요청 이벤트 발행 완료 - paymentId: {}", payment.id)
             } catch (qrException: Exception) {
                 log.error("❌ [PAYMENT] QR 생성 요청 이벤트 발행 실패 - paymentId: {}, error: {}",
