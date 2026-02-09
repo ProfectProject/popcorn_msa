@@ -4,6 +4,11 @@ server:
   tomcat:
     uri-encoding: UTF-8
 spring:
+  kafka:
+    enabled: true
+    bootstrap-servers: localhost:29092
+    consumer:
+      group-id: user-service-group
   config:
     activate:
       on-profile: local
@@ -61,3 +66,7 @@ logging:
     org.springframework.boot.web: DEBUG
     org.hibernate.SQL: DEBUG
     org.springframework.security: DEBUG
+    com.adjh.springbootkafka: DEBUG
+    org:
+      apache.kafka: INFO
+      springframework.kafka: INFO

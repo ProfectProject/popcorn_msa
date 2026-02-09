@@ -91,3 +91,5 @@ k6
 logs/
 *.log
 **/logs/
+
+docker-compose.yml
