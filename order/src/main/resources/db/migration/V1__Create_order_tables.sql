@@ -82,7 +82,12 @@ CREATE TABLE IF NOT EXISTS orders.p_order_status_histories (
     deleted_by BIGINT
 );
 
--- 7. 외래 키 제약 조건
+-- 7. 외래 키 제약 조건 (기존 제약조건 정리 후 재생성)
+-- 기존 제약조건이 있다면 삭제
+ALTER TABLE orders.p_order_goods DROP CONSTRAINT IF EXISTS fk_p_order_goods_order;
+ALTER TABLE orders.p_order_status_histories DROP CONSTRAINT IF EXISTS fk_p_order_status_histories_order;
+
+-- 새로운 제약조건 생성
 ALTER TABLE orders.p_order_goods
     ADD CONSTRAINT fk_p_order_goods_order
         FOREIGN KEY (order_id) REFERENCES orders.p_orders(order_id);
@@ -113,22 +118,50 @@ CREATE INDEX IF NOT EXISTS idx_p_order_goods_created_at ON orders.p_order_goods(
 CREATE INDEX IF NOT EXISTS idx_p_order_status_histories_order_id ON orders.p_order_status_histories(order_id);
 CREATE INDEX IF NOT EXISTS idx_p_order_status_histories_changed_at ON orders.p_order_status_histories(changed_at DESC);
 
--- 9. 체크 제약 조건
-ALTER TABLE orders.p_orders
-    ADD CONSTRAINT chk_p_orders_total_price
-        CHECK (total_price > 0);
+-- 9. 체크 제약 조건 (IF NOT EXISTS 조건 추가)
+DO $$
+BEGIN
+    IF NOT EXISTS (SELECT 1 FROM information_schema.table_constraints
+                   WHERE constraint_name = 'chk_p_orders_total_price'
+                   AND table_schema = 'orders') THEN
+        ALTER TABLE orders.p_orders
+            ADD CONSTRAINT chk_p_orders_total_price
+                CHECK (total_price > 0);
+    END IF;
+END $$;
 
-ALTER TABLE orders.p_order_goods
-    ADD CONSTRAINT chk_p_order_goods_qty
-        CHECK (qty > 0);
+DO $$
+BEGIN
+    IF NOT EXISTS (SELECT 1 FROM information_schema.table_constraints
+                   WHERE constraint_name = 'chk_p_order_goods_qty'
+                   AND table_schema = 'orders') THEN
+        ALTER TABLE orders.p_order_goods
+            ADD CONSTRAINT chk_p_order_goods_qty
+                CHECK (qty > 0);
+    END IF;
+END $$;
 
-ALTER TABLE orders.p_order_goods
-    ADD CONSTRAINT chk_p_order_goods_unit_price
-        CHECK (unit_price > 0);
+DO $$
+BEGIN
+    IF NOT EXISTS (SELECT 1 FROM information_schema.table_constraints
+                   WHERE constraint_name = 'chk_p_order_goods_unit_price'
+                   AND table_schema = 'orders') THEN
+        ALTER TABLE orders.p_order_goods
+            ADD CONSTRAINT chk_p_order_goods_unit_price
+                CHECK (unit_price > 0);
+    END IF;
+END $$;
 
-ALTER TABLE orders.p_order_goods
-    ADD CONSTRAINT chk_p_order_goods_price
-        CHECK (price > 0);
+DO $$
+BEGIN
+    IF NOT EXISTS (SELECT 1 FROM information_schema.table_constraints
+                   WHERE constraint_name = 'chk_p_order_goods_price'
+                   AND table_schema = 'orders') THEN
+        ALTER TABLE orders.p_order_goods
+            ADD CONSTRAINT chk_p_order_goods_price
+                CHECK (price > 0);
+    END IF;
+END $$;
 
 -- 10. 테이블 및 컬럼 코멘트
 COMMENT ON TABLE orders.p_orders IS '주문 정보 테이블 (Order Entity와 완전 일치)';

@@ -45,13 +45,27 @@ class WebClientConfig(
         properties: TossPaymentsProperties
     ): WebClient {
 
-        // 🌐 Reactor Netty HTTP 클라이언트 설정
-        val httpClient = HttpClient.create()
-            .option(ChannelOption.CONNECT_TIMEOUT_MILLIS, 3000) // 3초 연결 타임아웃
-            .responseTimeout(Duration.ofSeconds(5))             // 5초 응답 타임아웃
-            .doOnConnected { conn ->
-                conn.addHandlerLast(ReadTimeoutHandler(5, TimeUnit.SECONDS))  // 데이터 읽기 5초 타임아웃
-                    .addHandlerLast(WriteTimeoutHandler(3, TimeUnit.SECONDS)) // 데이터 쓰기 3초 타임아웃
+        // 🚀 고성능 최적화된 Reactor Netty HTTP 클라이언트 설정
+        val connectionProvider = reactor.netty.resources.ConnectionProvider.builder("payment-pool")
+            .maxConnections(100)              // 최대 연결 수: 기본 500 → 100 (충분함)
+            .maxIdleTime(Duration.ofSeconds(30))    // 유휴 연결 유지: 30초
+            .maxLifeTime(Duration.ofMinutes(5))     // 연결 최대 생명: 5분
+            .pendingAcquireMaxCount(50)            // 대기 중인 요청: 50개
+            .evictInBackground(Duration.ofSeconds(30)) // 백그라운드 정리: 30초
+            .build()
+
+        val httpClient = HttpClient.create(connectionProvider)
+            // 🔥 연결 풀 최적화 (성능 극대화)
+            .option(ChannelOption.CONNECT_TIMEOUT_MILLIS, 2000) // 2초로 단축 (3→2)
+            .option(ChannelOption.SO_KEEPALIVE, true)           // Keep-Alive 활성화
+            .option(ChannelOption.TCP_NODELAY, true)           // TCP Nagle 비활성화 (지연 최소화)
+
+            // ⚡ 타임아웃 최적화
+            .responseTimeout(Duration.ofSeconds(4))             // 4초로 단축 (5→4)
+
+            .doOnConnected { connection ->
+                connection.addHandlerLast(ReadTimeoutHandler(4, TimeUnit.SECONDS))  // 4초로 단축 (5→4)
+                    .addHandlerLast(WriteTimeoutHandler(2, TimeUnit.SECONDS)) // 2초로 단축 (3→2)
             }
 
         return WebClient.builder()

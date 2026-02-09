@@ -2,6 +2,7 @@ package com.popcorn.payment.client
 
 import com.fasterxml.jackson.annotation.JsonProperty
 import com.popcorn.payment.dto.OrderInfoResponse
+import com.popcorn.payment.dto.OrderLineItem
 import com.popcorn.payment.util.SystemPassportGenerator
 import kotlinx.coroutines.reactor.awaitSingle
 import org.slf4j.LoggerFactory
@@ -51,17 +52,29 @@ class OrderServiceClient(
                 log.info("✅ [HTTP] Order 정보 조회 성공 - orderId: {}, orderNo: {}",
                     orderId, response.data.orderNo)
 
+                // 🔍 디버깅: Order 데이터 상세 확인
+                log.info("🔍 [DEBUG] Order 데이터 확인 - orderId: {}, orderType: {}, items: {}",
+                    orderId, response.data.orderType, response.data.items?.size ?: 0)
+
+                response.data.items?.forEach { item ->
+                    log.info("🔍 [DEBUG] 아이템 확인 - itemId: {}, type: {}, goodsId: {}, sessionOptionId: {}, qty: {}, price: {}",
+                        item.itemId, item.orderItemType, item.goodsId, item.sessionOptionId, item.qty, item.unitPrice)
+                }
+
                 val hasGoods = hasGoodsItems(response.data)
-                log.info("🔍 [HTTP] 굿즈 포함 여부 확인 - orderId: {}, hasGoods: {}", orderId, hasGoods)
+                val lineItems = mapLineItems(response.data)
+                log.info("🔍 [HTTP] 주문 정보 매핑 완료 - orderId: {}, hasGoods: {}, lineItems: {}개",
+                    orderId, hasGoods, lineItems.size)
 
                 OrderInfoResponse(
-                    orderId = response.data.id,
+                    orderId = response.data.orderId,
                     orderNo = response.data.orderNo,
                     customerId = response.data.customerId,
                     status = response.data.status,
                     totalAmount = response.data.totalAmount,
                     success = true,
-                    hasGoods = hasGoods
+                    hasGoods = hasGoods,
+                    lineItems = lineItems
                 )
             } else {
                 log.warn("❌ [HTTP] Order 정보 조회 실패 - orderId: {}, code: {}, message: {}",
@@ -96,9 +109,60 @@ class OrderServiceClient(
      * 굿즈가 있으면 배송 주소 검증이 필요함
      */
     fun hasGoodsItems(orderData: OrderDetailData): Boolean {
-        return orderData.items?.any { item ->
-            item.goodsId != null || item.orderItemType == "GOODS"
-        } ?: false
+        val items = orderData.items
+        log.info("🔍 [DEBUG] hasGoodsItems 검사 - 총 아이템 수: {}", items?.size ?: 0)
+
+        if (items == null) {
+            log.warn("⚠️ [DEBUG] items가 null임 - hasGoods: false")
+            return false
+        }
+
+        val hasGoods = items.any { item ->
+            val hasGoodsId = item.goodsId != null
+            val isGoodsType = item.orderItemType == "GOODS"
+            log.debug("🔍 [DEBUG] 아이템 검사 - goodsId: {}, type: {}, hasGoodsId: {}, isGoodsType: {}",
+                item.goodsId, item.orderItemType, hasGoodsId, isGoodsType)
+            hasGoodsId || isGoodsType
+        }
+
+        log.info("🔍 [DEBUG] hasGoodsItems 결과: {}", hasGoods)
+        return hasGoods
+    }
+
+    /**
+     * OrderItemDetailData를 OrderLineItem으로 변환
+     * Store API 가격 검증에 사용
+     */
+    private fun mapLineItems(orderData: OrderDetailData): List<OrderLineItem> {
+        return orderData.items?.mapNotNull { item ->
+            val itemId: UUID?
+            val itemType: String
+
+            when {
+                item.goodsId != null -> {
+                    itemId = item.goodsId
+                    itemType = "GOODS"
+                }
+                item.sessionOptionId != null -> {
+                    itemId = item.sessionOptionId
+                    itemType = "SESSION"
+                }
+                else -> {
+                    log.debug("🚨 알 수 없는 아이템 타입 스킵 - itemDetailData: {}", item)
+                    return@mapNotNull null
+                }
+            }
+
+            OrderLineItem(
+                itemId = itemId,
+                itemType = itemType,
+                quantity = item.qty ?: 1,
+                unitPrice = item.unitPrice ?: 0,
+                lineAmount = item.lineAmount ?: 0,
+                sessionOptionId = item.sessionOptionId,
+                goodsId = item.goodsId
+            )
+        } ?: emptyList()
     }
 
     /**
@@ -119,23 +183,28 @@ data class OrderApiResponse(
     val data: OrderDetailData?
 )
 
+/**
+ * Order 서비스의 OrderDetailResponse 구조와 정확히 일치하도록 수정
+ */
 data class OrderDetailData(
-    @JsonProperty("orderId")
-    val id: UUID,
+    val orderId: UUID,  // ✅ @JsonProperty 제거, Order API에서 orderId로 반환
     val orderNo: String,
     val customerId: Long,
     val status: String,
     val totalAmount: Int,
     val orderType: String? = null,
-    val items: List<OrderItemData>? = null
+    val items: List<OrderItemDetailData>? = null  // ✅ 올바른 이름으로 수정
 )
 
-data class OrderItemData(
-    val itemId: UUID? = null,
-    val orderItemType: String? = null,
-    val qty: Int? = null,
-    val unitPrice: Int? = null,
-    val lineAmount: Int? = null,
+/**
+ * Order 서비스의 OrderDetailResponse.OrderItemDetailResponse와 매핑
+ */
+data class OrderItemDetailData(
+    val itemId: UUID,
+    val orderItemType: String,
+    val qty: Int,
+    val unitPrice: Int,
+    val lineAmount: Int,
     val sessionOptionId: UUID? = null,
     val goodsId: UUID? = null
 )

@@ -26,6 +26,10 @@ server:
   tomcat:
     uri-encoding: UTF-8
 
+# 🌐 Gateway 설정
+gateway:
+  base-url: ${GATEWAY_URL:http://popcorn-gateway:8080}
+
 # 프론트엔드 기본 URL 설정
 frontend:
   base-url: ${FRONTEND_BASE_URL:http://localhost:3000}

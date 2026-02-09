@@ -81,6 +81,7 @@ public class OrderDomainService {
         transitions.put(OrderStatus.RESERVED, EnumSet.of(
                 OrderStatus.PAYMENT_PENDING, // 결제 대기
                 OrderStatus.PAID,            // 결제 완료
+                OrderStatus.COMPLETED,       // 완료 (재고 차감 성공 시)
                 OrderStatus.CANCELLED        // 취소
         ));
 

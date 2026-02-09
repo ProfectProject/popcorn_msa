@@ -135,6 +135,9 @@ logging:
     org.hibernate.type.descriptor.sql.BasicBinder: TRACE
 
 # HTTP 클라이언트 설정 - 게이트웨이를 통한 서비스 간 통신 (MSA 원칙 준수)
+gateway:
+  base-url: ${GATEWAY_URL:http://popcorn-gateway:8080}
+
 order:
   service:
     base-url: ${ORDER_SERVICE_BASE_URL:http://popcorn-gateway:8080}

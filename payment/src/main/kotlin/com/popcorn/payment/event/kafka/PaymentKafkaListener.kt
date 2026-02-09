@@ -8,7 +8,7 @@ import com.popcorn.payment.event.domain.payment.EventLineItem
 import java.util.UUID
 import com.popcorn.payment.event.publisher.BasePaymentEventPublisherImpl
 import com.popcorn.payment.service.TossPaymentCoroutineService
-import com.popcorn.payment.service.PaymentCreateResult
+import com.popcorn.payment.dto.PaymentCreateResult
 import com.popcorn.common.kafka.KafkaIdempotencyService
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers

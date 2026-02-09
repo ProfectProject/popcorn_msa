@@ -13,7 +13,8 @@ data class OrderInfoResponse(
     val totalAmount: Int,
     val success: Boolean = true,
     val errorMessage: String? = null,
-    val hasGoods: Boolean = false  // 굿즈 포함 여부 (배송 주소 검증용)
+    val hasGoods: Boolean = false,  // 굿즈 포함 여부 (배송 주소 검증용)
+    val lineItems: List<OrderLineItem>? = null  // 라인 아이템 정보 (가격 검증용)
 ) {
     companion object {
         fun failure(orderId: UUID, errorMessage: String): OrderInfoResponse {
@@ -29,3 +30,16 @@ data class OrderInfoResponse(
         }
     }
 }
+
+/**
+ * 주문 라인 아이템 정보 (Store 가격 검증용)
+ */
+data class OrderLineItem(
+    val itemId: UUID,
+    val itemType: String,  // "SESSION" 또는 "GOODS"
+    val quantity: Int,
+    val unitPrice: Int,
+    val lineAmount: Int,
+    val sessionOptionId: UUID? = null,
+    val goodsId: UUID? = null
+)

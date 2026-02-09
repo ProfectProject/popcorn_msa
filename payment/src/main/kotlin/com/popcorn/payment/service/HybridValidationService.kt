@@ -1,7 +1,11 @@
 package com.popcorn.payment.service
 
 import com.popcorn.payment.client.UserServiceClient
+import com.popcorn.payment.client.StoreValidationClient
+import com.popcorn.payment.dto.BatchPriceValidationRequest
+import com.popcorn.payment.dto.LineItemPriceRequest
 import com.popcorn.payment.event.domain.payment.EventLineItem
+import com.popcorn.payment.exception.PaymentValidationException
 import com.popcorn.payment.repository.ExternalDbQueryException
 import com.popcorn.payment.repository.ExternalStoreRepository
 import com.popcorn.payment.repository.ExternalUserRepository
@@ -21,7 +25,8 @@ import org.springframework.beans.factory.annotation.Autowired
 class HybridValidationService(
     @Autowired(required = false) private val externalUserRepository: ExternalUserRepository?,
     @Autowired(required = false) private val externalStoreRepository: ExternalStoreRepository?,
-    private val userServiceClient: UserServiceClient
+    private val userServiceClient: UserServiceClient,
+    private val storeValidationClient: StoreValidationClient
 ) {
 
     private val log = LoggerFactory.getLogger(HybridValidationService::class.java)
@@ -423,7 +428,8 @@ class HybridValidationService(
         userId: Long,
         expectedAmount: Int,
         actualOrderAmount: Int,
-        hasGoods: Boolean = false  // 굿즈 포함 여부 (기본값: false)
+        hasGoods: Boolean = false,  // 굿즈 포함 여부 (기본값: false)
+        orderDetail: com.popcorn.payment.dto.OrderInfoResponse? = null  // Order 상세 정보
     ): BasicValidationResult {
         return try {
             log.debug("🔍 [HTTP] 기본 결제 검증 시작 - orderId: {}, userId: {}, expected: {}, actual: {}",
@@ -446,11 +452,59 @@ class HybridValidationService(
             }
 
             // 2. 가격 검증 (HTTP로 받은 Order 금액 vs 결제 요청 금액)
-            val priceValid = (expectedAmount == actualOrderAmount)
+            val basicPriceValid = (expectedAmount == actualOrderAmount)
 
-            if (!priceValid) {
-                log.warn("❌ [HTTP] 가격 불일치 - expected: {}, actual: {}", expectedAmount, actualOrderAmount)
+            if (!basicPriceValid) {
+                log.warn("❌ [HTTP] 기본 가격 불일치 - expected: {}, actual: {}", expectedAmount, actualOrderAmount)
             }
+
+            // 3. 심화 가격 검증 (mixed 주문에서 실제 Store DB 가격과 비교)
+            val detailedPriceValid = if (hasGoods && orderDetail?.lineItems?.isNotEmpty() == true) {
+                log.info("🏪 [Store API] Mixed 주문 감지 - Store API 기반 실제 가격 검증 시작!")
+
+                try {
+                    // LineItem 정보를 Store API 요청 형식으로 변환
+                    val lineItemRequests = orderDetail.lineItems!!.map { lineItem ->
+                        LineItemPriceRequest(
+                            itemId = lineItem.itemId,
+                            itemType = lineItem.itemType,
+                            expectedPrice = lineItem.unitPrice,
+                            quantity = lineItem.quantity
+                        )
+                    }
+
+                    // 🚀 Store API 배치 가격 검증 호출!
+                    val validationRequest = BatchPriceValidationRequest(
+                        orderId = orderId,
+                        lineItems = lineItemRequests,
+                        totalExpectedAmount = actualOrderAmount
+                    )
+
+                    val validationResponse = storeValidationClient.validateBatchPrices(validationRequest)
+
+                    if (validationResponse.isValid) {
+                        log.info("✅ [Store API] 배치 가격 검증 성공 - orderId: {}, 총금액: {}원",
+                                orderId, validationResponse.totalActualAmount)
+                        true
+                    } else {
+                        log.warn("❌ [Store API] 배치 가격 검증 실패 - orderId: {}, 이유: {}",
+                                orderId, validationResponse.failureReason)
+                        false
+                    }
+                } catch (e: Exception) {
+                    log.error("💀 [Store API] 가격 검증 실패 - orderId: {}, 보안상 결제 중단", orderId, e)
+                    // 보안상 Store API 실패 시 결제를 중단합니다
+                    throw PaymentValidationException("가격 검증 서비스 장애로 인한 결제 처리 불가: ${e.message}")
+                }
+            } else if (hasGoods) {
+                log.info("🔍 [Store API] Mixed 주문이지만 lineItem 정보 없음 - 기본 검증으로 처리")
+                true
+            } else {
+                log.info("🎭 [HTTP] 예약 전용 주문 - 기본 가격 검증만 수행 (굿즈 없음)")
+                true
+            }
+
+            val priceValid = basicPriceValid && detailedPriceValid
 
             val isValid = addressValid && priceValid
 

@@ -2,7 +2,7 @@ package com.popcorn.payment.event.listener
 
 import com.fasterxml.jackson.databind.ObjectMapper
 import com.popcorn.payment.constants.EventConstants
-import com.popcorn.payment.service.PaymentCreateResult
+import com.popcorn.payment.dto.PaymentCreateResult
 import com.popcorn.payment.service.TossPaymentCoroutineService
 import com.popcorn.payment.event.domain.payment.PaymentCancelFailedEvent
 import com.popcorn.payment.event.domain.payment.PaymentUrlCreatedEvent
