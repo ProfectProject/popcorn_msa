@@ -25,7 +25,6 @@ public class PopupScheduleReservationRepository {
 			       updated_at = now()
 			 WHERE schedule_id = :scheduleId
 			   AND deleted_at IS NULL
-			   AND is_active IS TRUE
 			   AND (capacity - remaining_capacity) >= :quantity
 			   AND (remaining_capacity + :quantity) <= capacity
 			RETURNING schedule_id, capacity, remaining_capacity
@@ -49,7 +48,6 @@ public class PopupScheduleReservationRepository {
 				       updated_at = now()
 				 WHERE schedule_id = :scheduleId
 				   AND deleted_at IS NULL
-				   AND is_active IS TRUE
 				   AND remaining_capacity >= :quantity
 				   AND capacity >= :quantity
 				RETURNING schedule_id, capacity, remaining_capacity

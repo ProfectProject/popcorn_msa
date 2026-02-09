@@ -23,7 +23,6 @@ public class GoodsReservationRepository  {
                    SET reservation_stock = reservation_stock + :quantity,
                        updated_at = now()
                  WHERE goods_id = :goodsId
-                   AND is_active = TRUE
                    AND stock - reservation_stock >= :quantity
                    AND deleted_at IS NULL
                 RETURNING goods_id, stock, reservation_stock
@@ -43,7 +42,6 @@ public class GoodsReservationRepository  {
                    SET reservation_stock = reservation_stock - :quantity,
                        updated_at = now()
                  WHERE goods_id = :goodsId
-                   AND is_active = TRUE
                    AND reservation_stock >= :quantity
                    AND deleted_at IS NULL
                 RETURNING goods_id, stock, reservation_stock
@@ -63,7 +61,6 @@ public class GoodsReservationRepository  {
                    SET reservation_stock = reservation_stock - :quantity,
                        updated_at = now()
                  WHERE goods_id = :goodsId
-                   AND is_active = TRUE
                    AND reservation_stock >= :quantity
                    AND deleted_at IS NULL
                 RETURNING goods_id, stock, reservation_stock
@@ -84,7 +81,6 @@ public class GoodsReservationRepository  {
                        stock = stock - :quantity,
                        updated_at = now()
                  WHERE goods_id = :goodsId
-                   AND is_active = TRUE
                    AND reservation_stock >= :quantity
                    AND stock >= :quantity
                    AND deleted_at IS NULL
