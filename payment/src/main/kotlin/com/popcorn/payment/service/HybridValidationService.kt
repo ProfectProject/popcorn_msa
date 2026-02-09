@@ -448,24 +448,23 @@ class HybridValidationService(
                 true // 굿즈가 없으면 주소 검증 불필요
             }
 
-            // 2. 가격 검증 (HTTP로 받은 Order 금액 vs 결제 요청 금액)
+            // 2. 주 검증: HTTP로 받은 Order 금액 vs 결제 요청 금액 비교 (핵심 검증)
             val basicPriceValid = (expectedAmount == actualOrderAmount)
 
-            // 🔍 디버깅: 타입과 값 상세 로깅
-            log.info("🔍 [HTTP] 가격 검증 상세 - orderId: {}", orderId)
-            log.info("  - expectedAmount: {} ({})", expectedAmount, expectedAmount?.javaClass?.simpleName)
-            log.info("  - actualOrderAmount: {} ({})", actualOrderAmount, actualOrderAmount?.javaClass?.simpleName)
+            log.info("🎯 [주 검증] HTTP 기본 가격 검증 - orderId: {}", orderId)
+            log.info("  - expectedAmount: {}, actualOrderAmount: {}", expectedAmount, actualOrderAmount)
             log.info("  - basicPriceValid: {}", basicPriceValid)
 
             if (!basicPriceValid) {
-                log.warn("❌ [HTTP] 기본 가격 불일치 - expected: {}, actual: {}", expectedAmount, actualOrderAmount)
-            } else {
-                log.info("✅ [HTTP] 기본 가격 검증 성공 - expected: {}, actual: {}", expectedAmount, actualOrderAmount)
+                log.warn("❌ [주 검증] 기본 가격 불일치로 결제 차단 - expected: {}, actual: {}", expectedAmount, actualOrderAmount)
+                throw PaymentValidationException("결제 금액이 주문 금액과 일치하지 않습니다")
             }
 
-            // 3. 심화 가격 검증 (mixed 주문에서 실제 Store DB 가격과 비교)
-            val detailedPriceValid = if (hasGoods && orderDetail?.lineItems?.isNotEmpty() == true) {
-                log.info("🏪 [Store API] Mixed 주문 감지 - Store API 기반 실제 가격 검증 시작!")
+            log.info("✅ [주 검증] 기본 가격 검증 성공! 결제 진행 가능 - expected: {}, actual: {}", expectedAmount, actualOrderAmount)
+
+            // 3. Store API 보조 검증 (실패해도 결제 진행, 추가 확신을 위한 참고용)
+            if (hasGoods && orderDetail?.lineItems?.isNotEmpty() == true) {
+                log.info("🏪 [보조 검증] Store API 추가 검증 시도 - orderId: {} (실패해도 결제 진행)", orderId)
 
                 try {
                     // LineItem 정보를 Store API 요청 형식으로 변환
@@ -478,7 +477,7 @@ class HybridValidationService(
                         )
                     }
 
-                    // 🚀 Store API 배치 가격 검증 호출!
+                    // Store API 배치 가격 검증 호출 (참고용)
                     val validationRequest = BatchPriceValidationRequest(
                         orderId = orderId,
                         lineItems = lineItemRequests,
@@ -488,87 +487,24 @@ class HybridValidationService(
                     val validationResponse = storeValidationClient.validateBatchPrices(validationRequest)
 
                     if (validationResponse.isValid) {
-                        log.info("✅ [Store API] 배치 가격 검증 성공 - orderId: {}, 총금액: {}원",
+                        log.info("✅ [보조 검증] Store API 검증도 성공! 추가 확신 획득 - orderId: {}, 총금액: {}원",
                                 orderId, validationResponse.totalActualAmount)
-                        true
                     } else {
-                        log.warn("❌ [Store API] 배치 가격 검증 실패 - orderId: {}, 이유: {}",
+                        log.warn("⚠️ [보조 검증] Store API 검증 실패하지만 기본 검증 성공으로 결제 진행 - orderId: {}, 이유: {}",
                                 orderId, validationResponse.failureReason)
-                        false
                     }
                 } catch (e: Exception) {
-                    log.error("💀 [Store API] 배치 가격 검증 실패 - orderId: {}, fallback 검증으로 전환", orderId, e)
-
-                    // Store API 오류 유형에 따른 차별적 처리 (다양한 503 오류 패턴 감지)
-                    val isTemporaryFailure = e.message?.contains("503") == true ||
-                                           e.message?.contains("SERVICE_UNAVAILABLE") == true ||
-                                           e.message?.contains("Service Unavailable") == true ||
-                                           e.message?.contains("temporarily unavailable") == true ||
-                                           e.message?.contains("service temporarily unavailable") == true
-
-                    // 🔍 디버깅: fallback 조건 상세 로깅
-                    log.info("🔍 [Store API] Fallback 조건 분석 - orderId: {}", orderId)
-                    log.info("  - 예외 메시지: '{}'", e.message)
-                    log.info("  - isTemporaryFailure: {}", isTemporaryFailure)
-                    log.info("  - basicPriceValid: {}", basicPriceValid)
-
-                    if (isTemporaryFailure && basicPriceValid) {
-                        // 🔄 임시 장애 + 기본 가격 검증 성공 시 관대하게 처리
-                        log.warn("🔄 [Store API] 임시 장애 감지, 기본 가격 검증 성공으로 결제 허용 - orderId: {}, expected: {}, actual: {}",
-                                orderId, expectedAmount, actualOrderAmount)
-                        true // Store API 임시 장애 시 기본 검증만으로 통과
-                    } else if (isTemporaryFailure) {
-                        // 임시 장애는 맞지만 기본 가격 검증이 실패한 경우
-                        log.warn("⚠️ [Store API] 임시 장애이지만 기본 가격 검증 실패 - orderId: {}, expected: {}, actual: {}",
-                                orderId, expectedAmount, actualOrderAmount)
-                        false // 기본 가격 검증 실패 시에는 차단
-                    } else {
-                        // Fallback: 더 보수적인 검증 로직 (심각한 오류나 가격 불일치 시)
-                        try {
-                            log.info("🔄 [Fallback] 보수적 fallback 검증 시도 - orderId: {}", orderId)
-
-                            // 1. 기본 금액 범위 검사 (예: 1원 ~ 1백만원)
-                            if (expectedAmount != null && (expectedAmount < 1 || expectedAmount > 1_000_000)) {
-                                log.error("💀 [Fallback] 비정상적인 결제 금액 - orderId: {}, amount: {}원", orderId, expectedAmount)
-                                throw PaymentValidationException("비정상적인 결제 금액으로 인한 결제 차단")
-                            }
-
-                            // 2. 라인 아이템 수량 검사 (예: 최대 10개 제한)
-                            val fallbackLineItems = orderDetail?.lineItems ?: emptyList()
-                            if (fallbackLineItems.size > 10) {
-                                log.error("💀 [Fallback] 과도한 아이템 수량 - orderId: {}, count: {}개", orderId, fallbackLineItems.size)
-                                throw PaymentValidationException("과도한 아이템 수량으로 인한 결제 차단")
-                            }
-
-                            // 3. 개별 아이템 가격 범위 검사
-                            for (lineItem in fallbackLineItems) {
-                                if (lineItem.unitPrice < 1 || lineItem.unitPrice > 100_000) {
-                                    log.error("💀 [Fallback] 비정상적인 단가 - orderId: {}, itemId: {}, price: {}원",
-                                        orderId, lineItem.itemId, lineItem.unitPrice)
-                                    throw PaymentValidationException("비정상적인 단가로 인한 결제 차단")
-                                }
-                            }
-
-                            log.error("💀 [Fallback] Store API 심각한 오류 시 보안상 결제 중단 - orderId: {}", orderId)
-                            throw PaymentValidationException("Store API 서비스 장애로 인한 결제 처리 불가: 가격 검증 필수")
-
-                        } catch (fallbackException: PaymentValidationException) {
-                            throw fallbackException // 보안 검증 실패는 그대로 전파
-                        } catch (fallbackException: Exception) {
-                            log.error("💀 [Fallback] Fallback 검증 실패 - orderId: {}, 보안상 결제 중단", orderId, fallbackException)
-                            throw PaymentValidationException("Fallback 검증 실패로 인한 결제 처리 불가: ${fallbackException.message}")
-                        }
-                    }
+                    log.warn("⚠️ [보조 검증] Store API 호출 실패하지만 기본 검증 성공으로 결제 진행 - orderId: {}, error: {}",
+                            orderId, e.message)
                 }
             } else if (hasGoods) {
-                log.info("🔍 [Store API] Mixed 주문이지만 lineItem 정보 없음 - 기본 검증으로 처리")
-                true
+                log.info("🔍 [보조 검증] Mixed 주문이지만 lineItem 정보 없음 - 기본 검증만으로 충분")
             } else {
-                log.info("🎭 [HTTP] 예약 전용 주문 - 기본 가격 검증만 수행 (굿즈 없음)")
-                true
+                log.info("🎭 [보조 검증] 예약 전용 주문 - Store API 검증 불필요")
             }
 
-            val priceValid = basicPriceValid && detailedPriceValid
+            // 기본 검증 성공했으므로 결제 허용
+            val priceValid = true // 주 검증(basicPriceValid) 성공 시 무조건 true
 
             val isValid = addressValid && priceValid
 
