@@ -109,9 +109,12 @@ public class OrderItem extends BaseEntity {
         return ItemType.GOODS.equals(orderItemType);
     }
 
+    /**
+     * 주문 아이템 타입 반환
+     * @return 아이템 타입 (RESERVATION 또는 GOODS)
+     */
     public ItemType getType() {
-        // TODO Auto-generated method stub
-        throw new UnsupportedOperationException("Unimplemented method 'getType'");
+        return orderItemType;
     }
 
 }

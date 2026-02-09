@@ -32,8 +32,15 @@ public class HeaderAuthenticationFilter extends OncePerRequestFilter {
             FilterChain filterChain
     ) throws ServletException, IOException {
         String uri = request.getRequestURI();
+
         // Allow actuator endpoints without passport/internal headers
         if (uri != null && uri.startsWith("/actuator")) {
+            filterChain.doFilter(request, response);
+            return;
+        }
+
+        // Allow all Payment API endpoints without authentication (configured as permitAll in SecurityConfig)
+        if (uri != null && uri.startsWith("/api/pay/v")) {
             filterChain.doFilter(request, response);
             return;
         }

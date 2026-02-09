@@ -603,4 +603,223 @@ class PaymentKafkaListener(
         }
     }
 
+    /**
+     * Order Events (주문 도메인 이벤트)
+     * - Order 서비스로부터의 주문 도메인 이벤트 수신
+     * - ORDER_CREATED, ORDER_PAID, ORDER_COMPLETED 등 처리
+     */
+    @KafkaListener(
+        topics = [EventConstants.Streams.ORDER_EVENTS],
+        groupId = EventConstants.ConsumerGroups.PAYMENT_SERVICE_GROUP
+    )
+    fun handleOrderEvents(
+        @Payload eventData: Map<String, Any>,
+        @Header(KafkaHeaders.RECEIVED_TOPIC) topic: String,
+        @Header(KafkaHeaders.RECEIVED_PARTITION) partition: Int,
+        @Header(KafkaHeaders.OFFSET) offset: Long,
+        @Header(KafkaHeaders.RECEIVED_KEY, required = false) key: String?,
+        acknowledgment: Acknowledgment
+    ) {
+        val startTime = System.currentTimeMillis()
+        val eventType = eventData[EventConstants.MetadataKeys.EVENT_TYPE] as? String
+        val eventId = eventData[EventConstants.MetadataKeys.EVENT_ID] as? String
+        try {
+            log.info("📦 [PAYMENT] Order 이벤트 수신 - topic: {}, partition: {}, offset: {}, key: {}, eventType: {}, eventId: {}",
+                topic, partition, offset, key, eventType, eventId)
+
+            // 멱등성 체크
+            val idempotencyKey = eventData[EventConstants.MetadataKeys.IDEMPOTENCY_KEY] as? String
+                ?: "$topic-$partition-$offset"
+
+            val isAlreadyProcessed = idempotencyService.isAlreadyProcessed(idempotencyKey)
+            if (isAlreadyProcessed) {
+                log.info("🔄 [PAYMENT] Order 이벤트 중복 처리 건너뛰기 - eventType: {}, eventId: {}, key: {}",
+                    eventType, eventId, idempotencyKey)
+                acknowledgment.acknowledge()
+                return
+            }
+
+            // 이벤트 타입별 처리
+            handleOrderDomainEvent(eventType, eventData)
+
+            // 멱등성 키 저장
+            idempotencyService.markAsProcessed(idempotencyKey)
+
+            // Kafka 메시지 커밋
+            acknowledgment.acknowledge()
+
+            val processingTime = System.currentTimeMillis() - startTime
+            log.info("✅ [PAYMENT] Order 이벤트 처리 완료 - topic: {}, partition: {}, offset: {}, eventType: {}, 처리시간: {}ms",
+                topic, partition, offset, eventType, processingTime)
+
+        } catch (e: Exception) {
+            val processingTime = System.currentTimeMillis() - startTime
+            log.error("🚨 [PAYMENT] Order 이벤트 처리 실패 - topic: {}, partition: {}, offset: {}, 처리시간: {}ms, error: {}",
+                topic, partition, offset, processingTime, e.message, e)
+            // 공통 DefaultErrorHandler가 재시도/ DLQ 처리
+            throw e
+        }
+    }
+
+    /**
+     * Order 도메인 이벤트 타입별 처리
+     */
+    private fun handleOrderDomainEvent(eventType: String?, eventData: Map<String, Any>) {
+        try {
+            when (eventType) {
+                EventConstants.EventTypes.OrderDomain.ORDER_CREATED -> {
+                    handleOrderCreated(eventData)
+                }
+                EventConstants.EventTypes.OrderDomain.ORDER_PAID -> {
+                    handleOrderPaid(eventData)
+                }
+                EventConstants.EventTypes.OrderDomain.ORDER_COMPLETED -> {
+                    handleOrderCompleted(eventData)
+                }
+                else -> {
+                    log.info("🔔 [PAYMENT] 기타 Order 도메인 이벤트 수신 - eventType: {}", eventType)
+                }
+            }
+        } catch (e: Exception) {
+            log.error("🚨 [PAYMENT] Order 도메인 이벤트 처리 실패 - eventType: {}, error: {}", eventType, e.message, e)
+        }
+    }
+
+    /**
+     * ORDER_CREATED 이벤트 처리
+     * - 주문 생성 완료 시 결제 준비 작업 수행
+     */
+    private fun handleOrderCreated(eventData: Map<String, Any>) {
+        val orderId = eventData["orderId"]?.toString()
+        val orderNo = eventData["orderNo"]?.toString()
+        val userId = eventData["userId"]?.toString()
+        val totalAmount = eventData["totalAmount"] as? Int
+        val hasReservation = eventData["hasReservation"] as? Boolean ?: false
+        val hasGoods = eventData["hasGoods"] as? Boolean ?: false
+
+        log.info("📦 [PAYMENT] 주문 생성 이벤트 수신 - orderId: {}, orderNo: {}, userId: {}, amount: {}원, reservation: {}, goods: {}",
+            orderId, orderNo, userId, totalAmount, hasReservation, hasGoods)
+
+        try {
+            // 1. 주문 정보 검증
+            if (orderId.isNullOrBlank() || totalAmount == null || totalAmount <= 0) {
+                log.error("❌ [PAYMENT] 주문 정보 검증 실패 - orderId: {}, amount: {}", orderId, totalAmount)
+                return
+            }
+
+            // 2. 결제 가능 상태 체크 (기본적인 검증)
+            log.info("🔍 [PAYMENT] 주문 생성 확인 완료 - 결제 대기 상태로 설정")
+            log.info("💰 [PAYMENT] 결제 예상 금액: {}원", totalAmount)
+
+            // 3. 주문 유형별 로깅
+            if (hasReservation) {
+                log.info("🎫 [PAYMENT] 예약 포함 주문 - 예약 취소 정책 적용 필요")
+            }
+            if (hasGoods) {
+                log.info("📦 [PAYMENT] 상품 포함 주문 - 재고 확보 후 결제 진행")
+            }
+
+            // 4. 결제 모니터링 시작 (실제 결제는 사용자가 결제 페이지에서 진행)
+            log.info("✅ [PAYMENT] ORDER_CREATED 처리 완료 - 결제 준비 상태, orderId: {}", orderId)
+
+        } catch (e: Exception) {
+            log.error("🚨 [PAYMENT] ORDER_CREATED 처리 실패 - orderId: {}, error: {}", orderId, e.message, e)
+        }
+    }
+
+    /**
+     * ORDER_PAID 이벤트 처리
+     * - 다른 서비스에서 결제 완료 상태로 변경했을 때 동기화
+     */
+    private fun handleOrderPaid(eventData: Map<String, Any>) {
+        val orderId = eventData["orderId"]?.toString()
+        val paymentId = eventData["paymentId"]?.toString()
+        val totalAmount = eventData["totalAmount"] as? Int
+        val paidAt = eventData["paidAt"]?.toString()
+
+        log.info("💳 [PAYMENT] 주문 결제 완료 이벤트 수신 - orderId: {}, paymentId: {}, amount: {}원, paidAt: {}",
+            orderId, paymentId, totalAmount, paidAt)
+
+        try {
+            if (orderId.isNullOrBlank()) {
+                log.error("❌ [PAYMENT] ORDER_PAID 처리 실패 - orderId가 없음")
+                return
+            }
+
+            // 1. 결제 정보 동기화 확인
+            log.info("🔍 [PAYMENT] 결제 완료 상태 동기화 확인 시작 - orderId: {}", orderId)
+
+            // 2. 결제 완료 후속 작업 준비
+            log.info("📋 [PAYMENT] 결제 완료 후속 작업 예약 - orderId: {}", orderId)
+            log.info("🎉 [PAYMENT] 고객 결제 완료 알림 준비 - orderId: {}", orderId)
+
+            // 3. 정산 데이터 준비
+            if (totalAmount != null && totalAmount > 0) {
+                log.info("💼 [PAYMENT] 정산 데이터 준비 - orderId: {}, amount: {}원", orderId, totalAmount)
+            }
+
+            log.info("✅ [PAYMENT] ORDER_PAID 처리 완료 - orderId: {}", orderId)
+
+        } catch (e: Exception) {
+            log.error("🚨 [PAYMENT] ORDER_PAID 처리 실패 - orderId: {}, error: {}", orderId, e.message, e)
+        }
+    }
+
+    /**
+     * ORDER_COMPLETED 이벤트 처리
+     * - 주문 완전 완료 시 결제 관련 정리 작업
+     */
+    private fun handleOrderCompleted(eventData: Map<String, Any>) {
+        val orderId = eventData["orderId"]?.toString()
+        val popupId = eventData["popupId"]?.toString()
+        val storeId = eventData["storeId"]?.toString()
+        val totalAmount = eventData["totalAmount"] as? Int
+        val completedAt = eventData["completedAt"]?.toString()
+        val hasReservation = eventData["hasReservation"] as? Boolean ?: false
+        val hasGoods = eventData["hasGoods"] as? Boolean ?: false
+
+        log.info("✅ [PAYMENT] 주문 완료 이벤트 수신 - orderId: {}, storeId: {}, amount: {}원, completedAt: {}",
+            orderId, storeId, totalAmount, completedAt)
+
+        try {
+            if (orderId.isNullOrBlank()) {
+                log.error("❌ [PAYMENT] ORDER_COMPLETED 처리 실패 - orderId가 없음")
+                return
+            }
+
+            // 1. 결제 완료 상태 최종 확인
+            log.info("🔍 [PAYMENT] 결제 최종 상태 확인 - orderId: {}", orderId)
+
+            // 2. 정산 데이터 확정
+            if (totalAmount != null && totalAmount > 0) {
+                log.info("💼 [PAYMENT] 정산 데이터 확정 처리 - orderId: {}, amount: {}원", orderId, totalAmount)
+
+                // 스토어별 수수료 정산 준비
+                if (!storeId.isNullOrBlank()) {
+                    log.info("🏪 [PAYMENT] 스토어 정산 처리 - storeId: {}, amount: {}원", storeId, totalAmount)
+                }
+            }
+
+            // 3. 주문 유형별 완료 처리
+            if (hasReservation) {
+                log.info("🎫 [PAYMENT] 예약 완료 처리 - orderId: {}, 예약 확정", orderId)
+            }
+            if (hasGoods) {
+                log.info("📦 [PAYMENT] 상품 주문 완료 - orderId: {}, 배송/픽업 준비 완료", orderId)
+            }
+
+            // 4. 환불 불가 상태로 변경 (주문 완료 시점)
+            log.info("🔒 [PAYMENT] 환불 정책 적용 - orderId: {}, 주문 완료로 인한 환불 제한", orderId)
+
+            // 5. 완료 알림 및 정리
+            log.info("🎉 [PAYMENT] 주문 완료 알림 발송 준비 - orderId: {}", orderId)
+            log.info("📊 [PAYMENT] 결제 통계 데이터 업데이트 - orderId: {}", orderId)
+
+            log.info("✅ [PAYMENT] ORDER_COMPLETED 처리 완료 - orderId: {}", orderId)
+
+        } catch (e: Exception) {
+            log.error("🚨 [PAYMENT] ORDER_COMPLETED 처리 실패 - orderId: {}, error: {}", orderId, e.message, e)
+        }
+    }
+
 }

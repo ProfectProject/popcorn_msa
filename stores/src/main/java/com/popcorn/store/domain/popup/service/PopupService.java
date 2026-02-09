@@ -207,15 +207,27 @@ public class PopupService {
 	 */
 	@Transactional(readOnly = true)
 	public SessionPriceResponse getSessionPrice(UUID sessionId) {
-		// 세션 정보 조회
+		// ⚡ 최적화: 세션 정보 조회
 		PopupScheduleView schedule = popupScheduleQueryRepository.findByScheduleId(sessionId);
 		if (schedule == null) {
 			throw PopupException.popupNotFound();
 		}
 
-		// 팝업 상세 정보 조회 (제목 등 추가 정보)
-		PopupDetailQuery popupQuery = PopupDetailQuery.of(schedule.getPopupId());
-		PopupDetailResponse popupDetail = popupDetailCacheService.getPopupDetailCached(popupQuery);
+		// ⚡ 최적화: 가격 조회용으로 간소화된 응답 (팝업 상세 조회 제거)
+		// 팝업 제목은 캐시 미스 시 성능 저하를 일으킬 수 있으므로 기본값 사용
+		String sessionName = "팝업 세션"; // 기본값으로 성능 최적화
+
+		// 캐시에서 팝업 정보 조회 시도 (캐시 히트 시에만 제목 사용)
+		try {
+			PopupDetailQuery popupQuery = PopupDetailQuery.of(schedule.getPopupId());
+			PopupDetailResponse popupDetail = popupDetailCacheService.getPopupDetailCached(popupQuery);
+			if (popupDetail != null && popupDetail.getTitle() != null) {
+				sessionName = popupDetail.getTitle() + " - 세션";
+			}
+		} catch (Exception e) {
+			// 캐시 조회 실패 시 기본값 유지 (성능 우선)
+			log.debug("⚠️ 팝업 상세 정보 조회 실패, 기본 세션명 사용: {}", e.getMessage());
+		}
 
 		// 사용 가능한 좌석 계산
 		Integer availableSeats = schedule.getRemainingCapacity();
@@ -225,7 +237,7 @@ public class PopupService {
 		return SessionPriceResponse.builder()
 				.sessionId(sessionId)
 				.popupId(schedule.getPopupId())
-				.sessionName(popupDetail.getTitle() + " - 세션")
+				.sessionName(sessionName)
 				.price(schedule.getPrice())
 				.originalPrice(schedule.getPrice()) // 할인 기능이 없으므로 동일
 				.discountRate(0) // 기본 할인율 0%

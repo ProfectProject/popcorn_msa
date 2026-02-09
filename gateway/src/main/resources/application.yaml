@@ -276,7 +276,7 @@ resilience4j:
         sliding-window-size: 100
         minimum-number-of-calls: 30
         failure-rate-threshold: 20
-        slow-call-duration-threshold: 300ms
+        slow-call-duration-threshold: 2000ms  # 300ms → 2000ms로 증가
         slow-call-rate-threshold: 40
         wait-duration-in-open-state: 5s
         permitted-number-of-calls-in-half-open-state: 10
@@ -288,7 +288,7 @@ resilience4j:
         sliding-window-size: 100
         minimum-number-of-calls: 30
         failure-rate-threshold: 20
-        slow-call-duration-threshold: 300ms
+        slow-call-duration-threshold: 3000ms  # 300ms → 3000ms (3초로 증가)
         slow-call-rate-threshold: 40
         wait-duration-in-open-state: 5s
         permitted-number-of-calls-in-half-open-state: 10
@@ -345,10 +345,10 @@ resilience4j:
   timelimiter:
     instances:
       cbUserService:
-        timeout-duration: 2000ms
+        timeout-duration: 5000ms  # 2000ms → 5000ms로 증가
         cancel-running-future: true
       cbStoreService:
-        timeout-duration: 2000ms
+        timeout-duration: 8000ms
       cbOrderService:
         timeout-duration: 8000ms  # 주문 처리는 시간이 오래 걸릴 수 있음 (3000ms → 8000ms 증가)
       cbPaymentService:

@@ -225,7 +225,7 @@ class PaymentCommandCoroutineService(
     @Transactional(readOnly = true)
     suspend fun getLatestPaymentByOrderId(orderId: UUID): PaymentDetailResult {
         val payment = paymentRepository.findFirstByOrderIdAndDeletedAtIsNullOrderByCreatedAtDesc(orderId)
-            ?: throw PaymentException.paymentNotFound()
+            ?: throw PaymentException.paymentNotFound("결제 정보가 아직 생성되지 않았거나 찾을 수 없습니다. orderId: $orderId")
 
         return PaymentDetailResult(
             paymentId = payment.id,
@@ -320,8 +320,8 @@ class PaymentCommandCoroutineService(
                     paymentKey = payment.paymentKey,
                     approvedAt = payment.approvedAt ?: java.time.LocalDateTime.now(),
                     customerId = orderInfo.customerId,   // 실제 사용자 ID
-                    popupId = orderInfo.popupId, // Order에서 받은 실제 popupId
-                    storeId = orderInfo.storeId, // Order에서 받은 실제 storeId
+                    popupId = orderInfo.popupId?.toString(), // Order에서 받은 실제 popupId
+                    storeId = orderInfo.storeId?.toString(), // Order에서 받은 실제 storeId
                     hasReservation = !orderInfo.hasGoods, // 굿즈가 없으면 예약만 있음
                     hasGoods = orderInfo.hasGoods,
                     lines = emptyList() // OrderInfoResponse에는 lines가 없음
