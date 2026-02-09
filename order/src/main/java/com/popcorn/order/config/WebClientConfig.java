@@ -63,6 +63,8 @@ public class WebClientConfig {
                 .defaultHeader("Content-Type", "application/json")
                 .defaultHeader("Accept", "application/json")
                 .defaultHeader("User-Agent", "Order-Service/1.0.0")
+                .defaultHeader("X-Internal-Service", "order-service")
+                .defaultHeader("X-Internal-Call", "true")
                 .filter(eventHttpLoggingFilter)
                 // 요청/응답 로깅 (개발환경용)
                 .filter((request, next) -> {

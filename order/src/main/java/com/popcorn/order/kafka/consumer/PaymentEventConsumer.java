@@ -26,27 +26,38 @@ public class PaymentEventConsumer {
 
     @KafkaListener(topics = "payment-events", groupId = "order-payment-cg")
     public void storeReserveConsumer(String kafkaMessage){
-        log.info("카프카 메세지-PaymentEventConsumer:{}",kafkaMessage);
+        log.info("🔔 카프카 메세지 수신 - PaymentEventConsumer: {}", kafkaMessage);
 
         Map<Object, Object> map = new HashMap<>();
         ObjectMapper mapper = new ObjectMapper();
         try {
             map = mapper.readValue(kafkaMessage, new TypeReference<Map<Object, Object>>() {
             });
+            log.info("🔍 파싱된 메시지 맵: {}", map);
         } catch (JsonProcessingException e) {
-            e.printStackTrace();
+            log.error("❌ JSON 파싱 실패: {}", e.getMessage(), e);
+            return;
         }
-
-        log.info("카프카 orderId={} , eventType={}",(String)map.get("orderId"),(String)map.get("eventType"));
 
         String eventType = (String)map.get("eventType");
         String orderIdRaw = (String)map.get("orderId");
 
-        /*if (orderIdRaw  == null || orderIdRaw .isBlank()) {
-            return null;
-        }*/
+        log.info("📋 추출된 값들 - orderId: '{}' (null={}), eventType: '{}' (null={})",
+                orderIdRaw, orderIdRaw == null, eventType, eventType == null);
 
-        UUID orderId = UUID.fromString(orderIdRaw);
+        if (orderIdRaw == null || orderIdRaw.isBlank()) {
+            log.warn("⚠️ Kafka 메시지에서 orderId가 null 또는 비어있음 - eventType: {}, 전체 맵: {}", eventType, map);
+            return;
+        }
+
+        UUID orderId;
+        try {
+            orderId = UUID.fromString(orderIdRaw);
+            log.info("✅ orderId UUID 파싱 성공: {}", orderId);
+        } catch (IllegalArgumentException e) {
+            log.error("❌ orderId UUID 파싱 실패: '{}' - error: {}", orderIdRaw, e.getMessage());
+            return;
+        }
         
 
         switch (eventType) {
