@@ -40,6 +40,13 @@ public class OrderSummary extends BaseEntity {
     @Column(name = "reservation_open_at")
     private LocalDateTime reservationOpenAt;
 
+    @Column(name = "owner_id")
+    private Long ownerId;
+
+    public void setOwnerId(Long ownerId) {
+        this.ownerId = ownerId;
+    }
+
     // 예약 KPI
     @Column(name = "reservation_total_orders", nullable = false)
     private int reservationTotalOrders;

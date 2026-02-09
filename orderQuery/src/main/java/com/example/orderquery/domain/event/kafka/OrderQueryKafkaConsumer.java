@@ -8,7 +8,9 @@ import org.springframework.messaging.handler.annotation.Header;
 import org.springframework.stereotype.Component;
 import org.springframework.util.StringUtils;
 
+import com.fasterxml.jackson.core.JsonProcessingException;
 import com.fasterxml.jackson.core.type.TypeReference;
+import com.fasterxml.jackson.databind.JsonNode;
 import com.fasterxml.jackson.databind.ObjectMapper;
 
 import lombok.RequiredArgsConstructor;
@@ -21,6 +23,7 @@ public class OrderQueryKafkaConsumer {
 
     private final ObjectMapper objectMapper;
     private final OrderEventProcessor orderEventProcessor;
+    private static final TypeReference<Map<String, Object>> MAP_TYPE = new TypeReference<>() {};
 
     @KafkaListener(
             topics = {
@@ -38,10 +41,18 @@ public class OrderQueryKafkaConsumer {
         }
 
         try {
-            Map<String, Object> envelope = objectMapper.readValue(rawMessage, new TypeReference<>() {});
+            Map<String, Object> envelope = parseEnvelope(rawMessage);
             orderEventProcessor.processEvent(topic, envelope);
         } catch (Exception e) {
             log.error("Failed to handle Kafka message from topic {}: {}", topic, e.getMessage(), e);
         }
+    }
+
+    private Map<String, Object> parseEnvelope(String rawMessage) throws JsonProcessingException {
+        JsonNode rootNode = objectMapper.readTree(rawMessage);
+        if (rootNode.isTextual()) {
+            rootNode = objectMapper.readTree(rootNode.textValue());
+        }
+        return objectMapper.convertValue(rootNode, MAP_TYPE);
     }
 }

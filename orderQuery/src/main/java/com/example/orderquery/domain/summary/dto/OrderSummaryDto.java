@@ -3,6 +3,8 @@ package com.example.orderquery.domain.summary.dto;
 import java.time.LocalDateTime;
 import java.util.UUID;
 
+import com.fasterxml.jackson.annotation.JsonIgnore;
+
 import lombok.*;
 
 @Getter
@@ -12,6 +14,9 @@ public class OrderSummaryDto {
 
     private final UUID popupId;
     private final UUID storeId;
+
+    @JsonIgnore
+    private final Long ownerId;
 
     private final String popupTitle;
     private final String popupStatus;
@@ -29,4 +34,3 @@ public class OrderSummaryDto {
 
     private final LocalDateTime updatedAt;
 }
-

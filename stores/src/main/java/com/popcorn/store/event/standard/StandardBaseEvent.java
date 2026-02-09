@@ -62,6 +62,11 @@ public abstract class StandardBaseEvent {
     private Long userId;
 
     /**
+     * 오너 ID
+     */
+    private Long ownerId;
+
+    /**
      * 상점 ID
      */
     private UUID storeId;
@@ -116,6 +121,7 @@ public abstract class StandardBaseEvent {
         if (orderId != null) map.put("orderId", orderId.toString());
         if (orderNo != null) map.put("orderNo", orderNo);
         if (userId != null) map.put("userId", userId.toString());
+        if (ownerId != null) map.put("ownerId", ownerId.toString());
         if (storeId != null) map.put("storeId", storeId.toString());
         if (popupId != null) map.put("popupId", popupId.toString());
         if (hasReservation != null) map.put("hasReservation", hasReservation.toString());
@@ -145,6 +151,7 @@ public abstract class StandardBaseEvent {
         if (producer != null) map.put("producer", producer);
         if (popupId != null) map.put("popupId", popupId.toString());
         if (storeId != null) map.put("storeId", storeId.toString());
+        if (ownerId != null) map.put("ownerId", ownerId.toString());
         return map;
     }
 }

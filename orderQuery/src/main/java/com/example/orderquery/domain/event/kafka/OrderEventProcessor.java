@@ -19,6 +19,7 @@ import com.example.orderquery.domain.itemView.entity.OrderStatus;
 import com.example.orderquery.domain.itemView.entity.PaymentStatus;
 import com.example.orderquery.domain.itemView.service.OrderItemViewUpsertService;
 import com.example.orderquery.domain.itemView.service.OrderItemViewUpdateService;
+import com.example.orderquery.domain.summary.entity.EventType;
 import com.example.orderquery.domain.summary.service.OrderSummaryDeltaService;
 import com.example.orderquery.domain.summary.service.PopupSummaryUpsertService;
 import com.example.orderquery.domain.itemView.service.CheckInItemUpsertService;
@@ -67,8 +68,9 @@ public class OrderEventProcessor {
             case "PAYMENT_FAILED" -> handlePaymentStatus(payload, PaymentStatus.FAILED, null);
             case "PAYMENT_USER_CANCELLED" -> handlePaymentStatus(payload, PaymentStatus.CANCELLED, null);
             case "CHECKIN_CREATED" -> handleCheckInCreated(eventId, payload, eventTime);
-            case "POPUP_CREATED" -> handlePopupLifecycle(payload, true);
-            case "POPUP_STATUS_UPDATED", "POPUP_INFO_UPDATED" -> handlePopupLifecycle(payload, false);
+            case "POPUP_CREATED" -> handlePopupLifecycle(eventId, payload, EventType.POPUP_CREATED);
+            case "POPUP_STATUS_UPDATED" -> handlePopupLifecycle(eventId, payload, EventType.POPUP_STATUS_UPDATED);
+            case "POPUP_INFO_UPDATED" -> handlePopupLifecycle(eventId, payload, EventType.POPUP_INFO_UPDATED);
             default -> log.debug("Unsupported event type received: {}", rawEventType);
         }
     }
@@ -177,7 +179,7 @@ public class OrderEventProcessor {
         checkInItemUpsertService.updateFromCheckIn(storeId, popupId, orderGoodsId, checkinAt);
     }
 
-    private void handlePopupLifecycle(Map<String, Object> payload, boolean isCreate) {
+    private void handlePopupLifecycle(UUID eventId, Map<String, Object> payload, EventType eventType) {
         UUID popupId = parseUUID(payload, "popupId", "popup_id");
         UUID storeId = parseUUID(payload, "storeId", "store_id");
         String title = getString(payload, "title");
@@ -186,19 +188,21 @@ public class OrderEventProcessor {
         String addressDetail = getString(payload, "addressDetail", "address_detail");
         LocalDateTime reservationOpenAt = parseLocalDateTime(payload, "reservationOpenAt", "reservation_open_at");
 
+        Long ownerId = parseLong(payload, "ownerId", "owner_id");
+
         if (popupId == null || storeId == null) {
             log.warn("Popup event ignored: missing identifiers (popupId={}, storeId={})", popupId, storeId);
             return;
         }
 
-        if (isCreate) {
+        if (eventType == EventType.POPUP_CREATED) {
             popupSummaryUpsertService.createFromPopup(
-                    popupId, storeId, null, title, status, addressRoad, addressDetail, reservationOpenAt);
+                    eventId, eventType, popupId, storeId, ownerId, title, status, addressRoad, addressDetail, reservationOpenAt);
             return;
         }
 
         popupSummaryUpsertService.updateFromPopup(
-                popupId, storeId, null, title, status, addressRoad, addressDetail, reservationOpenAt);
+                eventId, eventType, popupId, storeId, ownerId, title, status, addressRoad, addressDetail, reservationOpenAt);
     }
 
     // --- helpers ---

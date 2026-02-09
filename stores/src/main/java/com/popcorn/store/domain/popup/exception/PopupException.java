@@ -28,4 +28,8 @@ public class PopupException extends BaseException {
     public static PopupException missingOrderId() {
         return new PopupException(PopupResponseCode.MISSING_ORDER_ID);
     }
+
+    public static PopupException invalidScheduleTime() {
+        return new PopupException(PopupResponseCode.INVALID_SCHEDULE_TIME);
+    }
 }

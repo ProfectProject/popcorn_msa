@@ -91,6 +91,7 @@ public class OwnerPopupService {
                     .producer("store-service")
                     .storeId(popup.getStoreId())
                     .popupId(popup.getId())
+                    .ownerId(popup.getCreatedBy())
                     .title(popup.getTitle())
                     .status(popup.getStatus() != null ? popup.getStatus().name() : null)
                     .reservationOpenAt(popup.getReservationOpenAt())
@@ -218,7 +219,7 @@ public class OwnerPopupService {
         }
 
         eventPublisher.publishEvent(new PopupStatusUpdatedEvent(ownerId, updatedPopup));
-        queuePopupStatusUpdatedOutboxEntry(updatedPopup, fromStatus, request.getStatus());
+        queuePopupStatusUpdatedOutboxEntry(updatedPopup, fromStatus, request.getStatus(), ownerId);
 
         // 상태 변경 후 상세 캐시 무효화
         popupDetailCacheManager.evictDetail(updatedPopup.getId());
@@ -413,6 +414,15 @@ public class OwnerPopupService {
         }
     }
 
+    private void validateScheduleTimes(LocalDateTime startAt, LocalDateTime endAt) {
+        if (startAt == null || endAt == null) {
+            return;
+        }
+        if (!startAt.isBefore(endAt)) {
+            throw PopupException.invalidScheduleTime();
+        }
+    }
+
     private void validateStatusRequest(UpdatePopupStatusRequest request) {
         if (request == null || request.getStatus() == null) {
             throw new PopupException(PopupResponseCode.INVALID_REQUEST);
@@ -430,6 +440,7 @@ public class OwnerPopupService {
             Long ownerId) {
         LocalDateTime now = LocalDateTime.now();
         for (com.popcorn.store.domain.popup.dto.owner.request.CreatePopupScheduleRequest schedule : schedules) {
+            validateScheduleTimes(schedule.getStartAt(), schedule.getEndAt());
             UUID scheduleId = UUID.randomUUID();
             ownerPopupScheduleRepository.insertSchedule(
                     scheduleId,
@@ -462,6 +473,7 @@ public class OwnerPopupService {
         List<CreatePopupScheduleRequest> createSchedules = request.getCreateSchedules();
         if (createSchedules != null && !createSchedules.isEmpty()) {
             for (com.popcorn.store.domain.popup.dto.owner.request.CreatePopupScheduleRequest schedule : createSchedules) {
+                validateScheduleTimes(schedule.getStartAt(), schedule.getEndAt());
                 UUID scheduleId = UUID.randomUUID();
                 ownerPopupScheduleRepository.insertSchedule(
                         scheduleId,
@@ -491,6 +503,7 @@ public class OwnerPopupService {
         List<UpdatePopupScheduleRequest> updateSchedules = request.getUpdateSchedules();
         if (updateSchedules != null && !updateSchedules.isEmpty()) {
             for (com.popcorn.store.domain.popup.dto.owner.request.UpdatePopupScheduleRequest schedule : updateSchedules) {
+                validateScheduleTimes(schedule.getStartAt(), schedule.getEndAt());
                 int updated = ownerPopupScheduleRepository.updateSchedule(
                         schedule.getScheduleId(),
                         popupId,
@@ -559,13 +572,14 @@ public class OwnerPopupService {
         }
     }
 
-    private void queuePopupStatusUpdatedOutboxEntry(Popup popup, PopupStatus fromStatus, PopupStatus toStatus) {
+    private void queuePopupStatusUpdatedOutboxEntry(Popup popup, PopupStatus fromStatus, PopupStatus toStatus, Long ownerId) {
         try {
             StandardPopupStatusUpdatedEvent event = StandardPopupStatusUpdatedEvent.builder()
                     .eventType(StandardEventType.POPUP_STATUS_UPDATED)
                     .producer("store-service")
                     .storeId(popup.getStoreId())
                     .popupId(popup.getId())
+                    .ownerId(ownerId)
                     .fromStatus(fromStatus.name())
                     .toStatus(toStatus.name())
                     .build();
