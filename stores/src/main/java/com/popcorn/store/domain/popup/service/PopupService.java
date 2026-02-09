@@ -58,14 +58,6 @@ public class PopupService {
 		return popupScheduleQueryService.getProductSessions(normalizedQuery);
 	}
 
-	@Transactional
-	public PopupScheduleCapacity reservationPopupSchedule(UUID popupId, UUID scheduleId, Integer quantity) {
-		PopupScheduleCapacity capacity = popupScheduleReservationRepository.reserveCapacity(popupId, scheduleId, quantity);
-		if (capacity == null) {
-			throw PopupException.insufficientReservationCapacity();
-		}
-		return capacity;
-	}
 
 	@Transactional
 	public PopupScheduleCapacity cancelPopupScheduleReservation(UUID scheduleId, Integer quantity) {

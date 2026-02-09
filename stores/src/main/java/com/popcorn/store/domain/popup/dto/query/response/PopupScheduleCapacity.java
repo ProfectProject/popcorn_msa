@@ -16,6 +16,5 @@ public class PopupScheduleCapacity {
     private UUID scheduleId;
     private Integer capacity;
     private Integer remainingCapacity;
-    private Integer reservationCapacity;
 
 }

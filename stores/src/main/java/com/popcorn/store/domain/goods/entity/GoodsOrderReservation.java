@@ -31,7 +31,7 @@ public class GoodsOrderReservation {
 
     @Column(name = "order_no")
     private String orderNo;
-
+ 
     @Column(name = "popup_id")
     private UUID popupId;
 

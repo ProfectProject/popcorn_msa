@@ -177,6 +177,15 @@ public class InventoryRedisHoldService {
         return interpretReleaseResult(result);
     }
 
+    public boolean hasHold(UUID orderId) {
+        if (orderId == null) {
+            return false;
+        }
+        String lookupKey = buildLookupKey(orderId);
+        String popupIdValue = redisTemplate.opsForValue().get(lookupKey);
+        return popupIdValue != null && !popupIdValue.isBlank();
+    }
+
     private void registerPopupLookup(UUID orderId, UUID popupId) {
         if (orderId == null || popupId == null) {
             return;

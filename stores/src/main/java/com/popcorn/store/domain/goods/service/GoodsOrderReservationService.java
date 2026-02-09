@@ -10,6 +10,7 @@ import org.springframework.transaction.annotation.Transactional;
 
 import java.time.LocalDateTime;
 import java.util.List;
+import java.util.Optional;
 import java.util.UUID;
 
 @Service
@@ -60,6 +61,42 @@ public class GoodsOrderReservationService {
     @Transactional(readOnly = true)
     public List<GoodsOrderReservation> findByOrderIdAndType(UUID orderId, ReservationType reservationType) {
         return reservationRepository.findByOrderIdAndReservationType(orderId, reservationType);
+    }
+
+    @Transactional(readOnly = true)
+    public Optional<GoodsOrderReservation> findLatestGoodsReservation(UUID orderId, UUID goodsId) {
+        if (orderId == null || goodsId == null) {
+            return Optional.empty();
+        }
+        return reservationRepository.findFirstByOrderIdAndGoodsIdAndReservationTypeOrderByCreatedAtDesc(
+                orderId, goodsId, ReservationType.GOODS);
+    }
+
+    @Transactional(readOnly = true)
+    public Optional<GoodsOrderReservation> findLatestScheduleReservation(UUID orderId, UUID scheduleId) {
+        if (orderId == null || scheduleId == null) {
+            return Optional.empty();
+        }
+        return reservationRepository.findFirstByOrderIdAndScheduleIdAndReservationTypeOrderByCreatedAtDesc(
+                orderId, scheduleId, ReservationType.SCHEDULE);
+    }
+
+    @Transactional(readOnly = true)
+    public Optional<GoodsOrderReservation> findExistingGoodsReservation(UUID orderId, UUID popupId, UUID goodsId) {
+        if (orderId == null || popupId == null || goodsId == null) {
+            return Optional.empty();
+        }
+        return reservationRepository.findFirstByOrderIdAndPopupIdAndGoodsIdAndReservationTypeOrderByCreatedAtDesc(
+                orderId, popupId, goodsId, ReservationType.GOODS);
+    }
+
+    @Transactional(readOnly = true)
+    public Optional<GoodsOrderReservation> findExistingScheduleReservation(UUID orderId, UUID popupId, UUID scheduleId) {
+        if (orderId == null || popupId == null || scheduleId == null) {
+            return Optional.empty();
+        }
+        return reservationRepository.findFirstByOrderIdAndPopupIdAndScheduleIdAndReservationTypeOrderByCreatedAtDesc(
+                orderId, popupId, scheduleId, ReservationType.SCHEDULE);
     }
 
     @Transactional

@@ -25,6 +25,7 @@ import java.util.ArrayList;
 import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
+import java.util.Optional;
 import java.util.UUID;
 import java.util.stream.Collectors;
 
@@ -96,7 +97,27 @@ public class OrderCreatedReservationService {
             return;
         }
 
-        List<GoodsHoldItem> holdItems = aggregated.entrySet().stream()
+        Map<UUID, Integer> deduped = new LinkedHashMap<>();
+        for (Map.Entry<UUID, Integer> entry : aggregated.entrySet()) {
+            if (entry.getValue() == null || entry.getValue() <= 0) {
+                continue;
+            }
+            UUID goodsId = entry.getKey();
+            Optional<GoodsOrderReservation> existing = reservationService.findExistingGoodsReservation(
+                    event.getOrderId(), popupId, goodsId);
+            if (existing.isPresent()) {
+                log.info("중복 GOODS 예약 발견(사전) - orderId={}, popupId={}, goodsId={}",
+                        event.getOrderId(), popupId, goodsId);
+                continue;
+            }
+            deduped.put(goodsId, entry.getValue());
+        }
+        if (deduped.isEmpty()) {
+            log.info("모든 goods 항목이 이미 예약됨 - orderId={}", event.getOrderId());
+            return;
+        }
+
+        List<GoodsHoldItem> holdItems = deduped.entrySet().stream()
                 .map(entry -> new GoodsHoldItem(entry.getKey(), entry.getValue()))
                 .collect(Collectors.toList());
 
@@ -105,13 +126,13 @@ public class OrderCreatedReservationService {
         try {
             HoldResult holdResult = inventoryHoldService.holdGoods(event.getOrderId(), popupId, holdItems);
             if (!holdResult.isSuccess()) {
-                handleHoldFailure(event, aggregated, popupId, holdResult.getDetail());
+                handleHoldFailure(event, deduped, popupId, holdResult.getDetail());
                 return;
             }
             handleHoldSuccess(event, popupId, holdItems);
         } catch (Exception e) {
             log.error("ORDER_CREATED goods HOLD 실패 - orderId={} error={}", event.getOrderId(), e.getMessage(), e);
-            handleHoldFailure(event, aggregated, popupId, e.getMessage());
+            handleHoldFailure(event, deduped, popupId, e.getMessage());
         }
     }
 
@@ -137,6 +158,14 @@ public class OrderCreatedReservationService {
         UUID scheduleId = scheduleLine.getScheduleId();
         int quantity = scheduleLine.getQty();
         scheduleInventoryApiService.ensureScheduleKey(popupId, scheduleId);
+
+        Optional<GoodsOrderReservation> existingScheduleReservation =
+                reservationService.findExistingScheduleReservation(event.getOrderId(), popupId, scheduleId);
+        if (existingScheduleReservation.isPresent()) {
+            log.info("중복 SCHEDULE 예약 발견(사전) - orderId={}, popupId={}, scheduleId={}",
+                    event.getOrderId(), popupId, scheduleId);
+            return;
+        }
 
         HoldResult holdResult;
         try {

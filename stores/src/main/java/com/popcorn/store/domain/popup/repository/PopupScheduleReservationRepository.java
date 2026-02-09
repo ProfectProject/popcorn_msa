@@ -18,38 +18,17 @@ public class PopupScheduleReservationRepository {
 
 	private final NamedParameterJdbcTemplate jdbcTemplate;
 
-	public PopupScheduleCapacity reserveCapacity(UUID popupId, UUID scheduleId, int quantity) {
-		String sql = """
-			UPDATE popup_schedules
-			   SET reservation_capacity = reservation_capacity + 1,
-			       updated_at = now()
-			 WHERE schedule_id = :scheduleId
-			   AND popup_id = :popupId
-			   AND deleted_at IS NULL
-			   AND is_active IS TRUE
-			   AND (remaining_capacity - :quantity - reservation_capacity) >= 0
-			RETURNING schedule_id, capacity, remaining_capacity, reservation_capacity
-			""";
-
-		MapSqlParameterSource params = new MapSqlParameterSource()
-			.addValue("popupId", popupId)
-			.addValue("scheduleId", scheduleId)
-			.addValue("quantity", quantity);
-
-		return jdbcTemplate.query(sql, params, rs -> rs.next() ? mapCapacity(rs) : null);
-	}
-
 	public PopupScheduleCapacity cancelCapacity(UUID scheduleId, int quantity) {
 		String sql = """
 			UPDATE popup_schedules
 			   SET remaining_capacity = remaining_capacity + :quantity,
-			       reservation_capacity = reservation_capacity - :quantity,
 			       updated_at = now()
 			 WHERE schedule_id = :scheduleId
 			   AND deleted_at IS NULL
 			   AND is_active IS TRUE
-			   AND reservation_capacity >= :quantity
-			RETURNING schedule_id, capacity, remaining_capacity, reservation_capacity
+			   AND (capacity - remaining_capacity) >= :quantity
+			   AND (remaining_capacity + :quantity) <= capacity
+			RETURNING schedule_id, capacity, remaining_capacity
 			""";
 
 		MapSqlParameterSource params = new MapSqlParameterSource()
@@ -60,34 +39,20 @@ public class PopupScheduleReservationRepository {
 	}
 
 	public PopupScheduleCapacity failCapacity(UUID scheduleId, int quantity) {
-		String sql = """
-				UPDATE popup_schedules
-					SET reservation_capacity = reservation_capacity - :quantity,
-				       updated_at = now()
-				 WHERE schedule_id = :scheduleId
-				   AND deleted_at IS NULL
-				   AND is_active IS TRUE
-				   AND reservation_capacity >= :quantity
-				RETURNING schedule_id, capacity, remaining_capacity, reservation_capacity
-				""";
-		MapSqlParameterSource params = new MapSqlParameterSource()
-				.addValue("scheduleId", scheduleId)
-				.addValue("quantity", quantity);
-		return jdbcTemplate.query(sql, params, rs -> rs.next() ? mapCapacity(rs) : null);
+		return cancelCapacity(scheduleId, quantity);
 	}
 
 	public PopupScheduleCapacity completeCapacity(UUID scheduleId, int quantity){
 		String sql = """
 				UPDATE popup_schedules
 				   SET remaining_capacity = remaining_capacity - :quantity,
-				       reservation_capacity = reservation_capacity - :quantity,
 				       updated_at = now()
 				 WHERE schedule_id = :scheduleId
 				   AND deleted_at IS NULL
 				   AND is_active IS TRUE
-				   AND (remaining_capacity - :quantity) >= 0
-				   AND reservation_capacity >= :quantity
-				RETURNING schedule_id, capacity, remaining_capacity, reservation_capacity
+				   AND remaining_capacity >= :quantity
+				   AND capacity >= :quantity
+				RETURNING schedule_id, capacity, remaining_capacity
 				""";
 
 		MapSqlParameterSource params = new MapSqlParameterSource()
@@ -101,8 +66,7 @@ public class PopupScheduleReservationRepository {
 		return new PopupScheduleCapacity(
 			UUID.fromString(rs.getString("schedule_id")),
 			rs.getInt("capacity"),
-			rs.getInt("remaining_capacity"),
-			rs.getInt("reservation_capacity")
+			rs.getInt("remaining_capacity")
 		);
 	}
 }

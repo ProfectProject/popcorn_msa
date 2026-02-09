@@ -19,7 +19,5 @@ public interface PopupScheduleView {
 
 	Integer getRemainingCapacity();
 
-	Integer getReservationCapacity();
-
 	Boolean getIsActive();
 }
