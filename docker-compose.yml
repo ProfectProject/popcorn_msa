@@ -1,8 +1,44 @@
 services:
+#  db:
+#    image: postgres:15-alpine
+#    container_name: popcorn-db
+#    environment:
+#      POSTGRES_DB: ${DB_NAME:-popcorn_db}
+#      POSTGRES_USER: ${DB_USERNAME:-postgres}
+#      POSTGRES_PASSWORD: ${DB_PASSWORD:-1234}
+#    ports:
+#      - "5432:5432"
+#      - "5430:5432"
+#    volumes:
+#      - ./V0__init.sql:/docker-entrypoint-initdb.d/V0__init.sql:ro
+#    healthcheck:
+#      test: ["CMD-SHELL", "pg_isready -U ${DB_USERNAME:-postgres} -d ${DB_NAME:-popcorn_db}"]
+#      interval: 10s
+#      timeout: 5s
+#      retries: 5
+#      retries: 5
+#    restart: always
+
+  redis:
+    image: redis:7.2-alpine
+    container_name: popcorn-redis
+    ports:
+      - "6379:6379"
+    command: redis-server --appendonly yes
+    volumes:
+      - redis-data:/data
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 10s
+      timeout: 5s
+      retries: 3
+    restart: always
+
+
   kafka:
-    image: confluentinc/cp-kafka:latest
-    hostname: broker
-    container_name: broker
+    image: confluentinc/cp-kafka:7.6.0
+    hostname: kafka
+    container_name: kafka
     ports:
       - "29092:29092"
       - "9092:9092"
@@ -10,25 +46,66 @@ services:
     environment:
       KAFKA_NODE_ID: 1
       KAFKA_PROCESS_ROLES: broker,controller
-      KAFKA_CONTROLLER_QUORUM_VOTERS: 1@kafka:29093 
+      KAFKA_CONTROLLER_QUORUM_VOTERS: 1@kafka:29093
       KAFKA_LISTENERS: PLAINTEXT://kafka:9092,CONTROLLER://kafka:29093,PLAINTEXT_HOST://0.0.0.0:29092
-      KAFKA_ADVERTISED_LISTENERS: PLAINTEXT://kafka:9092,PLAINTEXT_HOST://localhost:29092 
-      KAFKA_LISTENER_SECURITY_PROTOCOL_MAP: CONTROLLER:PLAINTEXT,PLAINTEXT:PLAINTEXT,PLAINTEXT_HOST:PLAINTEXT 
-      KAFKA_CONTROLLER_LISTENER_NAMES: CONTROLLER 
+      KAFKA_ADVERTISED_LISTENERS: PLAINTEXT://kafka:9092,PLAINTEXT_HOST://localhost:29092
+      KAFKA_LISTENER_SECURITY_PROTOCOL_MAP: CONTROLLER:PLAINTEXT,PLAINTEXT:PLAINTEXT,PLAINTEXT_HOST:PLAINTEXT
+      KAFKA_CONTROLLER_LISTENER_NAMES: CONTROLLER
       KAFKA_INTER_BROKER_LISTENER_NAME: PLAINTEXT
       KAFKA_OFFSETS_TOPIC_REPLICATION_FACTOR: 1
       KAFKA_TRANSACTION_STATE_LOG_REPLICATION_FACTOR: 1
-      CLUSTER_ID: 'ciWo7IWazngRchmPES6q5A==' 
-      KAFKA_LOG_DIRS: '/tmp/kraft-combined-logs' 
-  kafka-ui:
-    image: provectuslabs/kafka-ui:latest
-    ports:
-      - "8090:8080"  
-    environment:
-      KAFKA_CLUSTERS_0_NAME: local 
-      KAFKA_CLUSTERS_0_BOOTSTRAPSERVERS: kafka:9092 
+      CLUSTER_ID: 'ciWo7IWazngRchmPES6q5A=='
+      KAFKA_LOG_DIRS: '/tmp/kraft-combined-logs'
+
+  kafka-connect:
+    image: debezium/connect:2.6
+    container_name: kafka-connect
+    hostname: kafka-connect
     depends_on:
       - kafka
+    ports:
+      - "8093:8083"
+    environment:
+      BOOTSTRAP_SERVERS: "kafka:9092"
+      GROUP_ID: "popcorn-connect"
+
+      # Connect 내부 토픽 (클러스터당 1세트)
+      CONFIG_STORAGE_TOPIC: "connect-configs"
+      OFFSET_STORAGE_TOPIC: "connect-offsets"
+      STATUS_STORAGE_TOPIC: "connect-status"
+
+      # 단일 브로커라 1
+      CONFIG_STORAGE_REPLICATION_FACTOR: "1"
+      OFFSET_STORAGE_REPLICATION_FACTOR: "1"
+      STATUS_STORAGE_REPLICATION_FACTOR: "1"
+
+      # Converter (json으로 단순화)
+      KEY_CONVERTER: "org.apache.kafka.connect.json.JsonConverter"
+      VALUE_CONVERTER: "org.apache.kafka.connect.json.JsonConverter"
+      KEY_CONVERTER_SCHEMAS_ENABLE: "false"
+      VALUE_CONVERTER_SCHEMAS_ENABLE: "false"
+
+      # REST
+      REST_ADVERTISED_HOST_NAME: "kafka-connect"
+      REST_PORT: "9093"
+
+
+  kafka-ui:
+      image: provectuslabs/kafka-ui:latest
+      ports:
+        - "8090:8080"
+      environment:
+        KAFKA_CLUSTERS_0_NAME: local
+        KAFKA_CLUSTERS_0_BOOTSTRAPSERVERS: kafka:9092
+
+        KAFKA_CLUSTERS_0_KAFKACONNECT_0_NAME: connect
+        KAFKA_CLUSTERS_0_KAFKACONNECT_0_ADDRESS: http://kafka-connect:8083
+
+      depends_on:
+        - kafka
+        - kafka-connect
+
 
 volumes:
   redis-data:
+  kafka_data:

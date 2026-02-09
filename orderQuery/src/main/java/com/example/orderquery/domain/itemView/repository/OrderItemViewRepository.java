@@ -11,6 +11,8 @@ import org.springframework.data.repository.query.Param;
 
 import com.example.orderquery.domain.itemView.entity.OrderItemView;
 import com.example.orderquery.domain.itemView.entity.OrderItemViewId;
+import com.example.orderquery.domain.itemView.entity.OrderStatus;
+import com.example.orderquery.domain.itemView.entity.PaymentStatus;
 
 public interface OrderItemViewRepository extends JpaRepository<OrderItemView, OrderItemViewId>,
         JpaSpecificationExecutor<OrderItemView> {
@@ -22,4 +24,19 @@ public interface OrderItemViewRepository extends JpaRepository<OrderItemView, Or
                       @Param("popupId") UUID popupId,
                       @Param("orderGoodsId") UUID orderGoodsId,
                       @Param("checkinAt") LocalDateTime checkinAt);
+
+    @Modifying(clearAutomatically = true, flushAutomatically = true)
+    @Query("update OrderItemView v set v.orderStatus = :orderStatus " +
+            "where v.id.popupId = :popupId and v.orderId = :orderId")
+    int updateOrderStatus(@Param("popupId") UUID popupId,
+                          @Param("orderId") UUID orderId,
+                          @Param("orderStatus") OrderStatus orderStatus);
+
+    @Modifying(clearAutomatically = true, flushAutomatically = true)
+    @Query("update OrderItemView v set v.paymentStatus = :paymentStatus, v.paymentApprovedAt = :approvedAt " +
+            "where v.id.popupId = :popupId and v.orderId = :orderId")
+    int updatePaymentStatus(@Param("popupId") UUID popupId,
+                            @Param("orderId") UUID orderId,
+                            @Param("paymentStatus") PaymentStatus paymentStatus,
+                            @Param("approvedAt") LocalDateTime approvedAt);
 }

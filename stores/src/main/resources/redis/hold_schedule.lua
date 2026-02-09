@@ -37,9 +37,6 @@ redis.call("HSET", hold_key,
     "scheduleId", schedule_id,
     "scheduleQty", schedule_qty,
     "scheduleKey", schedule_key,
-    "goodsJson", "[]",
-    "goodsKeys", "",
-    "goodsQtys", "",
     "expiresAt", expires_at)
 if ttl_ms and ttl_ms > 0 then
     redis.call("PEXPIRE", hold_key, ttl_ms)

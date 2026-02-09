@@ -15,6 +15,11 @@ public enum EventType {
 
     // 체크인
     CHECKIN_CREATED,            // checked_in_orders +1
-    CHECKIN_REVERTED            // checked_in_orders -1 (있다면)
+    CHECKIN_REVERTED,           // checked_in_orders -1 (있다면)
+
+    // 팝업
+    POPUP_CREATED,
+    POPUP_INFO_UPDATED,
+    POPUP_STATUS_UPDATED
 
 }

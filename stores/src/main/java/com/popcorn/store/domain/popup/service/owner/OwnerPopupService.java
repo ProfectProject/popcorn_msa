@@ -3,6 +3,8 @@ package com.popcorn.store.domain.popup.service.owner;
 import java.time.LocalDateTime;
 import java.util.List;
 import java.util.UUID;
+
+import com.popcorn.store.domain.popup.entity.OutboxEvent;
 import org.springframework.context.ApplicationEventPublisher;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
@@ -33,12 +35,16 @@ import com.popcorn.store.domain.popup.event.PopupUpdatedEvent;
 import com.popcorn.store.domain.popup.cache.PopupDetailCacheManager;
 import com.popcorn.store.domain.popup.repository.owner.OwnerPopupRepository;
 import com.popcorn.store.domain.popup.repository.owner.OwnerPopupScheduleRepository;
+import com.popcorn.store.domain.popup.repository.owner.outbox.OutboxEventRepository;
 import com.popcorn.store.domain.popup.repository.owner.view.OwnerPopupScheduleView;
 import com.popcorn.store.domain.store.exception.StoreException;
-import com.popcorn.store.event.standard.StandardStoreEventPublisher;
 import com.popcorn.store.event.standard.StandardPopupCreatedEvent;
 import com.popcorn.store.event.standard.StandardPopupStatusUpdatedEvent;
+import com.popcorn.store.event.standard.StandardEventType;
+import com.popcorn.store.constants.EventConstants;
 
+import java.util.HashMap;
+import java.util.Map;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 
@@ -51,8 +57,8 @@ public class OwnerPopupService {
     private final OwnerPopupScheduleRepository ownerPopupScheduleRepository;
     private final OwnerPopupValidationService validationService;
     private final ApplicationEventPublisher eventPublisher;
-    private final StandardStoreEventPublisher standardStoreEventPublisher;
     private final PopupDetailCacheManager popupDetailCacheManager;
+    private final OutboxEventRepository outboxEventRepository;
 
     @Transactional
     public PopupCreatedDto createPopup(Long userId, CreatePopupRequest request) {
@@ -70,15 +76,39 @@ public class OwnerPopupService {
         Popup savedPopup = ownerPopupRepository.save(createPopupEntity(userId, request, trimmedTitle));
         createPopupSchedules(savedPopup.getId(), request.getSchedules(), userId);
 
-        // 기존 이벤트 발행
-        eventPublisher.publishEvent(new PopupCreatedEvent(userId, savedPopup));
-
-        // 표준 이벤트 발행
-        publishStandardPopupCreatedEvent(savedPopup);
+        queuePopupCreatedOutboxEntry(savedPopup);
 
         log.info("[POPUP_CREATED] popupId={}, storeId={}", savedPopup.getId(), savedPopup.getStoreId());
         return mapToDto(savedPopup);
 
+    }
+
+    private void queuePopupCreatedOutboxEntry(Popup popup) {
+        try {
+            StandardPopupCreatedEvent event = StandardPopupCreatedEvent.builder()
+                    .topic("store-events")
+                    .eventType(StandardEventType.POPUP_CREATED)
+                    .producer("store-service")
+                    .storeId(popup.getStoreId())
+                    .popupId(popup.getId())
+                    .ownerId(popup.getCreatedBy())
+                    .title(popup.getTitle())
+                    .status(popup.getStatus() != null ? popup.getStatus().name() : null)
+                    .reservationOpenAt(popup.getReservationOpenAt())
+                    .addressRoad(popup.getAddressRoad())
+                    .addressDetail(popup.getAddressDetail())
+                    .createdAt(popup.getCreatedAt())
+                    .build();
+
+            event.setDefaults();
+            persistPopupCreatedOutboxEntry(popup, event);
+
+            log.info("📦 [OUTBOX] 팝업 생성 표준 이벤트 저장 완료 - popupId: {}, storeId: {}",
+                    popup.getId(), popup.getStoreId());
+        } catch (Exception e) {
+            log.error("❌ [OUTBOX] 팝업 생성 표준 이벤트 저장 실패 - popupId: {}, error: {}",
+                    popup.getId(), e.getMessage(), e);
+        }
     }
 
     @Transactional(readOnly = true)
@@ -188,11 +218,8 @@ public class OwnerPopupService {
                     ownerId);
         }
 
-        // 기존 이벤트 발행
         eventPublisher.publishEvent(new PopupStatusUpdatedEvent(ownerId, updatedPopup));
-
-        // 표준 이벤트 발행
-        publishStandardPopupStatusUpdatedEvent(updatedPopup, fromStatus, request.getStatus());
+        queuePopupStatusUpdatedOutboxEntry(updatedPopup, fromStatus, request.getStatus(), ownerId);
 
         // 상태 변경 후 상세 캐시 무효화
         popupDetailCacheManager.evictDetail(updatedPopup.getId());
@@ -387,6 +414,15 @@ public class OwnerPopupService {
         }
     }
 
+    private void validateScheduleTimes(LocalDateTime startAt, LocalDateTime endAt) {
+        if (startAt == null || endAt == null) {
+            return;
+        }
+        if (!startAt.isBefore(endAt)) {
+            throw PopupException.invalidScheduleTime();
+        }
+    }
+
     private void validateStatusRequest(UpdatePopupStatusRequest request) {
         if (request == null || request.getStatus() == null) {
             throw new PopupException(PopupResponseCode.INVALID_REQUEST);
@@ -404,6 +440,7 @@ public class OwnerPopupService {
             Long ownerId) {
         LocalDateTime now = LocalDateTime.now();
         for (com.popcorn.store.domain.popup.dto.owner.request.CreatePopupScheduleRequest schedule : schedules) {
+            validateScheduleTimes(schedule.getStartAt(), schedule.getEndAt());
             UUID scheduleId = UUID.randomUUID();
             ownerPopupScheduleRepository.insertSchedule(
                     scheduleId,
@@ -436,6 +473,7 @@ public class OwnerPopupService {
         List<CreatePopupScheduleRequest> createSchedules = request.getCreateSchedules();
         if (createSchedules != null && !createSchedules.isEmpty()) {
             for (com.popcorn.store.domain.popup.dto.owner.request.CreatePopupScheduleRequest schedule : createSchedules) {
+                validateScheduleTimes(schedule.getStartAt(), schedule.getEndAt());
                 UUID scheduleId = UUID.randomUUID();
                 ownerPopupScheduleRepository.insertSchedule(
                         scheduleId,
@@ -465,6 +503,7 @@ public class OwnerPopupService {
         List<UpdatePopupScheduleRequest> updateSchedules = request.getUpdateSchedules();
         if (updateSchedules != null && !updateSchedules.isEmpty()) {
             for (com.popcorn.store.domain.popup.dto.owner.request.UpdatePopupScheduleRequest schedule : updateSchedules) {
+                validateScheduleTimes(schedule.getStartAt(), schedule.getEndAt());
                 int updated = ownerPopupScheduleRepository.updateSchedule(
                         schedule.getScheduleId(),
                         popupId,
@@ -510,56 +549,67 @@ public class OwnerPopupService {
         }
     }
 
+
     /**
      * 표준 팝업 생성 이벤트 발행
      */
-    private void publishStandardPopupCreatedEvent(Popup popup) {
+    private void persistPopupCreatedOutboxEntry(Popup popup, StandardPopupCreatedEvent event) {
         try {
-            StandardPopupCreatedEvent event = StandardPopupCreatedEvent.builder()
-                    .eventType(com.popcorn.store.event.standard.StandardEventType.POPUP_CREATED)
-                    .producer("store-service")
-                    .storeId(popup.getStoreId())
-                    .popupId(popup.getId())
-                    .title(popup.getTitle())
-                    .status(popup.getStatus().name())
-                    .reservationOpenAt(popup.getReservationOpenAt())
-                    .addressRoad(popup.getAddressRoad())
-                    .addressDetail(popup.getAddressDetail())
-                    .createdAt(popup.getCreatedAt())
-                    .build();
-
-            event.setDefaults();
-            standardStoreEventPublisher.publishPopupCreatedEvent(event);
-
-            log.info("✅ [STANDARD-STORE] 팝업 생성 표준 이벤트 발행 완료 - popupId: {}, storeId: {}",
-                    popup.getId(), popup.getStoreId());
+            Map<String, Object> payload = event.toOutboxMap();
+            Map<String, Object> headers = Map.of("producer", event.getProducer());
+            OutboxEvent outbox = OutboxEvent.of(
+                    event.getTopic(),
+                    EventConstants.AggregateTypes.POPUP,
+                    popup.getId().toString(),
+                    event.getEventType(),
+                    payload,
+                    headers
+            );
+            outboxEventRepository.save(outbox);
         } catch (Exception e) {
-            log.error("❌ [STANDARD-STORE] 팝업 생성 표준 이벤트 발행 실패 - popupId: {}, error: {}",
+            log.error("❌ [OUTBOX] 팝업 생성 표준 이벤트 저장 실패 - popupId: {}, error: {}",
                     popup.getId(), e.getMessage(), e);
         }
     }
 
-    /**
-     * 표준 팝업 상태 변경 이벤트 발행
-     */
-    private void publishStandardPopupStatusUpdatedEvent(Popup popup, PopupStatus fromStatus, PopupStatus toStatus) {
+    private void queuePopupStatusUpdatedOutboxEntry(Popup popup, PopupStatus fromStatus, PopupStatus toStatus, Long ownerId) {
         try {
             StandardPopupStatusUpdatedEvent event = StandardPopupStatusUpdatedEvent.builder()
-                    .eventType(com.popcorn.store.event.standard.StandardEventType.POPUP_STATUS_UPDATED)
+                    .eventType(StandardEventType.POPUP_STATUS_UPDATED)
                     .producer("store-service")
                     .storeId(popup.getStoreId())
                     .popupId(popup.getId())
+                    .ownerId(ownerId)
                     .fromStatus(fromStatus.name())
                     .toStatus(toStatus.name())
                     .build();
 
             event.setDefaults();
-            standardStoreEventPublisher.publishPopupStatusUpdatedEvent(event);
+            persistPopupStatusUpdatedOutboxEntry(popup, event);
 
-            log.info("✅ [STANDARD-STORE] 팝업 상태 변경 표준 이벤트 발행 완료 - popupId: {}, {} -> {}",
+            log.info("📦 [OUTBOX] 팝업 상태 변경 표준 이벤트 저장 완료 - popupId: {}, {} -> {}",
                     popup.getId(), fromStatus.name(), toStatus.name());
         } catch (Exception e) {
-            log.error("❌ [STANDARD-STORE] 팝업 상태 변경 표준 이벤트 발행 실패 - popupId: {}, error: {}",
+            log.error("❌ [OUTBOX] 팝업 상태 변경 표준 이벤트 저장 실패 - popupId: {}, error: {}",
+                    popup.getId(), e.getMessage(), e);
+        }
+    }
+
+    private void persistPopupStatusUpdatedOutboxEntry(Popup popup, StandardPopupStatusUpdatedEvent event) {
+        try {
+            Map<String, Object> payload = event.toOutboxMap();
+            Map<String, Object> headers = Map.of("producer", event.getProducer());
+            OutboxEvent outbox = OutboxEvent.of(
+                    event.getTopic(),
+                    EventConstants.AggregateTypes.POPUP,
+                    popup.getId().toString(),
+                    event.getEventType(),
+                    payload,
+                    headers
+            );
+            outboxEventRepository.save(outbox);
+        } catch (Exception e) {
+            log.error("❌ [OUTBOX] 팝업 상태 변경 표준 이벤트 저장 실패 - popupId: {}, error: {}",
                     popup.getId(), e.getMessage(), e);
         }
     }

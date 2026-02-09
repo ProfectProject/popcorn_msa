@@ -6,8 +6,11 @@ import java.util.UUID;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
+import com.example.orderquery.domain.summary.entity.EventType;
 import com.example.orderquery.domain.summary.entity.OrderSummary;
+import com.example.orderquery.domain.summary.entity.SummaryAppliedLog;
 import com.example.orderquery.domain.summary.repository.OrderSummaryRepository;
+import com.example.orderquery.domain.summary.repository.SummaryAppliedLogRepository;
 
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
@@ -19,8 +22,11 @@ import lombok.extern.slf4j.Slf4j;
 public class PopupSummaryUpsertService {
 
     private final OrderSummaryRepository orderSummaryRepository;
+    private final SummaryAppliedLogRepository summaryAppliedLogRepository;
 
-    public void createFromPopup(UUID popupId,
+    public void createFromPopup(UUID eventId,
+                                EventType eventType,
+                                UUID popupId,
                                 UUID storeId,
                                 Long ownerId,
                                 String title,
@@ -28,9 +34,17 @@ public class PopupSummaryUpsertService {
                                 String addressRoad,
                                 String addressDetail,
                                 LocalDateTime reservationOpenAt) {
+        if (isAlreadyApplied(eventId, eventType)) {
+            log.debug("Popup create event already applied: eventId={}, eventType={}", eventId, eventType);
+            return;
+        }
+
         OrderSummary summary = orderSummaryRepository.findByStoreIdAndPopupId(storeId, popupId)
                 .orElse(null);
         if (summary != null) {
+            if (ownerId != null && summary.getOwnerId() == null) {
+                summary.setOwnerId(ownerId);
+            }
             summary.setUpdatedBy(ownerId);
             summary.updatePopupInfo(title, status, addressRoad, addressDetail, reservationOpenAt);
             orderSummaryRepository.save(summary);
@@ -45,6 +59,7 @@ public class PopupSummaryUpsertService {
                 .addressRoad(addressRoad)
                 .addressDetail(addressDetail)
                 .reservationOpenAt(reservationOpenAt)
+                .ownerId(ownerId)
                 .reservationTotalOrders(0)
                 .reservationPaidOrders(0)
                 .reservationCancelledOrders(0)
@@ -56,9 +71,12 @@ public class PopupSummaryUpsertService {
         created.setCreatedBy(ownerId);
         created.setUpdatedBy(ownerId);
         orderSummaryRepository.save(created);
+        recordPopupEvent(eventId, eventType, popupId);
     }
 
-    public void updateFromPopup(UUID popupId,
+    public void updateFromPopup(UUID eventId,
+                                EventType eventType,
+                                UUID popupId,
                                 UUID storeId,
                                 Long ownerId,
                                 String title,
@@ -66,6 +84,10 @@ public class PopupSummaryUpsertService {
                                 String addressRoad,
                                 String addressDetail,
                                 LocalDateTime reservationOpenAt) {
+        if (isAlreadyApplied(eventId, eventType)) {
+            log.debug("Popup update event already applied: eventId={}, eventType={}", eventId, eventType);
+            return;
+        }
         OrderSummary summary = orderSummaryRepository.findByStoreIdAndPopupId(storeId, popupId)
                 .orElse(null);
         if (summary == null) {
@@ -73,13 +95,37 @@ public class PopupSummaryUpsertService {
             return;
         }
 
+        if (ownerId != null && summary.getOwnerId() == null) {
+            summary.setOwnerId(ownerId);
+        }
         summary.setUpdatedBy(ownerId);
         summary.updatePopupInfo(title, status, addressRoad, addressDetail, reservationOpenAt);
         orderSummaryRepository.save(summary);
+        recordPopupEvent(eventId, eventType, popupId);
     }
 
     public void deleteSummary(UUID storeId, UUID popupId) {
         orderSummaryRepository.findByStoreIdAndPopupId(storeId, popupId)
                 .ifPresent(orderSummaryRepository::delete);
+    }
+
+    private boolean isAlreadyApplied(UUID eventId, EventType eventType) {
+        return eventId != null && eventType != null && summaryAppliedLogRepository.existsByEventIdAndEventType(eventId, eventType);
+    }
+
+    private void recordPopupEvent(UUID eventId, EventType eventType, UUID popupId) {
+        if (eventId == null || eventType == null || popupId == null) {
+            return;
+        }
+        SummaryAppliedLog logEntry = SummaryAppliedLog.of(
+                eventId,
+                eventType,
+                popupId,
+                null,
+                0, 0, 0,
+                0, 0, 0,
+                0,
+                LocalDateTime.now());
+        summaryAppliedLogRepository.save(logEntry);
     }
 }

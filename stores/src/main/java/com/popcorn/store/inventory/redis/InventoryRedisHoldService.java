@@ -1,7 +1,5 @@
 package com.popcorn.store.inventory.redis;
 
-import com.fasterxml.jackson.core.JsonProcessingException;
-import com.fasterxml.jackson.databind.ObjectMapper;
 import lombok.Getter;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
@@ -24,7 +22,7 @@ import java.util.stream.Collectors;
 @Slf4j
 public class InventoryRedisHoldService {
 
-    private static final Duration HOLD_TTL = Duration.ofMinutes(10);
+    private static final Duration HOLD_TTL = Duration.ofMinutes(30);
     private static final String SCHEDULE_KEY_TEMPLATE = "schedule_avail:{%s}:%s";
     private static final String GOODS_KEY_TEMPLATE = "goods_avail:{%s}:%s";
     private static final String HOLD_KEY_TEMPLATE = "hold:{%s}:%s";
@@ -35,7 +33,6 @@ public class InventoryRedisHoldService {
     private final RedisScript<Long> holdGoodsScript;
     private final RedisScript<Long> holdBothScript;
     private final RedisScript<Long> releaseHoldScript;
-    private final ObjectMapper objectMapper;
 
     public boolean ensureGoodsAvailabilityKey(UUID popupId, UUID goodsId, int available) {
         String key = buildGoodsKey(popupId, goodsId);
@@ -46,6 +43,10 @@ public class InventoryRedisHoldService {
             return true;
         }
         return false;
+    }
+
+    public Duration getHoldDuration() {
+        return HOLD_TTL;
     }
 
     public HoldResult holdSchedule(UUID orderId, UUID popupId, UUID scheduleId, int scheduleQty) {
@@ -86,14 +87,14 @@ public class InventoryRedisHoldService {
         List<String> keys = buildGoodsKeys(popupId, items);
         long ttlMs = HOLD_TTL.toMillis();
         String expiresAt = OffsetDateTime.now().plus(HOLD_TTL).toString();
-        String goodsJson = buildGoodsJson(items);
+        String goodsIds = buildGoodsIdString(items);
         String goodsQtys = buildGoodsQtyString(items);
         List<Object> args = new ArrayList<>();
         args.add(orderId.toString());
         args.add(popupId.toString());
         args.add(String.valueOf(ttlMs));
         args.add(expiresAt);
-        args.add(goodsJson);
+        args.add(goodsIds);
         args.add(goodsQtys);
         args.add(String.valueOf(items.size()));
         items.forEach(item -> args.add(String.valueOf(item.getQuantity())));
@@ -130,7 +131,7 @@ public class InventoryRedisHoldService {
 
         long ttlMs = HOLD_TTL.toMillis();
         String expiresAt = OffsetDateTime.now().plus(HOLD_TTL).toString();
-        String goodsJson = buildGoodsJson(items);
+        String goodsIds = buildGoodsIdString(items);
         String goodsQtys = buildGoodsQtyString(items);
 
         List<Object> args = new ArrayList<>();
@@ -138,7 +139,7 @@ public class InventoryRedisHoldService {
         args.add(popupId.toString());
         args.add(scheduleId.toString());
         args.add(String.valueOf(scheduleQty));
-        args.add(goodsJson);
+        args.add(goodsIds);
         args.add(goodsQtys);
         args.add(String.valueOf(ttlMs));
         args.add(expiresAt);
@@ -228,15 +229,10 @@ public class InventoryRedisHoldService {
         return String.format(HOLD_KEY_TEMPLATE, popupId, orderId);
     }
 
-    private String buildGoodsJson(List<GoodsHoldItem> items) {
-        try {
-            return objectMapper.writeValueAsString(items.stream()
-                    .map(item -> new GoodsPayload(item.getGoodsId(), item.getQuantity()))
-                    .collect(Collectors.toList()));
-        } catch (JsonProcessingException e) {
-            log.warn("goods json serialization failed - fallback to []", e);
-            return "[]";
-        }
+    private String buildGoodsIdString(List<GoodsHoldItem> items) {
+        return items.stream()
+                .map(item -> item.getGoodsId().toString())
+                .collect(Collectors.joining("|"));
     }
 
     private String buildGoodsQtyString(List<GoodsHoldItem> items) {
@@ -318,21 +314,4 @@ public class InventoryRedisHoldService {
         }
     }
 
-    private static class GoodsPayload {
-        private final UUID goodsId;
-        private final int qty;
-
-        public GoodsPayload(UUID goodsId, int qty) {
-            this.goodsId = goodsId;
-            this.qty = qty;
-        }
-
-        public UUID getGoodsId() {
-            return goodsId;
-        }
-
-        public int getQty() {
-            return qty;
-        }
-    }
 }

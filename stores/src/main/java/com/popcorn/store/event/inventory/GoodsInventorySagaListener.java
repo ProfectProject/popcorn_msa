@@ -23,6 +23,7 @@ import lombok.extern.slf4j.Slf4j;
 import org.springframework.context.event.EventListener;
 import org.springframework.stereotype.Component;
 
+import java.time.LocalDateTime;
 import java.util.ArrayList;
 import java.util.LinkedHashMap;
 import java.util.List;
@@ -139,6 +140,7 @@ public class GoodsInventorySagaListener {
             eventPublisher.publishStockDeductionFailedEvent(orderId, orderNo, popupId,
                     "재고 복구 - " + event.getReason(), "PAYMENT_RESTORE",
                     "restore requested by payment event");
+            eventPublisher.publishStockReleasedEvent(orderId, LocalDateTime.now());
         }
     }
 

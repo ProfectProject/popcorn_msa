@@ -44,6 +44,8 @@ spring:
     password: ${PAYMENT_DB_MIGRATION_PASSWORD:${PAYMENT_FLYWAY_PASSWORD:${PAYMENT_DB_PASSWORD:payment123}}}
     schemas: payment
     default-schema: payment
+    placeholders:
+      PAYMENT_MIGRATOR_PASSWORD: ${PAYMENT_MIGRATOR_PASSWORD:payment321}
 
   # Redis 설정 (개발 환경)
   data:

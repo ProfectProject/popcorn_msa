@@ -73,6 +73,8 @@ spring:
     baseline-on-migrate: true
     validate-on-migrate: false
     clean-disabled: false
+    placeholders:
+      PAYMENT_MIGRATOR_PASSWORD: ${PAYMENT_MIGRATOR_PASSWORD:payment321}
 
 # 인증 설정
 passport:

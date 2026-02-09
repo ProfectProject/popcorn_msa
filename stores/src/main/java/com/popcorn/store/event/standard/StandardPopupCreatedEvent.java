@@ -84,4 +84,16 @@ public class StandardPopupCreatedEvent extends StandardBaseEvent {
 
         return map;
     }
+
+    @Override
+    public java.util.Map<String, Object> toOutboxMap() {
+        java.util.Map<String, Object> map = super.toOutboxMap();
+        if (title != null) map.put("title", title);
+        if (status != null) map.put("status", status);
+        if (reservationOpenAt != null) map.put("reservationOpenAt", reservationOpenAt.toString());
+        if (addressRoad != null) map.put("addressRoad", addressRoad);
+        if (addressDetail != null) map.put("addressDetail", addressDetail);
+        if (createdAt != null) map.put("createdAt", createdAt.toString());
+        return map;
+    }
 }

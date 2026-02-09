@@ -3,7 +3,7 @@ local order_id = ARGV[1]
 local popup_id = ARGV[2]
 local ttl_ms = tonumber(ARGV[3])
 local expires_at = ARGV[4]
-local goods_json = ARGV[5]
+local goods_ids = ARGV[5]
 local goods_qtys = ARGV[6]
 local goods_count = tonumber(ARGV[7])
 
@@ -55,13 +55,10 @@ for index = 1, goods_count do
 end
 
 -- 홀드 데이터 설정
-redis.call("HSET", hold_key,
+    redis.call("HSET", hold_key,
     "type", "GOODS_ONLY",
     "popupId", popup_id,
-    "scheduleId", "",
-    "scheduleQty", "0",
-    "scheduleKey", "",
-    "goodsJson", goods_json,
+    "goodsId", goods_ids,
     "goodsKeys", table.concat(KEYS, "|"),
     "goodsQtys", goods_qtys,
     "expiresAt", expires_at)

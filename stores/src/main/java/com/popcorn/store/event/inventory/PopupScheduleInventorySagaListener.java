@@ -19,6 +19,7 @@ import org.springframework.context.event.EventListener;
 import org.springframework.stereotype.Component;
 import org.springframework.transaction.annotation.Transactional;
 
+import java.time.LocalDateTime;
 import java.util.ArrayList;
 import java.util.List;
 import java.util.UUID;
@@ -34,13 +35,11 @@ public class PopupScheduleInventorySagaListener {
 
     private static final String ORDER_PAID_SCHEDULE_SCOPE = "order-paid-schedule";
     private static final String INVENTORY_CONFIRMATION_SCHEDULE_SCOPE = "inventory-confirmation-schedule";
-    private static final String SCHEDULE_KEY_FORMAT = "schedule_avail:{%s}:%s";
 
     private final PopupService popupService;
     private final GoodsOrderReservationService reservationService;
     private final StoreInventoryEventPublisher eventPublisher;
     private final InventoryRedisHoldService inventoryHoldService;
-    private final ScheduleInventoryApiService scheduleInventoryApiService;
     private final InventoryEventIdempotencyService idempotencyService;
 
     /**
@@ -89,8 +88,9 @@ public class PopupScheduleInventorySagaListener {
                     details.add(formatDetail(reservation));
                 }
                 log.info("[SCHEDULE_COMMIT] orderId={} eventId={}", orderId, event.getEventId());
-                eventPublisher.publishStockDeductionSuccessEvent(orderId, orderNo, popupId,
-                        String.join(", ", details));
+                String detailSummary = String.join(", ", details);
+                eventPublisher.publishStockDeductionSuccessEvent(orderId, orderNo, popupId, detailSummary);
+                eventPublisher.publishScheduleConfirmationSuccessEvent(orderId, orderNo, popupId, detailSummary);
             } catch (Exception e) {
                 log.error("팝업 스케줄 재고 확정 실패 - orderId={}, error={}", orderId, e.getMessage(), e);
                 reservations.stream()
@@ -98,6 +98,8 @@ public class PopupScheduleInventorySagaListener {
                         .forEach(res -> reservationService.updateStatus(res, ReservationStatus.FAILED, e.getMessage()));
                 eventPublisher.publishStockDeductionFailedEvent(orderId, orderNo, popupId,
                         "재고 차감 실패: " + e.getMessage(), "SYSTEM_ERROR", e.getMessage());
+                eventPublisher.publishScheduleConfirmationFailedEvent(orderId, orderNo, popupId,
+                        "재고 차감 실패: " + e.getMessage());
                 throw new RuntimeException("팝업 스케줄 재고 확정 실패", e);
             }
         } else if (event.isRestoreAction()) {
@@ -118,6 +120,7 @@ public class PopupScheduleInventorySagaListener {
             eventPublisher.publishStockDeductionFailedEvent(orderId, orderNo, popupId,
                     "재고 복구 - " + event.getReason(), "PAYMENT_RESTORE",
                     "restore requested by payment event");
+            eventPublisher.publishScheduleReleasedEvent(orderId, LocalDateTime.now());
         }
     }
 

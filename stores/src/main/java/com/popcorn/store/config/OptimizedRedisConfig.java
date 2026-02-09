@@ -1,9 +1,12 @@
 package com.popcorn.store.config;
 
+import com.fasterxml.jackson.databind.ObjectMapper;
+import com.fasterxml.jackson.datatype.jsr310.JavaTimeModule;
 import io.lettuce.core.ClientOptions;
 import io.lettuce.core.resource.ClientResources;
 import io.lettuce.core.resource.DefaultClientResources;
 import lombok.extern.slf4j.Slf4j;
+import org.springframework.beans.factory.annotation.Qualifier;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.Configuration;
@@ -96,13 +99,18 @@ public class OptimizedRedisConfig {
 
     @Bean
     @Primary
-    public RedisTemplate<String, Object> optimizedRedisTemplate(RedisConnectionFactory connectionFactory) {
+    public RedisTemplate<String, Object> optimizedRedisTemplate(
+        RedisConnectionFactory connectionFactory,
+        @Qualifier("storeOptimizedObjectMapper") ObjectMapper objectMapper
+    ) {
         RedisTemplate<String, Object> template = new RedisTemplate<>();
         template.setConnectionFactory(connectionFactory);
 
         // 🚀 성능 최적화된 시리얼라이저 설정
         StringRedisSerializer stringSerializer = new StringRedisSerializer();
-        GenericJackson2JsonRedisSerializer jsonSerializer = new GenericJackson2JsonRedisSerializer();
+        ObjectMapper redisObjectMapper = objectMapper.copy()
+            .registerModule(new JavaTimeModule());
+        GenericJackson2JsonRedisSerializer jsonSerializer = new GenericJackson2JsonRedisSerializer(redisObjectMapper);
 
         template.setKeySerializer(stringSerializer);
         template.setHashKeySerializer(stringSerializer);

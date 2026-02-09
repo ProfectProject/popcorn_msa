@@ -112,6 +112,17 @@ public class GoodsService {
         return response;
     }
 
+    @Transactional(readOnly = true)
+    public int calculateAvailableStock(UUID goodsId) {
+        GoodsVariant goodsVariant = goodsVariantRepository.findById(goodsId)
+                .filter(variant -> variant.getDeletedAt() == null)
+                .orElseThrow(GoodsException::goodsNotFound);
+
+        int stock = goodsVariant.getStock();
+        int reservationStock = goodsVariant.getReservationStock();
+        return Math.max(0, stock - reservationStock);
+    }
+
     /**
      * 굿즈 가격 조회
      * Order 서비스의 굿즈 가격 조회 요청을 처리합니다.
