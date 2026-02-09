@@ -32,12 +32,13 @@ class UserServiceClient(
         return try {
             log.debug("🔍 [HTTP] User 서비스 주소 API 호출 시작 - userId: {}", userId)
 
-            val systemPassport = systemPassportGenerator.generateSystemPassport()
+            // 실제 사용자 ID로 Passport 생성
+            val userPassport = systemPassportGenerator.generateUserPassport(userId)
 
             val response = webClient
                 .get()
                 .uri("$userServiceBaseUrl/api/users/v1/users/{userId}/addresses", userId)
-                .header("X-Passport", systemPassport)
+                .header("X-Passport", userPassport)
                 .header("X-Internal-Call", "true")
                 .header("X-Internal-Service", "payment-service")
                 .retrieve()
@@ -75,6 +76,41 @@ class UserServiceClient(
         } catch (e: Exception) {
             log.error("❌ [HTTP] 기본 주소 확인 실패 - userId: {}, error: {}", userId, e.message, e)
             false
+        }
+    }
+
+    /**
+     * 사용자 존재 여부 확인
+     */
+    suspend fun existsUser(userId: Long): Boolean {
+        return try {
+            log.debug("🔍 [HTTP] 사용자 존재 확인 - userId: {}", userId)
+
+            // 실제 사용자 ID로 Passport 생성
+            val userPassport = systemPassportGenerator.generateUserPassport(userId)
+
+            val response = webClient
+                .head()
+                .uri("$userServiceBaseUrl/api/users/v1/users/{userId}", userId)
+                .header("X-Passport", userPassport)
+                .header("X-Internal-Call", "true")
+                .header("X-Internal-Service", "payment-service")
+                .retrieve()
+                .toBodilessEntity()
+                .awaitSingle()
+
+            val exists = response.statusCode.is2xxSuccessful
+            log.debug("✅ [HTTP] 사용자 존재 확인 완료 - userId: {}, exists: {}", userId, exists)
+            exists
+
+        } catch (ex: WebClientResponseException) {
+            val exists = ex.statusCode.value() != 404
+            log.debug("⚠️ [HTTP] 사용자 존재 확인 - userId: {}, status: {}, exists: {}",
+                userId, ex.statusCode, exists)
+            exists
+        } catch (e: Exception) {
+            log.warn("❌ [HTTP] 사용자 존재 확인 실패 - userId: {}, error: {}", userId, e.message)
+            true // fallback: 사용자가 존재한다고 가정
         }
     }
 }

@@ -345,10 +345,10 @@ resilience4j:
   timelimiter:
     instances:
       cbUserService:
-        timeout-duration: 700ms
+        timeout-duration: 2000ms
         cancel-running-future: true
       cbStoreService:
-        timeout-duration: 700ms
+        timeout-duration: 2000ms
       cbOrderService:
         timeout-duration: 8000ms  # 주문 처리는 시간이 오래 걸릴 수 있음 (3000ms → 8000ms 증가)
       cbPaymentService:

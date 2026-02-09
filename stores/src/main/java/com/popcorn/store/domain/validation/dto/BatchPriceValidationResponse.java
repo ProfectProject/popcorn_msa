@@ -23,6 +23,7 @@ public class BatchPriceValidationResponse {
     private UUID orderId;
 
     @Schema(description = "전체 검증 성공 여부", example = "true")
+    @com.fasterxml.jackson.annotation.JsonProperty("valid")
     private boolean isValid;
 
     @Schema(description = "총 실제 금액", example = "75000")
@@ -54,6 +55,7 @@ public class BatchPriceValidationResponse {
         private String itemType;
 
         @Schema(description = "검증 성공 여부", example = "true")
+        @com.fasterxml.jackson.annotation.JsonProperty("valid")
         private boolean isValid;
 
         @Schema(description = "실제 가격", example = "25000")

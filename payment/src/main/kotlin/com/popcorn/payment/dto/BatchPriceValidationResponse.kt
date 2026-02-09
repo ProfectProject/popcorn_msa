@@ -1,5 +1,6 @@
 package com.popcorn.payment.dto
 
+import com.fasterxml.jackson.annotation.JsonProperty
 import java.util.*
 
 /**
@@ -7,7 +8,7 @@ import java.util.*
  */
 data class BatchPriceValidationResponse(
     val orderId: UUID,
-    val isValid: Boolean,
+    @JsonProperty("valid") val isValid: Boolean,
     val totalActualAmount: Int,
     val totalExpectedAmount: Int,
     val itemResults: List<LineItemValidationResult>,
@@ -20,7 +21,7 @@ data class BatchPriceValidationResponse(
 data class LineItemValidationResult(
     val itemId: UUID,
     val itemType: String,
-    val isValid: Boolean,
+    @JsonProperty("valid") val isValid: Boolean,
     val actualPrice: Int?,
     val expectedPrice: Int,
     val quantity: Int,

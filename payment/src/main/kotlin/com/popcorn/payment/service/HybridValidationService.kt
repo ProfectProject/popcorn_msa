@@ -7,24 +7,19 @@ import com.popcorn.payment.dto.LineItemPriceRequest
 import com.popcorn.payment.event.domain.payment.EventLineItem
 import com.popcorn.payment.exception.PaymentValidationException
 import com.popcorn.payment.repository.ExternalDbQueryException
-import com.popcorn.payment.repository.ExternalStoreRepository
-import com.popcorn.payment.repository.ExternalUserRepository
 import org.springframework.cache.annotation.Cacheable
 import org.springframework.stereotype.Service
 import java.util.*
 import kotlinx.coroutines.async
 import kotlinx.coroutines.runBlocking
 import org.slf4j.LoggerFactory
-import org.springframework.beans.factory.annotation.Autowired
 
 /**
  * Hybrid 검증 서비스
- * 중요한 검증은 DB 직접 조회, 일반적인 검증은 HTTP + 캐싱
+ * 모든 검증을 HTTP API 통신으로 처리하여 마이크로서비스 아키텍처 준수
  */
 @Service
 class HybridValidationService(
-    @Autowired(required = false) private val externalUserRepository: ExternalUserRepository?,
-    @Autowired(required = false) private val externalStoreRepository: ExternalStoreRepository?,
     private val userServiceClient: UserServiceClient,
     private val storeValidationClient: StoreValidationClient
 ) {
@@ -50,35 +45,30 @@ class HybridValidationService(
 
             hasDefaultAddress
         } catch (e: Exception) {
-            log.warn("⚠️ [HTTP] 사용자 주소 검증 실패, 관대하게 통과 처리 - userId: {}, error: {}", userId, e.message)
-            // User 서비스 다운 시에도 결제는 진행 (이벤트 기반 검증과 동일한 정책)
-            true
+            log.error("💀 [HTTP] 사용자 주소 검증 실패 - userId: {}, 보안상 결제 중단", userId, e)
+            throw PaymentValidationException("사용자 주소 검증 서비스 장애로 인한 결제 처리 불가: ${e.message}")
         }
     }
 
     /**
-     * 세션 가격 검증 (Order 가격 vs DB 가격)
+     * 세션 가격 검증 (HTTP API 통신 방식)
      */
     @Cacheable(value = ["hybridPrices"], key = "'session:' + #sessionId", unless = "#result == null")
     suspend fun getSessionPriceHybrid(sessionId: UUID): Int? {
         return try {
-            log.debug("🔍 [DB] 세션 가격 조회 시작 - sessionId: {}", sessionId)
+            log.debug("🔍 [HTTP] 세션 가격 조회 시작 - sessionId: {}", sessionId)
 
-            if (externalStoreRepository == null) {
-                log.warn("⚠️ [DB] 외부 스토어 Repository 없음 - 세션 가격 검증 불가 - sessionId: {}", sessionId)
-                return null
-            }
-
-            val price = externalStoreRepository.findSessionPrice(sessionId)
+            // HTTP API를 통한 세션 가격 조회
+            val price = storeValidationClient.getSessionPrice(sessionId)
             if (price != null) {
-                log.debug("✅ [DB] 세션 가격 조회 성공 - sessionId: {}, price: {}원", sessionId, price)
+                log.debug("✅ [HTTP] 세션 가격 조회 성공 - sessionId: {}, price: {}원", sessionId, price)
             } else {
-                log.warn("❌ [DB] 세션 가격 정보 없음 - sessionId: {}", sessionId)
+                log.warn("❌ [HTTP] 세션 가격 정보 없음 - sessionId: {}", sessionId)
             }
 
             price
         } catch (e: Exception) {
-            log.error("❌ [DB] 세션 가격 조회 실패 - sessionId: {}, error: {}", sessionId, e.message, e)
+            log.error("❌ [HTTP] 세션 가격 조회 실패 - sessionId: {}, error: {}", sessionId, e.message, e)
             null
         }
     }
@@ -89,23 +79,19 @@ class HybridValidationService(
     @Cacheable(value = ["hybridPrices"], key = "'goods:' + #goodsId", unless = "#result == null")
     suspend fun getGoodsPriceHybrid(goodsId: UUID): Int? {
         return try {
-            log.debug("🔍 [DB] 굿즈 가격 조회 시작 - goodsId: {}", goodsId)
+            log.debug("🔍 [HTTP] 굿즈 가격 조회 시작 - goodsId: {}", goodsId)
 
-            if (externalStoreRepository == null) {
-                log.warn("⚠️ [DB] 외부 스토어 Repository 없음 - 굿즈 가격 검증 불가 - goodsId: {}", goodsId)
-                return null
-            }
-
-            val price = externalStoreRepository.findGoodsPrice(goodsId)
+            // HTTP API를 통한 굿즈 가격 조회
+            val price = storeValidationClient.getGoodsPrice(goodsId)
             if (price != null) {
-                log.debug("✅ [DB] 굿즈 가격 조회 성공 - goodsId: {}, price: {}원", goodsId, price)
+                log.debug("✅ [HTTP] 굿즈 가격 조회 성공 - goodsId: {}, price: {}원", goodsId, price)
             } else {
-                log.warn("❌ [DB] 굿즈 가격 정보 없음 - goodsId: {}", goodsId)
+                log.warn("❌ [HTTP] 굿즈 가격 정보 없음 - goodsId: {}", goodsId)
             }
 
             price
         } catch (e: Exception) {
-            log.error("❌ [DB] 굿즈 가격 조회 실패 - goodsId: {}, error: {}", goodsId, e.message, e)
+            log.error("❌ [HTTP] 굿즈 가격 조회 실패 - goodsId: {}, error: {}", goodsId, e.message, e)
             null
         }
     }
@@ -342,31 +328,42 @@ class HybridValidationService(
     }
 
     /**
-     * 빠른 존재성 확인 (DB 직접 조회)
+     * 빠른 존재성 확인 (HTTP API 통신 방식)
      * 캐시 없이 실시간 확인이 필요한 경우
      */
     suspend fun quickExistenceCheck(userId: Long, sessionId: UUID?, goodsId: UUID?): ExistenceCheckResult {
         return try {
             runBlocking {
                 val userExists = async {
-                    if (externalUserRepository != null) {
-                        externalUserRepository?.existsUser(userId) ?: false
-                    } else {
+                    try {
+                        userServiceClient.existsUser(userId)
+                    } catch (e: Exception) {
+                        log.warn("⚠️ [HTTP] 사용자 존재 확인 실패, fallback - userId: {}", userId)
                         userId > 0 // fallback
                     }
                 }
                 val sessionValid = async {
-                    if (sessionId != null && externalStoreRepository != null) {
-                        externalStoreRepository?.isValidSession(sessionId) ?: false
+                    if (sessionId != null) {
+                        try {
+                            storeValidationClient.isValidSession(sessionId)
+                        } catch (e: Exception) {
+                            log.warn("⚠️ [HTTP] 세션 검증 실패, fallback - sessionId: {}", sessionId)
+                            true // fallback: 세션이 있으면 유효하다고 가정
+                        }
                     } else {
-                        sessionId != null
+                        false
                     }
                 }
                 val goodsExists = async {
-                    if (goodsId != null && externalStoreRepository != null) {
-                        externalStoreRepository?.findGoodsPrice(goodsId) != null
+                    if (goodsId != null) {
+                        try {
+                            storeValidationClient.getGoodsPrice(goodsId) != null
+                        } catch (e: Exception) {
+                            log.warn("⚠️ [HTTP] 굿즈 존재 확인 실패, fallback - goodsId: {}", goodsId)
+                            true // fallback: 굿즈가 있으면 존재한다고 가정
+                        }
                     } else {
-                        goodsId != null
+                        false
                     }
                 }
 
@@ -374,11 +371,11 @@ class HybridValidationService(
                     userExists = userExists.await(),
                     sessionValid = sessionValid.await(),
                     goodsExists = goodsExists.await(),
-                    processingTimeMs = 30 // 예상 처리 시간
+                    processingTimeMs = 50 // HTTP 통신으로 인한 약간 증가된 처리 시간
                 )
             }
         } catch (e: Exception) {
-            log.error("❌ [DB] 존재성 확인 실패", e)
+            log.error("❌ [HTTP] 존재성 확인 실패", e)
             ExistenceCheckResult.failed()
         }
     }
@@ -492,9 +489,43 @@ class HybridValidationService(
                         false
                     }
                 } catch (e: Exception) {
-                    log.error("💀 [Store API] 가격 검증 실패 - orderId: {}, 보안상 결제 중단", orderId, e)
-                    // 보안상 Store API 실패 시 결제를 중단합니다
-                    throw PaymentValidationException("가격 검증 서비스 장애로 인한 결제 처리 불가: ${e.message}")
+                    log.error("💀 [Store API] 배치 가격 검증 실패 - orderId: {}, fallback 검증으로 전환", orderId, e)
+
+                    // Fallback: 더 보수적인 검증 로직
+                    try {
+                        log.info("🔄 [Fallback] 보수적 fallback 검증 시도 - orderId: {}", orderId)
+
+                        // 1. 기본 금액 범위 검사 (예: 1원 ~ 1백만원)
+                        if (expectedAmount != null && (expectedAmount < 1 || expectedAmount > 1_000_000)) {
+                            log.error("💀 [Fallback] 비정상적인 결제 금액 - orderId: {}, amount: {}원", orderId, expectedAmount)
+                            throw PaymentValidationException("비정상적인 결제 금액으로 인한 결제 차단")
+                        }
+
+                        // 2. 라인 아이템 수량 검사 (예: 최대 10개 제한)
+                        val fallbackLineItems = orderDetail?.lineItems ?: emptyList()
+                        if (fallbackLineItems.size > 10) {
+                            log.error("💀 [Fallback] 과도한 아이템 수량 - orderId: {}, count: {}개", orderId, fallbackLineItems.size)
+                            throw PaymentValidationException("과도한 아이템 수량으로 인한 결제 차단")
+                        }
+
+                        // 3. 개별 아이템 가격 범위 검사
+                        for (lineItem in fallbackLineItems) {
+                            if (lineItem.unitPrice < 1 || lineItem.unitPrice > 100_000) {
+                                log.error("💀 [Fallback] 비정상적인 단가 - orderId: {}, itemId: {}, price: {}원",
+                                    orderId, lineItem.itemId, lineItem.unitPrice)
+                                throw PaymentValidationException("비정상적인 단가로 인한 결제 차단")
+                            }
+                        }
+
+                        log.error("💀 [Fallback] Store API 장애 시 보안상 결제 중단 - orderId: {}", orderId)
+                        throw PaymentValidationException("Store API 서비스 장애로 인한 결제 처리 불가: 가격 검증 필수")
+
+                    } catch (fallbackException: PaymentValidationException) {
+                        throw fallbackException // 보안 검증 실패는 그대로 전파
+                    } catch (fallbackException: Exception) {
+                        log.error("💀 [Fallback] Fallback 검증 실패 - orderId: {}, 보안상 결제 중단", orderId, fallbackException)
+                        throw PaymentValidationException("Fallback 검증 실패로 인한 결제 처리 불가: ${fallbackException.message}")
+                    }
                 }
             } else if (hasGoods) {
                 log.info("🔍 [Store API] Mixed 주문이지만 lineItem 정보 없음 - 기본 검증으로 처리")

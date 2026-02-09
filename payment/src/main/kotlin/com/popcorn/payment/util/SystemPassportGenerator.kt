@@ -53,4 +53,37 @@ class SystemPassportGenerator(
         // 최종 passport JSON 반환
         return objectMapper.writeValueAsString(envelope)
     }
+
+    /**
+     * 사용자별 Passport 토큰 생성
+     */
+    fun generateUserPassport(userId: Long, userEmail: String = "user@popcorn.com"): String {
+        val now = Instant.now().epochSecond
+        val exp = now + 300 // 5분 유효
+
+        // 실제 사용자 정보
+        val user = PassportUser(
+            userId.toString(),
+            userEmail,
+            "CUSTOMER"
+        )
+
+        val payload = PassportPayload(
+            user,
+            now,
+            exp
+        )
+
+        // payload를 JSON으로 직렬화
+        val payloadJson = objectMapper.writeValueAsString(payload)
+
+        // HMAC 서명 생성
+        val userIntegrity = HmacUtil.hmacSha256Base64Url(passportSecret, payloadJson)
+
+        // Passport envelope 생성
+        val envelope = PassportEnvelope(payload, userIntegrity)
+
+        // 최종 passport JSON 반환
+        return objectMapper.writeValueAsString(envelope)
+    }
 }

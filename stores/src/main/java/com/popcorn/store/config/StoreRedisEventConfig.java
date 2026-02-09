@@ -111,8 +111,12 @@ public class StoreRedisEventConfig {
 
         var options = StreamMessageListenerContainer.StreamMessageListenerContainerOptions
                         .<String, MapRecord<String, String, String>>builder()
-                        .batchSize(20)  // 배치 크기 상향
-                        .pollTimeout(Duration.ofMillis(5000))  // 폴링 타임아웃 증가 (5초)
+                        .batchSize(5)  // 배치 크기 감소하여 메모리 사용량 줄임
+                        .pollTimeout(Duration.ofMillis(1000))  // 폴링 타임아웃 감소 (1초)
+                        .errorHandler(t -> {
+                            log.warn("⚠️ Redis Stream 오류 발생 (복구 가능): {}", t.getMessage());
+                            // 연결 오류의 경우 자동으로 재연결됨
+                        })
                         .build();
 
         var container = StreamMessageListenerContainer.create(connectionFactory, options);

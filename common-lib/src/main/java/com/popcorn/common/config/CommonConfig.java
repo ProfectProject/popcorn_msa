@@ -10,10 +10,7 @@ import org.springframework.data.jpa.repository.config.EnableJpaAuditing;
 import org.springframework.security.core.Authentication;
 import org.springframework.security.core.context.SecurityContextHolder;
 
-import com.fasterxml.jackson.databind.DeserializationFeature;
-import com.fasterxml.jackson.databind.ObjectMapper;
-import com.fasterxml.jackson.databind.SerializationFeature;
-import com.fasterxml.jackson.datatype.jsr310.JavaTimeModule;
+// Jackson ObjectMapper 관련 import 제거 (각 서비스에서 개별 관리)
 
 @Configuration
 @EnableJpaAuditing(auditorAwareRef = "auditorAware")
@@ -22,24 +19,8 @@ import com.fasterxml.jackson.datatype.jsr310.JavaTimeModule;
 })
 public class CommonConfig {
 
-	@Bean
-	public ObjectMapper objectMapper() {
-		ObjectMapper mapper = new ObjectMapper();
-		mapper.registerModule(new JavaTimeModule());
-		// Register Kotlin module if present on the classpath.
-		try {
-			Class<?> kotlinModuleClass = Class.forName("com.fasterxml.jackson.module.kotlin.KotlinModule");
-			Object kotlinModule = kotlinModuleClass.getDeclaredConstructor().newInstance();
-			mapper.registerModule((com.fasterxml.jackson.databind.Module) kotlinModule);
-		} catch (ClassNotFoundException ignored) {
-			// Kotlin module not available; skip registration.
-		} catch (Exception e) {
-			throw new IllegalStateException("Failed to register KotlinModule", e);
-		}
-		mapper.disable(SerializationFeature.WRITE_DATES_AS_TIMESTAMPS);
-		mapper.disable(DeserializationFeature.ADJUST_DATES_TO_CONTEXT_TIME_ZONE);
-		return mapper;
-	}
+	// ObjectMapper 빈은 각 서비스의 JacksonConfig에서 정의하도록 변경
+	// 중복 빈 정의 방지를 위해 CommonConfig에서는 제거
 
 	@Bean
 	public AuditorAware<Long> auditorAware() {

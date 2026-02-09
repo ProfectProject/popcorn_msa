@@ -16,6 +16,7 @@ import org.springframework.data.redis.core.RedisTemplate;
 import org.springframework.data.redis.core.StringRedisTemplate;
 import org.springframework.data.redis.serializer.GenericJackson2JsonRedisSerializer;
 import org.springframework.data.redis.serializer.StringRedisSerializer;
+import com.fasterxml.jackson.databind.ObjectMapper;
 
 import java.time.Duration;
 
@@ -29,6 +30,12 @@ import java.time.Duration;
 @Configuration
 @Slf4j
 public class OptimizedRedisConfig {
+
+    private final ObjectMapper objectMapper;
+
+    public OptimizedRedisConfig(ObjectMapper objectMapper) {
+        this.objectMapper = objectMapper;
+    }
 
     @Value("${spring.data.redis.host:localhost}")
     private String redisHost;
@@ -102,7 +109,7 @@ public class OptimizedRedisConfig {
 
         // 🚀 성능 최적화된 시리얼라이저 설정
         StringRedisSerializer stringSerializer = new StringRedisSerializer();
-        GenericJackson2JsonRedisSerializer jsonSerializer = new GenericJackson2JsonRedisSerializer();
+        GenericJackson2JsonRedisSerializer jsonSerializer = new GenericJackson2JsonRedisSerializer(objectMapper);
 
         template.setKeySerializer(stringSerializer);
         template.setHashKeySerializer(stringSerializer);

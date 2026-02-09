@@ -10,6 +10,12 @@ spring:
     exclude: org.springframework.boot.autoconfigure.jdbc.DataSourceTransactionManagerAutoConfiguration
   profiles:
     default: local
+  jackson:
+    serialization:
+      write-dates-as-timestamps: false
+    deserialization:
+      fail-on-unknown-properties: false
+    default-property-inclusion: non_null
 
 passport:
   secret: ${PASSPORT_SECRET:passport-shared-secret}

@@ -108,14 +108,23 @@ public class RedisCacheResultAspect {
             }
 
             if (cacheResult.cacheNull() || cacheValue != null) {
-                if (cacheResult.ttlSeconds() > 0) {
-                    redisTemplate.opsForValue()
-                        .set(cacheKey, cacheValue, Duration.ofSeconds(cacheResult.ttlSeconds()));
-                } else {
-                    redisTemplate.opsForValue().set(cacheKey, cacheValue);
+                try {
+                    // LocalDateTime 직렬화 이슈 방지를 위해 ObjectMapper로 사전 직렬화 검증
+                    String jsonString = objectMapper.writeValueAsString(cacheValue);
+                    log.debug("Redis 캐시 직렬화 검증 완료: key={}, json length={}", cacheKey, jsonString.length());
+
+                    if (cacheResult.ttlSeconds() > 0) {
+                        redisTemplate.opsForValue()
+                            .set(cacheKey, cacheValue, Duration.ofSeconds(cacheResult.ttlSeconds()));
+                    } else {
+                        redisTemplate.opsForValue().set(cacheKey, cacheValue);
+                    }
+                    log.debug("Redis 캐시 저장 완료: key={}, method={}", cacheKey, joinPoint.getSignature());
+                    logCacheStatus(cacheResult.cacheName(), cacheKey, "캐시 저장");
+                } catch (Exception serializationException) {
+                    log.error("Redis 캐시 직렬화 실패: key={}, error={}", cacheKey, serializationException.getMessage());
+                    // 직렬화 실패해도 메서드 결과는 정상 반환
                 }
-                log.debug("Redis 캐시 저장: key={}, method={}", cacheKey, joinPoint.getSignature());
-                logCacheStatus(cacheResult.cacheName(), cacheKey, "캐시 저장");
             }
         } catch (DataAccessException e) {
             log.warn("Redis 캐시 저장 실패로 캐시 우회: key={}, error={}", cacheKey, e.getMessage());

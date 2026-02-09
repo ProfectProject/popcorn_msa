@@ -72,14 +72,24 @@ public class BatchPriceValidationController extends BaseController {
                     response.getOrderId(), response.getFailureReason());
         }
 
-        return ok(response);
+        // 🔍 JSON 응답 로깅
+        try {
+            BaseResponse<BatchPriceValidationResponse> finalResponse = ok(response);
+            String responseJson = new com.fasterxml.jackson.databind.ObjectMapper().writeValueAsString(finalResponse);
+            log.info("🔍 [Store] 실제 JSON 응답 - orderId: {}, response: {}",
+                    response.getOrderId(), responseJson);
+            return finalResponse;
+        } catch (Exception e) {
+            log.error("❌ [Store] JSON 직렬화 실패: {}", e.getMessage());
+            return ok(response);
+        }
     }
 
     @Operation(
         summary = "배치 가격 검증 (헬스체크)",
         description = "배치 가격 검증 API의 헬스체크를 위한 간단한 엔드포인트"
     )
-    @PostMapping("/health")
+    @PostMapping("/batch-health")
     public ResponseEntity<BaseResponse<String>> healthCheck() {
         log.debug("💚 [Store] 배치 가격 검증 API 헬스체크");
         return ok("배치 가격 검증 API가 정상적으로 동작중입니다.");

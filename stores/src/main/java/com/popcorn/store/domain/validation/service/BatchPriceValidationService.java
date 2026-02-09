@@ -60,11 +60,16 @@ public class BatchPriceValidationService {
             }
         }
 
-        // 총 금액 검증
-        if (allValid && totalActualAmount != request.getTotalExpectedAmount()) {
+        // 총 금액 검증 (null-safe 처리)
+        Integer expectedAmount = request.getTotalExpectedAmount();
+        if (allValid && expectedAmount != null && totalActualAmount != expectedAmount.intValue()) {
             allValid = false;
             failureReason = String.format("총 금액 불일치 - 예상: %d원, 실제: %d원",
-                request.getTotalExpectedAmount(), totalActualAmount);
+                expectedAmount, totalActualAmount);
+        } else if (allValid && expectedAmount == null) {
+            // expectedAmount가 null인 경우 경고 로그만 출력하고 검증 통과
+            log.warn("⚠️ [Store] 총 예상 금액이 null입니다 - orderId: {}, actualAmount: {}원",
+                request.getOrderId(), totalActualAmount);
         }
 
         BatchPriceValidationResponse response = BatchPriceValidationResponse.builder()

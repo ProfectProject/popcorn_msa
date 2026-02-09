@@ -313,7 +313,19 @@ public class UserService {
 
             // Fallback: 문자열로 ID가 전달된 경우
             String userIdStr = authentication.getName();
-            return Long.parseLong(userIdStr);
+
+            // anonymousUser 케이스 처리
+            if ("anonymousUser".equals(userIdStr)) {
+                log.warn("익명 사용자로 사용자 ID 조회 시도됨");
+                throw new RuntimeException("익명 사용자는 사용자 정보에 접근할 수 없습니다.");
+            }
+
+            try {
+                return Long.parseLong(userIdStr);
+            } catch (NumberFormatException e) {
+                log.error("사용자 ID 형식 오류: userIdStr={}", userIdStr);
+                throw new RuntimeException("잘못된 사용자 ID 형식입니다.");
+            }
 
         } catch (Exception e) {
             log.error("현재 사용자 ID 조회 실패: {}", e.getMessage());
@@ -328,21 +340,27 @@ public class UserService {
     private void validateUserAccess(Long requestedUserId) {
         Authentication authentication = SecurityContextHolder.getContext().getAuthentication();
 
-        // 내부 서비스 호출인 경우 권한 검증 우회
-        if (authentication != null && authentication.getAuthorities().stream()
+        if (authentication == null) {
+            log.warn("인증 정보가 없음 - requestedUserId: {}", requestedUserId);
+            throw new RuntimeException("인증되지 않은 사용자입니다.");
+        }
+
+        // 내부 서비스 호출인 경우 권한 검증 우회 (조기 리턴)
+        if (authentication.getAuthorities().stream()
                 .anyMatch(authority -> authority.getAuthority().equals("ROLE_SYSTEM"))) {
-            log.debug("내부 서비스 호출 - 권한 검증 우회: requestedUserId={}", requestedUserId);
+            log.debug("🔧 [내부 서비스] 권한 검증 우회 - requestedUserId: {}", requestedUserId);
             return;
         }
 
+        // 일반 사용자인 경우 권한 검증
         Long currentUserId = getCurrentAuthenticatedUserId();
 
         if (!currentUserId.equals(requestedUserId)) {
-            log.warn("권한 없는 사용자 접근 시도: currentUserId={}, requestedUserId={}",
+            log.warn("❌ [권한 거부] 다른 사용자 정보 접근 시도 - currentUserId: {}, requestedUserId: {}",
                     currentUserId, requestedUserId);
             throw new RuntimeException("다른 사용자의 정보에 접근할 수 없습니다.");
         }
 
-        log.debug("사용자 접근 권한 확인 완료: userId={}", currentUserId);
+        log.debug("✅ [권한 확인] 사용자 접근 권한 검증 완료 - userId: {}", currentUserId);
     }
 }

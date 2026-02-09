@@ -2,7 +2,7 @@
 CREATE SCHEMA IF NOT EXISTS user_auth;
 
 DO $$ BEGIN
-  CREATE TYPE user_auth.user_role AS ENUM ('CUSTOMER','OWNER','MANAGER');
+  CREATE TYPE user_auth.user_role AS ENUM ('CUSTOMER','OWNER','MANAGER','ADMIN');
 EXCEPTION WHEN duplicate_object THEN NULL; END $$;
 
 CREATE TABLE IF NOT EXISTS user_auth.users (
