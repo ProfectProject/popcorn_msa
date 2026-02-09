@@ -451,8 +451,16 @@ class HybridValidationService(
             // 2. 가격 검증 (HTTP로 받은 Order 금액 vs 결제 요청 금액)
             val basicPriceValid = (expectedAmount == actualOrderAmount)
 
+            // 🔍 디버깅: 타입과 값 상세 로깅
+            log.info("🔍 [HTTP] 가격 검증 상세 - orderId: {}", orderId)
+            log.info("  - expectedAmount: {} ({})", expectedAmount, expectedAmount?.javaClass?.simpleName)
+            log.info("  - actualOrderAmount: {} ({})", actualOrderAmount, actualOrderAmount?.javaClass?.simpleName)
+            log.info("  - basicPriceValid: {}", basicPriceValid)
+
             if (!basicPriceValid) {
                 log.warn("❌ [HTTP] 기본 가격 불일치 - expected: {}, actual: {}", expectedAmount, actualOrderAmount)
+            } else {
+                log.info("✅ [HTTP] 기본 가격 검증 성공 - expected: {}, actual: {}", expectedAmount, actualOrderAmount)
             }
 
             // 3. 심화 가격 검증 (mixed 주문에서 실제 Store DB 가격과 비교)
@@ -491,16 +499,29 @@ class HybridValidationService(
                 } catch (e: Exception) {
                     log.error("💀 [Store API] 배치 가격 검증 실패 - orderId: {}, fallback 검증으로 전환", orderId, e)
 
-                    // Store API 오류 유형에 따른 차별적 처리
+                    // Store API 오류 유형에 따른 차별적 처리 (다양한 503 오류 패턴 감지)
                     val isTemporaryFailure = e.message?.contains("503") == true ||
                                            e.message?.contains("SERVICE_UNAVAILABLE") == true ||
-                                           e.message?.contains("temporarily unavailable") == true
+                                           e.message?.contains("Service Unavailable") == true ||
+                                           e.message?.contains("temporarily unavailable") == true ||
+                                           e.message?.contains("service temporarily unavailable") == true
+
+                    // 🔍 디버깅: fallback 조건 상세 로깅
+                    log.info("🔍 [Store API] Fallback 조건 분석 - orderId: {}", orderId)
+                    log.info("  - 예외 메시지: '{}'", e.message)
+                    log.info("  - isTemporaryFailure: {}", isTemporaryFailure)
+                    log.info("  - basicPriceValid: {}", basicPriceValid)
 
                     if (isTemporaryFailure && basicPriceValid) {
                         // 🔄 임시 장애 + 기본 가격 검증 성공 시 관대하게 처리
                         log.warn("🔄 [Store API] 임시 장애 감지, 기본 가격 검증 성공으로 결제 허용 - orderId: {}, expected: {}, actual: {}",
                                 orderId, expectedAmount, actualOrderAmount)
                         true // Store API 임시 장애 시 기본 검증만으로 통과
+                    } else if (isTemporaryFailure) {
+                        // 임시 장애는 맞지만 기본 가격 검증이 실패한 경우
+                        log.warn("⚠️ [Store API] 임시 장애이지만 기본 가격 검증 실패 - orderId: {}, expected: {}, actual: {}",
+                                orderId, expectedAmount, actualOrderAmount)
+                        false // 기본 가격 검증 실패 시에는 차단
                     } else {
                         // Fallback: 더 보수적인 검증 로직 (심각한 오류나 가격 불일치 시)
                         try {
