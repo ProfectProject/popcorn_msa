@@ -1093,9 +1093,9 @@ public class StoreRedisStreamListener implements StreamListener<String, MapRecor
             String orderIdStr = normalizeUuidString((String) values.get("orderId"));
             String orderNo = normalizeQuotedString((String) values.get("orderNo"));
             String popupIdStr = normalizeUuidString((String) values.get("popupId"));
-            String confirmationItemsJson = normalizeQuotedString((String) values.get("confirmationItems"));
-            if (confirmationItemsJson == null || confirmationItemsJson.isBlank()) {
-                confirmationItemsJson = normalizeQuotedString((String) values.get("reservedSessions"));
+            Object confirmationItemsObj = values.get("confirmationItems");
+            if (confirmationItemsObj == null) {
+                confirmationItemsObj = values.get("reservedSessions");
             }
 
             UUID orderId = UUID.fromString(orderIdStr);
@@ -1103,14 +1103,27 @@ public class StoreRedisStreamListener implements StreamListener<String, MapRecor
 
             log.info("📅🔒 [STORES] 스케줄 확정 처리 시작 - orderId: {}, popupId: {}", orderId, popupId);
 
-            if (confirmationItemsJson == null || confirmationItemsJson.isBlank()) {
+            if (confirmationItemsObj == null) {
                 log.warn("📅🔒 [STORES] 스케줄 확정 JSON 누락 - orderId: {}", orderId);
                 return;
             }
 
-            List<Map<String, Object>> confirmationItems = objectMapper.readValue(
-                    confirmationItemsJson, new TypeReference<List<Map<String, Object>>>() {}
-            );
+            List<Map<String, Object>> confirmationItems;
+            if (confirmationItemsObj instanceof String confirmationItemsJson) {
+                if (confirmationItemsJson.isBlank()) {
+                    log.warn("📅🔒 [STORES] 스케줄 확정 JSON 누락 - orderId: {}", orderId);
+                    return;
+                }
+                confirmationItems = objectMapper.readValue(
+                        confirmationItemsJson, new TypeReference<List<Map<String, Object>>>() {}
+                );
+            } else if (confirmationItemsObj instanceof List<?> list) {
+                confirmationItems = objectMapper.convertValue(list,
+                        objectMapper.getTypeFactory().constructCollectionType(List.class, Map.class));
+            } else {
+                log.warn("📅🔒 [STORES] 스케줄 확정 JSON 형식 오류 - orderId={}", orderId);
+                return;
+            }
 
             if (confirmationItems == null || confirmationItems.isEmpty()) {
                 log.warn("📅🔒 [STORES] 스케줄 확정 항목이 비어있음 - orderId: {}", orderId);
@@ -1122,10 +1135,11 @@ public class StoreRedisStreamListener implements StreamListener<String, MapRecor
 
             for (Map<String, Object> item : confirmationItems) {
                 try {
-                    String scheduleIdStr = normalizeUuidString((String) item.get("scheduleId"));
-                    if (scheduleIdStr == null) {
-                        scheduleIdStr = normalizeUuidString((String) item.get("sessionOptionId"));
+                    Object scheduleIdObj = item.get("scheduleId");
+                    if (scheduleIdObj == null) {
+                        scheduleIdObj = item.get("sessionOptionId");
                     }
+                    String scheduleIdStr = normalizeUuidString(scheduleIdObj != null ? scheduleIdObj.toString() : null);
                     int quantity = parseQuantity(item.get("quantity"), item.get("qty"));
                     if (scheduleIdStr == null || scheduleIdStr.isEmpty()) {
                         throw new IllegalArgumentException("scheduleId 누락");

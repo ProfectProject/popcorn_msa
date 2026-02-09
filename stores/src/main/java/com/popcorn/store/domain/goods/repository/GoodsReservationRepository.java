@@ -20,8 +20,7 @@ public class GoodsReservationRepository  {
 
         String sql = """
                 UPDATE goods_variants
-                   SET stock = stock - :quantity,
-                       reservation_stock = reservation_stock + :quantity,
+                   SET reservation_stock = reservation_stock + :quantity,
                        updated_at = now()
                  WHERE goods_id = :goodsId
                    AND is_active = TRUE
@@ -41,11 +40,11 @@ public class GoodsReservationRepository  {
 
         String sql = """
                 UPDATE goods_variants
-                   SET stock = stock + :quantity,
+                   SET reservation_stock = reservation_stock - :quantity,
                        updated_at = now()
                  WHERE goods_id = :goodsId
                    AND is_active = TRUE
-                   AND stock >= :quantity
+                   AND reservation_stock >= :quantity
                    AND deleted_at IS NULL
                 RETURNING goods_id, stock, reservation_stock
                 """;
