@@ -1,48 +1,51 @@
-/*package com.popcorn.order.kafka.producer;
+package com.popcorn.order.kafka.producer;
 
-import java.time.LocalDateTime;
+import com.popcorn.order.entity.Order;
+import java.time.Instant;
+import java.util.HashMap;
 import java.util.Map;
 import java.util.UUID;
 
 import org.springframework.kafka.core.KafkaTemplate;
 import org.springframework.stereotype.Component;
 
-import com.popcorn.order.entity.Order;
-import com.popcorn.order.kafka.event.MetaEvent;
-import com.popcorn.order.kafka.event.order_events.OrderCreateEvent;
-import com.popcorn.order.kafka.event.payment_requests.PaymentCANCELRequestEvent;
-
 import lombok.RequiredArgsConstructor;
 
 @Component
 @RequiredArgsConstructor
 public class PaymentRequestsProducer {
-    private final KafkaTemplate<String, Object> kafkaTemplate;
+        private static final String PAYMENT_REQUESTS_TOPIC = "payment-requests";
+        private final KafkaTemplate<String, Object> kafkaTemplate;
 
-    /*
-    * PAYMENT_CANCEL_REQUESTED
-    */
-    /*public void publishPaymentCancelRequested(Order order,UUID paymentId,
-                                boolean hasGoods, boolean hasReservation) {
+        public void publishPaymentCreateRequested(Order order, String paymentMethod, String paymentKey) {
+        Map<String, Object> payload = new HashMap<>();
+        payload.put("eventId", UUID.randomUUID().toString());
+        payload.put("eventType", "PAYMENT_CREATE_REQUESTED");
+        payload.put("occurredAt", Instant.now().toString());
+        payload.put("producer", "order-service");
+        // + paymentId :: 어디서
+        payload.put("orderId", order.getId().toString()); 
+        //- payload.put("orderNo", order.getOrderNo());
+        payload.put("amount", order.getTotalAmount());
+        // + orderName :: orderType으로 대체
+        payload.put("requestedAt", Instant.now().toString());
+        //- payload.put("paymentMethod", paymentMethod);
+        //- payload.put("paymentKey", paymentKey);
 
-        PaymentCANCELRequestEvent event = PaymentCANCELRequestEvent.builder()
-                .meta(MetaEvent.builder()
-                        .eventId(UUID.randomUUID())
-                        .correlationId(UUID.randomUUID())
-                        .timestamp(LocalDateTime.now())
-                        .eventType("PAYMENT_CANCEL_REQUESTED")
-                        .eventVersion("1.0")
-                        .producer("order-service")
-                        .aggregateType("Order")
-                        .metadata(Map.of())
-                        .build())
-                .paymentId(paymentId)
-                .orderId(order.getId())
-                .requestedAt(null)
-                .build();
-
-        // key 전략: orderId (같은 주문 이벤트는 같은 파티션으로)
-        kafkaTemplate.send("order-events", order.getId().toString(), event);
+        kafkaTemplate.send(PAYMENT_REQUESTS_TOPIC, order.getId().toString(), payload);
     }
+    public void publishPaymentCancelRequested(Order order, String paymentId, String reason) {
+        Map<String, Object> payload = new HashMap<>();
+        payload.put("eventId", UUID.randomUUID().toString());
+        payload.put("eventType", "PAYMENT_CANCEL_REQUESTED");
+        payload.put("occurredAt", Instant.now().toString());
+        payload.put("producer", "order-service");
+        payload.put("orderId", order.getId().toString());
+        payload.put("orderNo", order.getOrderNo());
+        payload.put("paymentId", paymentId);
+        payload.put("cancelReason", reason);
+        payload.put("requestedAt", Instant.now().toString()); // occurredAt과 같은가?
 
-}*/
+        kafkaTemplate.send(PAYMENT_REQUESTS_TOPIC, order.getId().toString(), payload);
+    }
+}

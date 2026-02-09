@@ -109,4 +109,9 @@ public class OrderItem extends BaseEntity {
         return ItemType.GOODS.equals(orderItemType);
     }
 
+    public ItemType getType() {
+        // TODO Auto-generated method stub
+        throw new UnsupportedOperationException("Unimplemented method 'getType'");
+    }
+
 }

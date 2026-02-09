@@ -1,4 +1,4 @@
-package com.popcorn.users;
+/*package com.popcorn.users;
 
 import java.util.HashMap;
 import java.util.Map;
@@ -35,3 +35,4 @@ public class ConsumerTest {
     }
 
 }
+*/

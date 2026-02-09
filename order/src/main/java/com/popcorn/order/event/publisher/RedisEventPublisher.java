@@ -41,7 +41,7 @@ public class RedisEventPublisher {
     private static final String STORE_LOOKUP_STREAM = "store-lookup-events"; // 팝업 정보 조회 (필요시만 사용)
 
     /**
-     * 주문 결제 완료 이벤트 발행 (Store 서비스에서 수신)
+     * 주문 결제 완료 이벤트 발행 (Store 서비스에서 수신) ORDER_PAID
      */
     public void publishOrderPaidEvent(OrderPaidEvent event) {
         try {
@@ -76,7 +76,7 @@ public class RedisEventPublisher {
 
 
     /**
-     * 굿즈 예약 취소 요청 이벤트 발행 (Store 서비스에서 수신)
+     * 굿즈 예약 취소 요청 이벤트 발행 (Store 서비스에서 수신) GOODS_RESERVATION_CANCEL_REQUESTED
      */
     public void publishGoodsReservationCancelRequestedEvent(String eventId,
                                                             java.util.UUID orderId,
@@ -112,7 +112,7 @@ public class RedisEventPublisher {
     }
 
     /**
-     * 결제 생성 요청 이벤트 발행 (Payment 서비스에서 수신)
+     * 결제 생성 요청 이벤트 발행 (Payment 서비스에서 수신) PAYMENT_CREATE_REQUESTED
      */
     public void publishPaymentCreateRequestedEvent(String eventId,
                                                    java.util.UUID orderId,
@@ -152,7 +152,7 @@ public class RedisEventPublisher {
     }
 
     /**
-     * 결제 취소 요청 이벤트 발행 (Payment 서비스에서 수신)
+     * 결제 취소 요청 이벤트 발행 (Payment 서비스에서 수신) PAYMENT_CANCEL_REQUESTED
      */
     public void publishPaymentCancelRequestedEvent(String eventId,
                                                    java.util.UUID orderId,
@@ -201,7 +201,7 @@ public class RedisEventPublisher {
 
     /**
      * 스케줄 확정 요청 이벤트 Stream 발행 (결제 완료 후)
-     * Store 서비스로 스케줄 예약 → 확정 변경 요청 전송
+     * Store 서비스로 스케줄 예약 → 확정 변경 요청 전송  SCHEDULE_CONFIRMATION_REQUESTED
      */
     public void publishScheduleConfirmationRequestedEvent(
             String eventId,
@@ -328,7 +328,7 @@ public class RedisEventPublisher {
     // ================ 📦 개별 이벤트 발행 메소드들 ================
 
     /**
-     * 재고 차감 요청 이벤트 발행 (Store 서비스에서 수신)
+     * 재고 차감 요청 이벤트 발행 (Store 서비스에서 수신) STOCK_DEDUCTION_REQUESTED
      */
     public void publishStockDeductionRequestedEvent(com.popcorn.order.event.stock.StockDeductionRequestedEvent event) {
         try {
@@ -357,7 +357,7 @@ public class RedisEventPublisher {
     }
 
     /**
-     * 굿즈 예약 요청 이벤트 발행 (Store 서비스에서 수신)
+     * 굿즈 예약 요청 이벤트 발행 (Store 서비스에서 수신) X -> order-created 로 대체
      */
     public void publishGoodsReservationRequestedEvent(com.popcorn.order.event.goods.GoodsReservationRequestedEvent event) {
         try {
@@ -385,7 +385,7 @@ public class RedisEventPublisher {
     }
 
     /**
-     * 스케줄 예약 요청 이벤트 발행 (Store 서비스에서 수신)
+     * 스케줄 예약 요청 이벤트 발행 (Store 서비스에서 수신) X -> order-created 로 대체
      */
     public void publishScheduleReservationRequestedEvent(com.popcorn.order.event.schedule.ScheduleReservationRequestedEvent event) {
         try {

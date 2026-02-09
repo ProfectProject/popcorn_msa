@@ -1,58 +1,91 @@
-/*package com.popcorn.order.kafka.consumer;
+package com.popcorn.order.kafka.consumer;
 
+import java.util.HashMap;
 import java.util.Map;
+import java.util.UUID;
 
-import org.apache.kafka.clients.consumer.ConsumerRecord;
+import org.springframework.core.OrderComparator;
 import org.springframework.kafka.annotation.KafkaListener;
-import org.springframework.kafka.support.Acknowledgment;
-import org.springframework.stereotype.Component;
+import org.springframework.stereotype.Service;
 
+import com.fasterxml.jackson.core.JsonProcessingException;
+import com.fasterxml.jackson.core.type.TypeReference;
 import com.fasterxml.jackson.databind.ObjectMapper;
+import com.popcorn.order.constants.EventConstants;
+import com.popcorn.order.entity.OrderStatus;
+import com.popcorn.order.service.core.OrderCommandService;
 
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 
+@Service
 @Slf4j
-@Component
 @RequiredArgsConstructor
 public class StoreEventConsumer {
+    private final OrderCommandService orderCommandService;
 
-    private final ObjectMapper objectMapper;
+    @KafkaListener(topics = "store-events", groupId = "order-reservation-cg")
+    public void storeReserveConsumer(String kafkaMessage){
+        log.info("카프카 메세지-StoreEventConsumer:{}",kafkaMessage);
 
-    @KafkaListener(
-            topics = "store-events",
-            groupId = "order-reservation-cg"
-    )
-    public void consumeStoreEvent(
-            ConsumerRecord<String, String> record,
-            Acknowledgment ack
-    ) {
+        Map<Object, Object> map = new HashMap<>();
+        ObjectMapper mapper = new ObjectMapper();
         try {
-            log.info("📥 [STORE-EVENT-TEST] raw 수신");
-            log.info("  ▶ topic={}, partition={}, offset={}",
-                    record.topic(), record.partition(), record.offset());
-            log.info("  ▶ key={}", record.key());
-            log.info("  ▶ value={}", record.value());
+            map = mapper.readValue(kafkaMessage, new TypeReference<Map<Object, Object>>() {
+            });
+        } catch (JsonProcessingException e) {
+            e.printStackTrace();
+        }
 
-            // JSON 파싱만 해보기
-            Map<String, Object> payload =
-                    objectMapper.readValue(record.value(), Map.class);
+        log.info("카프카 orderId={} , eventType={}",(String)map.get("orderId"),(String)map.get("eventType"));
 
-            String eventType = String.valueOf(payload.get("eventType"))
-                    .replace("\"", "")
-                    .trim();
+        String eventType = (String)map.get("eventType");
+        String orderIdRaw = (String)map.get("orderId");
 
-            log.info("✅ [STORE-EVENT-TEST] eventType={}", eventType);
+        /*if (orderIdRaw  == null || orderIdRaw .isBlank()) {
+            return null;
+        }*/
 
-            // 여기서는 아무 처리 안 함
-            ack.acknowledge();
+        UUID orderId = UUID.fromString(orderIdRaw);
+        
 
-        } catch (Exception e) {
-            log.error("🚨 [STORE-EVENT-TEST] 소비 실패", e);
-
-            // ❗ 테스트 단계에서는 ack 해서 offset 고정 방지
-            ack.acknowledge();
+        switch (eventType) {
+                case "GOODS_RESERVATION_SUCCEEDED":
+                case "SCHEDULE_RESERVATION_SUCCEEDED":
+                    orderCommandService.updateOrderStatus(orderId, OrderStatus.RESERVED.name(),
+                            "예약 성공 이벤트 수신");
+                    // 결제 생성 요청 이벤트 발행
+                    orderCommandService.publishPaymentCreateRequestedEvent(orderId);
+                    break;
+                case "STOCK_DEDUCTION_SUCCEEDED":
+                case "SCHEDULE_CONFIRMATION_SUCCEEDED":
+                    orderCommandService.updateOrderStatus(orderId, OrderStatus.COMPLETED.name(),
+                            "차감/확정 성공 이벤트 수신");
+                    orderCommandService.publishOrderCompletedEvent(orderId);
+                    break;
+                /*case "goods-reservation-failed":
+                case "schedule-reservation-failed":
+                    orderCommandService.updateOrderStatus(orderId, OrderStatus.REJECTED.name(),
+                            "예약 실패 이벤트 수신");
+                    break;
+                case "reservation-expired":
+                    orderCommandService.updateOrderStatus(orderId, OrderStatus.EXPIRED.name(),
+                            "예약 만료 이벤트 수신");
+                    break;
+                case "stock-deduction-failed":
+                case "schedule-confirmation-failed":
+                    orderCommandService.updateOrderStatus(orderId, OrderStatus.CANCELLED.name(),
+                            "차감/확정 실패 이벤트 수신");
+                    orderCommandService.cancelPaymentForOrder(orderId, getString(payload, "paymentId"),
+                            "차감/확정 실패로 인한 결제 취소");
+                    break;
+                case "stock-released":
+                case "schedule-released":
+                    orderCommandService.updateOrderStatus(orderId, OrderStatus.CANCELLED.name(),
+                            "재고/스케줄 해제 이벤트 수신");
+                    break;*/
+                default:
+                    log.info("Unhandled store eventType: {}", eventType);
         }
     }
-}*/
-
+}

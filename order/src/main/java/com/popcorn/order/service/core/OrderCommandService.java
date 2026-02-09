@@ -31,6 +31,7 @@ import com.popcorn.order.event.order.OrderStatusChangedEvent;
 import com.popcorn.order.event.order.OrderCancelledEvent;
 import com.popcorn.order.event.publisher.OrderEventPublisher;
 import com.popcorn.order.kafka.producer.OrderEventProducer;
+import com.popcorn.order.kafka.producer.StoreRequestsProducer;
 import com.popcorn.order.repository.OrderRepository;
 import com.popcorn.order.repository.OrderItemRepository;
 import com.popcorn.order.repository.OrderStatusHistoryRepository;
@@ -72,6 +73,8 @@ public class OrderCommandService {
     private final IdempotencyService idempotencyService;
     private final CircuitBreakerFactory circuitBreakerFactory;
     private final OrderEventProducer orderEventProducer;
+    private final StoreRequestsProducer storeRequestsProducer;
+
 
 
     // 🚀 극한 성능 최적화 서비스들 (목표: 1초 미만)
@@ -936,13 +939,18 @@ public class OrderCommandService {
         }
     }
 
+    /* 결제 요청 이벤트 발행  */
     public void publishPaymentCreateRequestedEvent(UUID orderId) {
         try {
             Order order = orderRepository.findById(orderId)
                     .orElseThrow(() -> new RuntimeException("주문을 찾을 수 없어요: " + orderId));
 
             String paymentMethod = determinePaymentMethod(order);
+            
             orderEventPublisher.publishPaymentCreateRequestedEvent(order, paymentMethod);
+            /* kafka 결제 생성 요청 이벤트 발행 */
+            
+            
         } catch (Exception e) {
             log.error("결제 생성 요청 이벤트 발행 실패 - orderId: {}, error: {}", orderId, e.getMessage(), e);
         }
@@ -1026,9 +1034,14 @@ public class OrderCommandService {
             // 주문 조회
             Order order = orderRepository.findById(orderId)
                     .orElseThrow(() -> new RuntimeException("주문을 찾을 수 없어요: " + orderId));
+            boolean hasGoods = order.isGoodsType() || order.isMixedType();
+            boolean hasReservation = order.isReservationType() || order.isMixedType();
 
             // 주문 완료 이벤트 발행
             orderEventPublisher.publishOrderCompletedEvent(order);
+
+            /* kafka 주문완료 이벤트 발행 */
+            orderEventProducer.publishOrderCompleted(order,hasGoods,hasReservation);
 
             log.info("✅ 주문 완료 이벤트 발행 완료 - orderId: {}, orderNo: {}", orderId, order.getOrderNo());
 
@@ -1169,6 +1182,9 @@ public class OrderCommandService {
                         order.getPopupId(),
                         deductionItems
                 );
+
+                /* kafka 재고차감 이벤트 발행 */
+                storeRequestsProducer.publishStockDeductionRequested(order,deductionItems);
             }
 
             log.info("✅ [ORDER] 재고 차감 요청 이벤트 발행 완료 - orderId: {}, 굿즈 항목 수: {}",
@@ -1218,6 +1234,7 @@ public class OrderCommandService {
 
             // 스케줄 확정 요청 이벤트 발행
             orderEventPublisher.publishScheduleConfirmationRequestedEvent(
+                    order,
                     orderId,
                     order.getOrderNo(),
                     order.getPopupId(),
