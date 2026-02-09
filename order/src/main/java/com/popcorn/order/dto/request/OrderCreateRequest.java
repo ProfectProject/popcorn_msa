@@ -10,13 +10,13 @@ import jakarta.validation.constraints.NotEmpty;
 import jakarta.validation.constraints.NotNull;
 import lombok.AllArgsConstructor;
 import lombok.Builder;
-import lombok.Getter;
+import lombok.Data;
 import lombok.NoArgsConstructor;
 
 /**
  * 주문 생성 요청 DTO
  */
-@Getter
+@Data
 @NoArgsConstructor
 @AllArgsConstructor
 @Builder

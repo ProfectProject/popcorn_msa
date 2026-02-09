@@ -8,7 +8,7 @@ server:
 spring:
   kafka:
     enabled: true
-    bootstrap-servers: localhost:29092
+    bootstrap-servers: ${KAFKA_BOOTSTRAP_SERVERS:kafka-1:9092,kafka-2:9092,kafka-3:9092}
     consumer:
       group-id: order-service-group
   config:
@@ -17,7 +17,7 @@ spring:
 
   # 데이터베이스 설정 (로컬 환경용, 성능 최적화)
   datasource:
-    url: jdbc:postgresql://${DB_HOST:localhost}:${DB_PORT:5430}/${DB_NAME:popcorn_db}
+    url: jdbc:postgresql://${DB_HOST:localhost}:${DB_PORT:5432}/${DB_NAME:popcorn_db}
     username: ${ORDER_DB_USERNAME:order_app}
     password: ${ORDER_DB_PASSWORD:order123}
     driver-class-name: org.postgresql.Driver

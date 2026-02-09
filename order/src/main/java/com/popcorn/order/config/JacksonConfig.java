@@ -35,8 +35,8 @@ public class JacksonConfig {
         // null 값 제외
         mapper.setSerializationInclusion(JsonInclude.Include.NON_NULL);
 
-        // snake_case 사용
-        mapper.setPropertyNamingStrategy(PropertyNamingStrategies.SNAKE_CASE);
+        // camelCase 사용 (기본값)
+        // mapper.setPropertyNamingStrategy(PropertyNamingStrategies.SNAKE_CASE);
 
         return mapper;
     }
