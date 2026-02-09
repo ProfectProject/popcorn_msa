@@ -232,7 +232,18 @@ class TossPaymentCoroutineService(
                         pgResponse = rawPayload
                     )
 
-                    log.info("✅ 결제 이벤트 발행 완료: orderId={}, amount={}원", orderId, amount)
+                    // CheckIns로 QR 코드 생성 요청 이벤트 발행
+                    paymentEventPublisher.publishQrCodeGenerationRequested(
+                        paymentId = paymentResult.paymentId,
+                        orderId = UUID.fromString(orderId),
+                        orderNo = orderId, // orderNo는 orderId와 동일하게 처리 (임시)
+                        amount = amount,
+                        customerId = 1L, // 기본값 (추후 결제 생성 시점에 저장된 값 사용)
+                        popupId = null,
+                        storeId = null
+                    )
+
+                    log.info("✅ 결제 이벤트 발행 완료: orderId={}, amount={}원 (QR 생성 요청 포함)", orderId, amount)
                 } catch (e: Exception) {
                     log.error("❌ 결제 이벤트 발행 실패 - 결제는 성공 처리됨: error={}", e.message, e)
                 }

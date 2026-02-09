@@ -350,6 +350,23 @@ class PaymentCommandCoroutineService(
             log.info("✅ [PAYMENT] PAYMENT_APPROVED 이벤트 발행 완료 - paymentId: {}, eventId: {}",
                 payment.id, event.eventId)
 
+            // CheckIns로 QR 코드 생성 요청 이벤트 발행
+            try {
+                paymentEventPublisher.publishQrCodeGenerationRequested(
+                    paymentId = payment.id,
+                    orderId = payment.orderId,
+                    orderNo = orderInfo?.orderNo ?: payment.orderId.toString(),
+                    amount = payment.amount,
+                    customerId = orderInfo?.customerId,
+                    popupId = orderInfo?.popupId,
+                    storeId = orderInfo?.storeId
+                )
+                log.info("✅ [PAYMENT] QR 생성 요청 이벤트 발행 완료 - paymentId: {}", payment.id)
+            } catch (qrException: Exception) {
+                log.error("❌ [PAYMENT] QR 생성 요청 이벤트 발행 실패 - paymentId: {}, error: {}",
+                    payment.id, qrException.message, qrException)
+            }
+
         } catch (e: Exception) {
             log.error("❌ [PAYMENT] PAYMENT_APPROVED 이벤트 발행 실패 - paymentId: {}, error: {}",
                 payment.id, e.message, e)
