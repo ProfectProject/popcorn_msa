@@ -8,6 +8,7 @@ import java.util.UUID;
 import org.springframework.context.event.EventListener;
 import org.springframework.stereotype.Component;
 
+import com.example.orderquery.domain.summary.entity.EventType;
 import com.example.orderquery.domain.summary.service.PopupSummaryUpsertService;
 
 import lombok.RequiredArgsConstructor;
@@ -73,6 +74,8 @@ public class PopupSummaryEventListener {
 
         if ("PopupCreatedEvent".equals(eventType)) {
             upsertService.createFromPopup(
+                    null,
+                    EventType.POPUP_CREATED,
                     popupId,
                     storeId,
                     ownerId,
@@ -85,7 +88,12 @@ public class PopupSummaryEventListener {
             return;
         }
 
+        EventType popupEventType = "PopupStatusUpdatedEvent".equals(eventType)
+                ? EventType.POPUP_STATUS_UPDATED
+                : EventType.POPUP_INFO_UPDATED;
         upsertService.updateFromPopup(
+                null,
+                popupEventType,
                 popupId,
                 storeId,
                 ownerId,

@@ -15,7 +15,7 @@ import com.popcorn.common.exception.BaseException;
 import lombok.extern.slf4j.Slf4j;
 
 @Slf4j
-@RestControllerAdvice(basePackages = "com.popcorn.store.domain.store")
+@RestControllerAdvice(basePackages = "com.popcorn.store.domain")
 @Order(1) // GlobalExceptionHandler보다 높은 우선순위
 public class StoreExceptionHandler {
 

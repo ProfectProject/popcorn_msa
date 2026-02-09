@@ -77,6 +77,9 @@ dependencies {
 	testImplementation 'org.junit.platform:junit-platform-suite'
 	testRuntimeOnly 'org.junit.platform:junit-platform-launcher'
 
+	//kafka
+	implementation 'org.springframework.kafka:spring-kafka' 
+
 	// JWT
 	implementation 'io.jsonwebtoken:jjwt-api:0.11.5'
 	runtimeOnly 'io.jsonwebtoken:jjwt-impl:0.11.5'

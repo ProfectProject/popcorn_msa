@@ -218,7 +218,7 @@ public class OrderCommandController {
                 requestId, request.getPopupId(), request.getOrderType(), request.getItems().size());
 
         // 요청 본문 상세 로깅 (민감 정보 제외)
-        log.debug("📝 [REQ-{}] 요청 본문: {}", requestId, request);
+        log.info("📝 [REQ-{}] 요청 본문: {}", requestId, request);
 
         long startTime = System.currentTimeMillis();
 

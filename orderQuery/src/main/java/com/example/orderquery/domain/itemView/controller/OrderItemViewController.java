@@ -3,7 +3,10 @@ package com.example.orderquery.domain.itemView.controller;
 import com.example.orderquery.domain.itemView.dto.OrderItemPageDto;
 import com.example.orderquery.domain.itemView.dto.OrderItemQuery;
 import com.example.orderquery.domain.itemView.service.OrderItemViewService;
+import com.example.orderquery.domain.summary.dto.OrderSummaryDto;
+import com.example.orderquery.domain.summary.service.OrderSummaryService;
 import com.example.orderquery.global.security.OwnerAuthService;
+import com.example.orderquery.global.security.OwnerAuthService.OwnerContext;
 import com.popcorn.common.controller.BaseController;
 import com.popcorn.common.dto.BaseResponse;
 import com.popcorn.common.annotation.ApiLogging;
@@ -33,6 +36,7 @@ public class OrderItemViewController extends BaseController {
 
     private final OrderItemViewService orderItemViewService;
     private final OwnerAuthService ownerAuthService;
+    private final OrderSummaryService orderSummaryService;
 
     @GetMapping()
     @Operation(summary = "팝업 주문 항목 조회", description = "storeId + popupId 기준으로 라인 아이템을 조회합니다.")
@@ -42,8 +46,9 @@ public class OrderItemViewController extends BaseController {
                                                                    @Parameter(description = "스토어 ID") @PathVariable UUID storeId,
                                                                    @Parameter(description = "팝업 ID") @PathVariable UUID popupId,
                                                                    @ParameterObject @Valid @ModelAttribute OrderItemQuery query) {
-        Long ownerId = ownerAuthService.getCurrentOwnerId(authentication);
-        ownerAuthService.requireOwnedPopup(storeId, popupId, ownerId);
+        OwnerContext context = ownerAuthService.resolveOwner(authentication);
+        OrderSummaryDto summary = orderSummaryService.getSummary(storeId, popupId);
+        ownerAuthService.authorizePopupAccess(summary, context);
         return ok(orderItemViewService.getItems(storeId, popupId, query));
     }
 }

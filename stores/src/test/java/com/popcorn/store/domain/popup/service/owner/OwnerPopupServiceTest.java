@@ -34,7 +34,6 @@ import com.popcorn.store.domain.popup.entity.enums.PopupCategory;
 import com.popcorn.store.domain.popup.entity.enums.PopupStatus;
 import com.popcorn.store.domain.popup.exception.PopupException;
 import com.popcorn.store.domain.popup.exception.owner.OwnerPopupException;
-import com.popcorn.store.domain.popup.event.PopupCreatedEvent;
 import com.popcorn.store.domain.popup.event.PopupScheduleCreatedEvent;
 import com.popcorn.store.domain.popup.event.PopupScheduleDeletedEvent;
 import com.popcorn.store.domain.popup.event.PopupScheduleUpdatedEvent;
@@ -42,6 +41,7 @@ import com.popcorn.store.domain.popup.event.PopupStatusUpdatedEvent;
 import com.popcorn.store.domain.popup.event.PopupUpdatedEvent;
 import com.popcorn.store.domain.popup.repository.owner.OwnerPopupRepository;
 import com.popcorn.store.domain.popup.repository.owner.OwnerPopupScheduleRepository;
+import com.popcorn.store.domain.popup.repository.owner.outbox.OutboxEventRepository;
 import com.popcorn.store.domain.popup.repository.owner.view.OwnerPopupScheduleView;
 import com.popcorn.store.domain.popup.cache.PopupDetailCacheManager;
 import com.popcorn.store.event.standard.StandardStoreEventPublisher;
@@ -61,10 +61,13 @@ class OwnerPopupServiceTest {
 	private ApplicationEventPublisher eventPublisher;
 
 	@Mock
+	private StandardStoreEventPublisher standardStoreEventPublisher;
+
+	@Mock
 	private PopupDetailCacheManager popupDetailCacheManager;
 
 	@Mock
-	private StandardStoreEventPublisher standardStoreEventPublisher;
+	private OutboxEventRepository outboxEventRepository;
 
 	private OwnerPopupService service;
 
@@ -72,12 +75,12 @@ class OwnerPopupServiceTest {
 	void setUp() {
 		MockitoAnnotations.openMocks(this);
 		service = new OwnerPopupService(ownerPopupRepository, ownerPopupScheduleRepository, validationService, eventPublisher,
-				standardStoreEventPublisher, popupDetailCacheManager);
+				standardStoreEventPublisher, popupDetailCacheManager, outboxEventRepository);
 	}
 
 	@Test
-	@DisplayName("팝업 생성 - 정상 생성 및 이벤트 발행")
-	void createPopupPublishesEvents() {
+	@DisplayName("팝업 생성 - outbox 저장 + 스케줄 이벤트 발행")
+	void createPopupStoresOutboxEvent() {
 		Long ownerId = 10L;
 		UUID storeId = UUID.randomUUID();
 		CreatePopupScheduleRequest schedule = CreatePopupScheduleRequest.builder()
@@ -114,8 +117,8 @@ class OwnerPopupServiceTest {
 		verify(ownerPopupScheduleRepository, times(1)).insertSchedule(any(), eq(savedPopup.getId()),
 				eq(schedule.getStartAt()), eq(schedule.getEndAt()), eq(10000), eq(20), eq(20), eq(false),
 				any(), eq(ownerId), eq(ownerId));
-		verify(eventPublisher).publishEvent(any(PopupCreatedEvent.class));
 		verify(eventPublisher).publishEvent(any(PopupScheduleCreatedEvent.class));
+		verify(outboxEventRepository).save(any());
 	}
 
 	@Test

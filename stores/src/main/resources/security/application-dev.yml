@@ -6,48 +6,117 @@ spring:
     activate:
       on-profile: dev
   datasource:
-    url: jdbc:postgresql://${DB_HOST:localhost}:${DB_PORT:5432}/${DB_NAME:popcorn_db}?currentSchema=store
+    url: jdbc:postgresql://${DB_HOST:localhost}:${DB_PORT:5430}/${DB_NAME:popcorn_db}
     username: ${STORE_DB_USERNAME:store_app}
     password: ${STORE_DB_PASSWORD:store123}
     driver-class-name: org.postgresql.Driver
-    hikari:
-      maximum-pool-size: 3
-      minimum-idle: 1
-      connection-init-sql: SET search_path TO store
   jpa:
     open-in-view: false
     hibernate:
-      ddl-auto: validate
+      ddl-auto: none
     properties:
       hibernate:
         type:
-          preferred_enum_jdbc_type: VARCHAR
-        default_schema: store
+          preferred_enum_jdbc_type: NAMED_ENUM
 
   cache:
     type: simple
 
+  # Redis 설정 (Order 서비스와 동일한 database 사용) - ⚡ 극한 성능 최적화
+  data:
+    redis:
+      host: ${REDIS_HOST:localhost}
+      port: ${REDIS_PORT:6379}
+      password: ${REDIS_PASSWORD:}
+      timeout: 2000ms  # Redis Stream 안정성 위해 기본 타임아웃 복구
+      database: 0  # Payment, Order 서비스와 동일한 database 0 사용
+      connection-timeout: 2000ms  # 연결 지연에 대비해 타임아웃 완화
+      jedis:
+        pool:
+          max-active: 50  # 30 → 50 (극한 성능 최적화) 🚀
+          max-idle: 30   # 20 → 30 (더 많은 유휴 연결 유지) 🚀
+          min-idle: 15    # 10 → 15 (빠른 연결 확보) 🚀
+          max-wait: 500ms # 1000ms → 500ms (대기시간 대폭 단축) ⚡
+          time-between-eviction-runs: 60000ms # 유휴 연결 정리 주기
+          min-evictable-idle-time: 300000ms # 최소 유휴 시간
+          test-on-borrow: false # 대출 시 유효성 검사 비활성화 (성능 향상)
+          test-on-return: false # 반환 시 유효성 검사 비활성화 (성능 향상)
+          test-while-idle: true # 유휴 중 검사만 활성화
+
   flyway:
-    url: jdbc:postgresql://${DB_HOST:localhost}:${DB_PORT:5432}/${DB_NAME:popcorn_db}
+    enabled: true
     user: ${STORE_FLYWAY_USERNAME:store_migrator}
     password: ${STORE_FLYWAY_PASSWORD:store123}
-    enabled: true
-    baseline-on-migrate: true
-    validate-on-migrate: true
-    locations: classpath:db/migration/schema
     default-schema: store
     schemas: store
+    locations: classpath:db/migration/schema,classpath:db/migration/seed
+    baseline-on-migrate: true
+    validate-on-migrate: true
     clean-disabled: false
+    placeholders:
+      STORE_MIGRATOR_PASSWORD: ${STORE_MIGRATOR_PASSWORD:store321}
 
-springdoc:
-  server-url: ${GATEWAY_SERVICE_URL:https://dev.goormpopcorn.shop}
+  kafka:
+    bootstrap-servers: ${KAFKA_BOOTSTRAP_SERVERS:localhost:29092}
 
+    producer:
+      acks: all
+      properties:
+        enable.idempotence: true
+      key-serializer: org.apache.kafka.common.serialization.StringSerializer
+      value-serializer: org.apache.kafka.common.serialization.StringSerializer
+
+    consumer:
+      group-id: ${KAFKA_CONSUMER_GROUP_ID:store-inventory-cg}
+      auto-offset-reset: earliest
+      enable-auto-commit: false
+      key-deserializer: org.apache.kafka.common.serialization.StringDeserializer
+      value-deserializer: org.apache.kafka.common.serialization.StringDeserializer
+
+    listener:
+      ack-mode: manual
+      concurrency: ${KAFKA_LISTENER_CONCURRENCY:3}
+
+# 인증 설정
+passport:
+  secret: ${PASSPORT_SECRET:passport-shared-secret}
+  ttl-seconds: 60
+
+# Redis 이벤트 설정
+redis:
+  events:
+    enabled: true
 
 jwt:
   secret: ${JWT_SECRET:dGVzdC1qd3Qtc2VjcmV0LWtleS1mb3ItbG9jYWwtZGV2ZWxvcG1lbnQtb25seS1kb25vdC11c2UtaW4tcHJvZHVjdGlvbg==}
   expiration: 3600000
   refresh-expiration-ms: 1209600000
 
-passport:
-  secret: ${PASSPORT_SECRET:passport-shared-secret}
-  ttl-seconds: 60
+springdoc:
+  api-docs:
+    enabled: true
+    path: /v3/api-docs
+  swagger-ui:
+    enabled: true
+    path: /swagger-ui.html
+
+logging:
+  level:
+    com.popcorn.store: DEBUG
+    org.springframework.web: DEBUG
+    org.springframework.boot.web: DEBUG
+    org.hibernate.SQL: DEBUG
+    org.springframework.security: DEBUG
+    com.adjh.springbootkafka: DEBUG
+    org:
+      apache.kafka: INFO
+      springframework.kafka: INFO
+
+popcorn:
+  kafka:
+    topics:
+      storeEvents: store-events
+    topic:
+      replicas: ${KAFKA_TOPIC_REPLICAS:1}
+    partitions:
+      storeEvents: ${STORE_EVENTS_PARTITIONS:12}

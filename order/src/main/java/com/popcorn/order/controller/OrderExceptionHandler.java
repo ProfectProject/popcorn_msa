@@ -217,6 +217,10 @@ public class OrderExceptionHandler {
 
         log.warn("요청 데이터 검증 실패 - 오류 필드 수: {}", ex.getBindingResult().getErrorCount());
 
+        // 실제 받은 객체 로깅
+        Object target = ex.getBindingResult().getTarget();
+        log.info("🔍 실제 받은 요청 객체: {}", target);
+
         List<String> errors = ex.getBindingResult().getFieldErrors().stream()
                 .map(this::formatFieldError)
                 .collect(Collectors.toList());

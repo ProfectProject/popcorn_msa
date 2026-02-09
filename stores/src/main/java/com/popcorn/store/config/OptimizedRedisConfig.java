@@ -1,9 +1,12 @@
 package com.popcorn.store.config;
 
+import com.fasterxml.jackson.databind.ObjectMapper;
+import com.fasterxml.jackson.datatype.jsr310.JavaTimeModule;
 import io.lettuce.core.ClientOptions;
 import io.lettuce.core.resource.ClientResources;
 import io.lettuce.core.resource.DefaultClientResources;
 import lombok.extern.slf4j.Slf4j;
+import org.springframework.beans.factory.annotation.Qualifier;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.Configuration;
@@ -16,7 +19,6 @@ import org.springframework.data.redis.core.RedisTemplate;
 import org.springframework.data.redis.core.StringRedisTemplate;
 import org.springframework.data.redis.serializer.GenericJackson2JsonRedisSerializer;
 import org.springframework.data.redis.serializer.StringRedisSerializer;
-import com.fasterxml.jackson.databind.ObjectMapper;
 
 import java.time.Duration;
 
@@ -30,12 +32,6 @@ import java.time.Duration;
 @Configuration
 @Slf4j
 public class OptimizedRedisConfig {
-
-    private final ObjectMapper objectMapper;
-
-    public OptimizedRedisConfig(ObjectMapper objectMapper) {
-        this.objectMapper = objectMapper;
-    }
 
     @Value("${spring.data.redis.host:localhost}")
     private String redisHost;
@@ -82,7 +78,7 @@ public class OptimizedRedisConfig {
                 .poolConfig(poolConfig)
                 .clientOptions(clientOptions)
                 .clientResources(clientResources)
-                .commandTimeout(Duration.ofMillis(10000))  // 명령 타임아웃 증가 (10초)
+                .commandTimeout(Duration.ofMillis(2000))  // 명령 타임아웃
                 .build();
 
         // Redis 서버 설정
@@ -103,13 +99,18 @@ public class OptimizedRedisConfig {
 
     @Bean
     @Primary
-    public RedisTemplate<String, Object> optimizedRedisTemplate(RedisConnectionFactory connectionFactory) {
+    public RedisTemplate<String, Object> optimizedRedisTemplate(
+        RedisConnectionFactory connectionFactory,
+        @Qualifier("storeOptimizedObjectMapper") ObjectMapper objectMapper
+    ) {
         RedisTemplate<String, Object> template = new RedisTemplate<>();
         template.setConnectionFactory(connectionFactory);
 
         // 🚀 성능 최적화된 시리얼라이저 설정
         StringRedisSerializer stringSerializer = new StringRedisSerializer();
-        GenericJackson2JsonRedisSerializer jsonSerializer = new GenericJackson2JsonRedisSerializer(objectMapper);
+        ObjectMapper redisObjectMapper = objectMapper.copy()
+            .registerModule(new JavaTimeModule());
+        GenericJackson2JsonRedisSerializer jsonSerializer = new GenericJackson2JsonRedisSerializer(redisObjectMapper);
 
         template.setKeySerializer(stringSerializer);
         template.setHashKeySerializer(stringSerializer);

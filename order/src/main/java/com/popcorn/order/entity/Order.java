@@ -123,7 +123,7 @@ public class Order extends BaseEntity {
     // 현재 p_orders 테이블에는 주소 필드가 없음
 
     /** 주문 항목 목록 - 이 주문에 포함된 상품들의 리스트 */
-    @OneToMany(fetch = FetchType.LAZY, cascade = {}, orphanRemoval = false)
+    @OneToMany(fetch = FetchType.LAZY, cascade = {}, orphanRemoval = true)
     @JoinColumn(name = "order_id", updatable = false)
     @Builder.Default
     private List<OrderItem> orderItems = new ArrayList<>();

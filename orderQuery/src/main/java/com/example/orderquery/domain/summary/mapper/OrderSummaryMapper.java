@@ -13,6 +13,7 @@ public final class OrderSummaryMapper {
         return OrderSummaryDto.builder()
                 .popupId(summary.getPopupId())
                 .storeId(summary.getStoreId())
+                .ownerId(summary.getOwnerId())
                 .popupTitle(summary.getPopupTitle())
                 .popupStatus(summary.getPopupStatus())
                 .addressRoad(summary.getAddressRoad())

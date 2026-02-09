@@ -25,6 +25,7 @@ public final class EventConstants {
         public static final String SCHEDULE_RESERVATION_FAILED = "SCHEDULE_RESERVATION_FAILED";
         public static final String MIXED_RESERVATION_SUCCEEDED = "MIXED_RESERVATION_SUCCEEDED";
         public static final String MIXED_RESERVATION_FAILED = "MIXED_RESERVATION_FAILED";
+        public static final String RESERVATION_EXPIRED = "RESERVATION_EXPIRED";
         public static final String STOCK_DEDUCTION_SUCCEEDED = "STOCK_DEDUCTION_SUCCEEDED";
         public static final String STOCK_DEDUCTION_FAILED = "STOCK_DEDUCTION_FAILED";
         public static final String SCHEDULE_CONFIRMATION_SUCCEEDED = "SCHEDULE_CONFIRMATION_SUCCEEDED";

@@ -59,4 +59,12 @@ public class StandardPopupStatusUpdatedEvent extends StandardBaseEvent {
 
         return map;
     }
+
+    @Override
+    public java.util.Map<String, Object> toOutboxMap() {
+        java.util.Map<String, Object> map = super.toOutboxMap();
+        if (fromStatus != null) map.put("fromStatus", fromStatus);
+        if (toStatus != null) map.put("toStatus", toStatus);
+        return map;
+    }
 }

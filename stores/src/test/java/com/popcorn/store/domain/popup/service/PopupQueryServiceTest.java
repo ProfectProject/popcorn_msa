@@ -136,6 +136,7 @@ class PopupQueryServiceTest {
 		when(popupQueryRepository.findPopupDetail(popupId)).thenReturn(Optional.of(popupView));
 
 		PopupScheduleView valid = new TestPopupScheduleView(
+				popupId,
 				"00000000-0000-0000-0000-000000000201",
 				popupId,
 				LocalDateTime.of(2025, 1, 2, 10, 0),
@@ -146,6 +147,7 @@ class PopupQueryServiceTest {
 				true
 		);
 		PopupScheduleView invalid = new TestPopupScheduleView(
+				popupId,
 				null,
 				popupId,
 				LocalDateTime.of(2025, 1, 3, 10, 0),
@@ -192,6 +194,7 @@ class PopupQueryServiceTest {
 	}
 
 	private record TestPopupScheduleView(
+			UUID popupId,
 			String scheduleId,
 			UUID popupId,
 			LocalDateTime startAt,

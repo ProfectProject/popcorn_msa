@@ -15,6 +15,10 @@ import com.popcorn.order.entity.ItemType;
 import com.popcorn.order.repository.OrderRepository;
 import com.popcorn.order.repository.OrderStatusHistoryRepository;
 import com.popcorn.order.event.publisher.OrderEventPublisher;
+import com.popcorn.order.kafka.producer.OrderEventProducer;
+import com.popcorn.order.repository.OrderItemRepository;
+import com.popcorn.order.entity.OrderItem;
+
 
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
@@ -41,6 +45,8 @@ public class OrderService {
     // 데이터베이스 작업을 위한 도구들
     private final OrderRepository orderRepository;
     private final OrderStatusHistoryRepository orderStatusHistoryRepository;
+    private final OrderEventProducer orderEventProducer;
+    private final OrderItemRepository orderItemRepository;
 
     // 이벤트 발행을 위한 도구
     private final OrderEventPublisher orderEventPublisher;
@@ -298,11 +304,25 @@ public class OrderService {
 
             Order savedOrder = orderRepository.save(order);
 
+            List<OrderItem> orderItems = orderItemRepository.findByOrderId(savedOrder.getId());
+            savedOrder.setOrderItems(orderItems);
+
             // 4. 주문 상태 변경 이력 기록
             saveOrderStatusHistory(order, oldStatus, "결제 완료");
 
             // 5. OrderPaidEvent 발행 (재고 차감 요청)
             orderEventPublisher.publishOrderPaidEvent(savedOrder);
+            boolean hasGoods = orderItems.stream()
+                    .anyMatch(item -> ItemType.GOODS.equals(item.getOrderItemType()));
+            boolean hasReservation = orderItems.stream()
+                    .anyMatch(item -> ItemType.RESERVATION.equals(item.getOrderItemType()));
+            orderEventProducer.publishOrderPaid(savedOrder, hasGoods, hasReservation);
+
+            /*
+            * kafka : order-paid 발행
+             */
+            orderEventProducer.publishOrderPaid(savedOrder,hasGoods,hasReservation);
+
 
             log.info("결제 완료 처리 성공 - orderId: {}, 상태: {} -> {}",
                     orderId, oldStatus, OrderStatus.PAID);
@@ -329,6 +349,11 @@ public class OrderService {
             Order order = orderRepository.findById(orderId)
                     .orElseThrow(() -> new IllegalArgumentException("주문을 찾을 수 없습니다: " + orderId));
 
+            /*
+            * kafka 이벤트 발행 위한 orderitem 조회
+            */
+            List<OrderItem> orderItems = orderItemRepository.findByOrderId(orderId);
+            
             // 2. 이미 취소된 주문인지 확인
             if (order.isCancelled()) {
                 log.warn("이미 취소된 주문입니다 - orderId: {}", orderId);
@@ -341,11 +366,21 @@ public class OrderService {
 
             Order savedOrder = orderRepository.save(order);
 
+            boolean hasGoodsItems = savedOrder.getOrderItems().stream()
+                .anyMatch(item -> ItemType.GOODS.equals(item.getOrderItemType()));
+            boolean hasReservationItems = savedOrder.getOrderItems().stream()
+                    .anyMatch(item -> ItemType.RESERVATION.equals(item.getOrderItemType()));
+
             // 4. 주문 상태 변경 이력 기록
             saveOrderStatusHistory(order, oldStatus, reason);
 
             // 5. OrderCancelledEvent 발행 (Payment 모듈에게 환불 요청)
             orderEventPublisher.publishOrderCancelledEvent(savedOrder, reason);
+
+            /*
+            * kafka order_cancelled 발행
+            */
+            orderEventProducer.publishOrderCancelled(savedOrder,orderItems,hasGoodsItems,hasReservationItems,LocalDateTime.now());
 
             log.info("주문 취소 처리 성공 - orderId: {}, 상태: {} -> {}, 사유: {}",
                     orderId, oldStatus, OrderStatus.CANCELLED, reason);

@@ -61,6 +61,29 @@ spring:
     baseline-on-migrate: true
     validate-on-migrate: true
     clean-disabled: false
+    placeholders:
+      STORE_MIGRATOR_PASSWORD: ${STORE_MIGRATOR_PASSWORD:store321}
+
+  kafka:
+    bootstrap-servers: ${KAFKA_BOOTSTRAP_SERVERS:localhost:29092}
+
+    producer:
+      acks: all
+      properties:
+        enable.idempotence: true
+      key-serializer: org.apache.kafka.common.serialization.StringSerializer
+      value-serializer: org.apache.kafka.common.serialization.StringSerializer
+
+    consumer:
+      group-id: ${KAFKA_CONSUMER_GROUP_ID:store-inventory-cg}
+      auto-offset-reset: earliest
+      enable-auto-commit: false
+      key-deserializer: org.apache.kafka.common.serialization.StringDeserializer
+      value-deserializer: org.apache.kafka.common.serialization.StringDeserializer
+
+    listener:
+      ack-mode: manual
+      concurrency: ${KAFKA_LISTENER_CONCURRENCY:3}
 
 # 인증 설정
 passport:
@@ -92,3 +115,16 @@ logging:
     org.springframework.boot.web: DEBUG
     org.hibernate.SQL: DEBUG
     org.springframework.security: DEBUG
+    com.adjh.springbootkafka: DEBUG
+    org:
+      apache.kafka: INFO
+      springframework.kafka: INFO
+
+popcorn:
+  kafka:
+    topics:
+      storeEvents: store-events
+    topic:
+      replicas: ${KAFKA_TOPIC_REPLICAS:1}
+    partitions:
+      storeEvents: ${STORE_EVENTS_PARTITIONS:12}

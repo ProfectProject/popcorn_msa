@@ -73,6 +73,9 @@ dependencies {
 	testImplementation 'org.projectlombok:lombok'
 	testAnnotationProcessor 'org.projectlombok:lombok'
 
+	//kafka
+	implementation 'org.springframework.kafka:spring-kafka' 
+
 	// Flyway (선택적 의존성)
 	implementation 'org.flywaydb:flyway-core'
 	implementation 'org.flywaydb:flyway-database-postgresql'

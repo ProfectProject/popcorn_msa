@@ -2,11 +2,13 @@ package com.popcorn.store.event.inventory;
 
 import com.popcorn.store.event.order.*;
 import com.popcorn.store.event.StoreRedisEventPublisher;
+import com.popcorn.store.event.kafka.KafkaPublisher;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.context.ApplicationEventPublisher;
 import org.springframework.stereotype.Component;
 
+import java.time.LocalDateTime;
 import java.util.List;
 import java.util.UUID;
 
@@ -17,6 +19,7 @@ public class StoreInventoryEventPublisher {
 
     private final ApplicationEventPublisher applicationEventPublisher;
     private final StoreRedisEventPublisher redisEventPublisher;
+    private final KafkaPublisher kafkaPublisher;
 
     public void publishStockReservedEvent(OrderPaidEvent event,
                                           List<StockReservedEvent.ReservedStockItem> reservedItems) {
@@ -36,6 +39,7 @@ public class StoreInventoryEventPublisher {
         applicationEventPublisher.publishEvent(stockReservedEvent);
 
         // 2. Redis로 굿즈 예약 성공 이벤트 발행 (각 항목별로)
+        LocalDateTime reservedExpiresAt = LocalDateTime.now().plusMinutes(10);
         for (StockReservedEvent.ReservedStockItem item : reservedItems) {
             if (item.getGoodsId() == null || item.getQuantity() == null) {
                 continue;
@@ -46,6 +50,13 @@ public class StoreInventoryEventPublisher {
                     event.getPopupId(),
                     item.getGoodsId(),
                     item.getQuantity()
+            );
+            // Kafka에도 동일한 예약 성공 이벤트를 전송하여 외부 시스템과 동기화
+            kafkaPublisher.publishGoodsReservationSucceeded(
+                    event.getOrderId(),
+                    item.getGoodsId(),
+                    item.getQuantity(),
+                    reservedExpiresAt
             );
         }
     }
@@ -66,6 +77,14 @@ public class StoreInventoryEventPublisher {
         );
         log.warn("재고 예약 실패 이벤트 발행 - orderId={}, reason={}", event.getOrderId(), failureReason);
         applicationEventPublisher.publishEvent(failedEvent);
+        // 실패 항목별로 Kafka store-events에도 실패 정보를 전송
+        for (StockReservationFailedEvent.FailedStockItem item : failedItems) {
+            if (item.getGoodsId() == null) {
+                continue;
+            }
+            String detailReason = item.getFailureReason() != null ? item.getFailureReason() : failureReason;
+            kafkaPublisher.publishGoodsReservationFailed(event.getOrderId(), item.getGoodsId(), detailReason);
+        }
     }
 
     public void publishStockDeductionSuccessEvent(UUID orderId, String orderNo, UUID popupId, String stockDetails) {
@@ -82,6 +101,9 @@ public class StoreInventoryEventPublisher {
 
         // 2. Redis로 외부 마이크로서비스들에게 발행
         redisEventPublisher.publishStockDeductionSuccessEvent(event);
+
+        // 3. Kafka로 store-events에 전파
+        kafkaPublisher.publishStockDeductionSucceeded(orderId, event.getStockDetails(), event.getSucceededAt());
     }
 
     public void publishStockDeductionFailedEvent(UUID orderId, String orderNo, UUID popupId,
@@ -101,5 +123,35 @@ public class StoreInventoryEventPublisher {
 
         // 2. Redis로 외부 마이크로서비스들에게 발행
         redisEventPublisher.publishStockDeductionFailedEvent(event);
+
+        // 3. Kafka로 store-events에 전파
+        kafkaPublisher.publishStockDeductionFailed(orderId, event.getReason(),
+                isRetryable(event.getFailureCode()), event.getFailedAt());
+    }
+
+    public void publishScheduleConfirmationSuccessEvent(UUID orderId, String orderNo,
+                                                       UUID popupId, String details) {
+        log.info("📅 [STORES] 스케줄 확정 성공 이벤트 발행 - orderId={}", orderId);
+        kafkaPublisher.publishScheduleConfirmationSucceeded(orderId, details, LocalDateTime.now());
+    }
+
+    public void publishScheduleConfirmationFailedEvent(UUID orderId, String orderNo,
+                                                      UUID popupId, String reason) {
+        log.warn("📅 [STORES] 스케줄 확정 실패 이벤트 발행 - orderId={}, reason={}", orderId, reason);
+        kafkaPublisher.publishScheduleConfirmationFailed(orderId, reason, true, LocalDateTime.now());
+    }
+
+    public void publishStockReleasedEvent(UUID orderId, LocalDateTime releasedAt) {
+        log.info("♻️ [STORES] 재고 릴리즈 이벤트 발행 - orderId={}", orderId);
+        kafkaPublisher.publishStockReleased(orderId, releasedAt);
+    }
+
+    public void publishScheduleReleasedEvent(UUID orderId, LocalDateTime releasedAt) {
+        log.info("♻️ [STORES] 스케줄 릴리즈 이벤트 발행 - orderId={}", orderId);
+        kafkaPublisher.publishScheduleReleased(orderId, releasedAt);
+    }
+
+    private boolean isRetryable(String failureCode) {
+        return failureCode == null || !"INSUFFICIENT_STOCK".equals(failureCode);
     }
 }

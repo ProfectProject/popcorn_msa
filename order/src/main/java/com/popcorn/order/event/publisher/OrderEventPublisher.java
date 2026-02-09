@@ -4,6 +4,8 @@ import org.springframework.context.ApplicationEventPublisher;
 import org.springframework.stereotype.Component;
 import com.popcorn.order.entity.Order;
 import com.popcorn.order.event.order.OrderPaidEvent;
+import com.popcorn.order.kafka.producer.PaymentRequestsProducer;
+import com.popcorn.order.kafka.producer.StoreRequestsProducer;
 import com.popcorn.order.event.order.OrderCancelledEvent;
 import com.popcorn.order.event.order.OrderCompletedEvent;
 import com.popcorn.order.repository.OrderRepository;
@@ -35,6 +37,8 @@ public class OrderEventPublisher {
     private final ApplicationEventPublisher applicationEventPublisher;
     private final RedisEventPublisher redisEventPublisher;
     private final OrderRepository orderRepository;
+    private final PaymentRequestsProducer paymentRequestsProducer;
+    private final StoreRequestsProducer storeRequestsProducer;
 
     /**
      * 주문 결제 완료 이벤트 발행
@@ -73,6 +77,8 @@ public class OrderEventPublisher {
             log.info("굿즈 예약 취소 요청 이벤트 발행 - orderId: {}, goodsId: {}",
                     order.getId(), goodsId);
 
+            /* kafka 굿즈 예약 취소 요청 */
+
             redisEventPublisher.publishGoodsReservationCancelRequestedEvent(
                     eventId,
                     order.getId(),
@@ -100,6 +106,9 @@ public class OrderEventPublisher {
                     order.getId(), paymentMethod);
 
             String paymentKey = "order:" + order.getId();
+
+            /* kafka payment-created request 발행 */
+            paymentRequestsProducer.publishPaymentCreateRequested(order,paymentMethod,paymentKey);
 
             redisEventPublisher.publishPaymentCreateRequestedEvent(
                     eventId,
@@ -233,6 +242,7 @@ public class OrderEventPublisher {
      * 예약 상태에서 확정 상태로 변경 요청
      */
     public void publishScheduleConfirmationRequestedEvent(
+            Order order,
             java.util.UUID orderId,
             String orderNo,
             java.util.UUID popupId,
@@ -243,6 +253,9 @@ public class OrderEventPublisher {
 
             log.info("[ORDER] 스케줄 확정 요청 이벤트 발행 시작 - orderId: {}, 스케줄 수: {}",
                     orderId, confirmationItems.size());
+
+            /* kafka SCHEDULE_CONFIRMATION_REQUESTED 발행 */
+            storeRequestsProducer.publishScheduleConfirmationRequested(order,confirmationItems);
 
             // Redis Stream을 통해 Store 서비스로 스케줄 확정 요청 전송
             redisEventPublisher.publishScheduleConfirmationRequestedEvent(

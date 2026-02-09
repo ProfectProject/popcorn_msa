@@ -110,6 +110,8 @@ spring:
     baseline-on-migrate: true
     validate-on-migrate: true
     clean-disabled: false
+    placeholders:
+      PAYMENT_MIGRATOR_PASSWORD: ${PAYMENT_MIGRATOR_PASSWORD:payment321}
 
 
 # 인증 설정 - 게이트웨이와 동일한 키 사용

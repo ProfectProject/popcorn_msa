@@ -11,6 +11,7 @@ import org.springframework.web.bind.annotation.RestController;
 import com.example.orderquery.domain.summary.dto.OrderSummaryDto;
 import com.example.orderquery.domain.summary.service.OrderSummaryService;
 import com.example.orderquery.global.security.OwnerAuthService;
+import com.example.orderquery.global.security.OwnerAuthService.OwnerContext;
 import com.popcorn.common.controller.BaseController;
 import com.popcorn.common.dto.BaseResponse;
 import org.springframework.http.ResponseEntity;
@@ -39,8 +40,9 @@ public class OrderSummaryController extends BaseController {
                                                                     Authentication authentication,
                                                                     @Parameter(description = "스토어 ID") @PathVariable UUID storeId,
                                                                     @Parameter(description = "팝업 ID") @PathVariable UUID popupId) {
-        Long ownerId = ownerAuthService.getCurrentOwnerId(authentication);
-        ownerAuthService.requireOwnedPopup(storeId, popupId, ownerId);
-        return ok(orderSummaryService.getSummary(storeId, popupId));
+        OwnerContext context = ownerAuthService.resolveOwner(authentication);
+        OrderSummaryDto summary = orderSummaryService.getSummary(storeId, popupId);
+        ownerAuthService.authorizePopupAccess(summary, context);
+        return ok(summary);
     }
 }

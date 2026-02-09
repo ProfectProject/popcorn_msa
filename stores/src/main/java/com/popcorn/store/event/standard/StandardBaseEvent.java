@@ -19,7 +19,10 @@ import java.util.UUID;
 @AllArgsConstructor
 public abstract class StandardBaseEvent {
 
+    private String topic;
+
     // === 📦 공통 Event Payload (모든 이벤트 공통) ===
+
 
     /**
      * 이벤트 고유 ID
@@ -57,6 +60,11 @@ public abstract class StandardBaseEvent {
      * 사용자 ID
      */
     private Long userId;
+
+    /**
+     * 오너 ID
+     */
+    private Long ownerId;
 
     /**
      * 상점 ID
@@ -101,6 +109,8 @@ public abstract class StandardBaseEvent {
     public java.util.Map<String, String> toStreamMap() {
         java.util.Map<String, String> map = new java.util.HashMap<>();
 
+        if (topic != null) map.put("topic", topic);
+
         // 공통 필드
         if (eventId != null) map.put("eventId", eventId);
         if (eventType != null) map.put("eventType", eventType.getValue());
@@ -111,6 +121,7 @@ public abstract class StandardBaseEvent {
         if (orderId != null) map.put("orderId", orderId.toString());
         if (orderNo != null) map.put("orderNo", orderNo);
         if (userId != null) map.put("userId", userId.toString());
+        if (ownerId != null) map.put("ownerId", ownerId.toString());
         if (storeId != null) map.put("storeId", storeId.toString());
         if (popupId != null) map.put("popupId", popupId.toString());
         if (hasReservation != null) map.put("hasReservation", hasReservation.toString());
@@ -128,6 +139,19 @@ public abstract class StandardBaseEvent {
             map.put("lines", "[]");
         }
 
+        return map;
+    }
+
+    public java.util.Map<String, Object> toOutboxMap() {
+        java.util.Map<String, Object> map = new java.util.HashMap<>();
+        if (topic != null) map.put("topic", topic);
+        if (eventId != null) map.put("eventId", eventId);
+        if (eventType != null) map.put("eventType", eventType.getValue());
+        if (occurredAt != null) map.put("occurredAt", occurredAt.toString());
+        if (producer != null) map.put("producer", producer);
+        if (popupId != null) map.put("popupId", popupId.toString());
+        if (storeId != null) map.put("storeId", storeId.toString());
+        if (ownerId != null) map.put("ownerId", ownerId.toString());
         return map;
     }
 }
