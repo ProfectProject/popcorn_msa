@@ -31,7 +31,7 @@ cd backend
 ## Team
 | 김리연(팀장) | 김세헌 | 서원지 | 오채영 | 이준범 | 홍준표 |
 |:---:|:---:|:---:|:---:|:---:|:---:|
-| Manager 구현 | Owner(스토어/팝업/스케줄) | Order & Reservation | 회원가입/로그인, 인증·인가 | 굿즈(Merch) | Product & QR, 결제(Pay) |
+| Manager 구현 CI/CD | Owner(스토어/팝업/스케줄) , Real Model 구현 및 고도화(MSA 분리, Kafka, Redis) | Order & Reservation 구현 및 Payment, Checkin 고도화(MSA 분리, Kafka, Redis) | 회원가입/로그인, 인증·인가, Gateway 구현 및 Order 고도화(MSA 분리, Kafka, Redis)| 굿즈(Merch) 및 인프라 모니터링 구축 | Product & QR, 결제(Pay) |
 
 ## Key Features
 - 회원가입/로그인(JWT), 인증·인가
