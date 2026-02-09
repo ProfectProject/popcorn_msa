@@ -9,21 +9,21 @@ GRANT ALL PRIVILEGES ON ALL SEQUENCES IN SCHEMA orders TO order_migrator;
 
 -- 1. PostgreSQL enum 타입 생성 (존재하지 않는 경우에만)
 DO $$ BEGIN
-    CREATE TYPE orders.itemtype AS ENUM ('RESERVATION', 'GOODS', 'MIXED');
+CREATE TYPE orders.itemtype AS ENUM ('RESERVATION', 'GOODS', 'MIXED');
 EXCEPTION
     WHEN duplicate_object THEN null;
 END $$;
 
 DO $$ BEGIN
-    CREATE TYPE orders.orderstatus AS ENUM ('REQUESTED', 'RESERVED', 'PAYMENT_PENDING', 'PENDING_PAYMENT', 'PAID', 'CONFIRMED', 'PROCESSING', 'COMPLETED', 'CANCELLED', 'REFUNDED');
+CREATE TYPE orders.orderstatus AS ENUM ('REQUESTED', 'RESERVED', 'PAYMENT_PENDING', 'PENDING_PAYMENT', 'PAID', 'CONFIRMED', 'PROCESSING', 'COMPLETED', 'CANCELLED', 'REFUNDED');
 EXCEPTION
     WHEN duplicate_object THEN null;
 END $$;
 
 -- 2. p_orders 테이블 생성 (Order Entity와 완전 일치)
 CREATE TABLE IF NOT EXISTS orders.p_orders (
-    order_id UUID PRIMARY KEY,                     -- Order.id (@Id)
-    order_no VARCHAR(32) UNIQUE NOT NULL,          -- Order.orderNo
+                                               order_id UUID PRIMARY KEY,                     -- Order.id (@Id)
+                                               order_no VARCHAR(32) UNIQUE NOT NULL,          -- Order.orderNo
     user_id BIGINT NOT NULL,                       -- Order.customerId
     popup_id UUID,                                 -- Order.popupId (이제 저장됨)
     order_type orders.itemtype NOT NULL,           -- Order.orderType (RESERVATION/GOODS/MIXED)
@@ -35,53 +35,53 @@ CREATE TABLE IF NOT EXISTS orders.p_orders (
     canceled_at TIMESTAMP,                         -- Order.canceledAt
     cancel_reason VARCHAR(500),                    -- Order.cancelReason
 
-    -- BaseEntity 필드들
+-- BaseEntity 필드들
     created_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,
     updated_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,
     deleted_at TIMESTAMP,
     created_by BIGINT,
     updated_by BIGINT,
     deleted_by BIGINT
-);
+    );
 
 -- 5. p_order_goods 테이블 생성 (OrderItem Entity와 완전 일치)
 CREATE TABLE IF NOT EXISTS orders.p_order_goods (
-    order_goods_id UUID PRIMARY KEY,                   -- OrderItem.id (@Id)
-    order_id UUID NOT NULL,                            -- OrderItem.orderId
-    popup_id UUID,                                      -- OrderItem.popupId
-    item_type orders.itemtype NOT NULL,                -- OrderItem.orderItemType (@Enumerated, RESERVATION/GOODS만 사용)
-    schedule_id UUID,                                   -- OrderItem.sessionOptionId (예약 항목용)
-    goods_variant_id UUID,                              -- OrderItem.goodsId (굿즈 항목용)
-    qty INTEGER NOT NULL,                               -- OrderItem.qty
-    unit_price INTEGER NOT NULL,                        -- OrderItem.unitPrice
-    price INTEGER NOT NULL,                             -- OrderItem.lineAmount
+                                                    order_goods_id UUID PRIMARY KEY,                   -- OrderItem.id (@Id)
+                                                    order_id UUID NOT NULL,                            -- OrderItem.orderId
+                                                    popup_id UUID,                                      -- OrderItem.popupId
+                                                    item_type orders.itemtype NOT NULL,                -- OrderItem.orderItemType (@Enumerated, RESERVATION/GOODS만 사용)
+                                                    schedule_id UUID,                                   -- OrderItem.sessionOptionId (예약 항목용)
+                                                    goods_variant_id UUID,                              -- OrderItem.goodsId (굿즈 항목용)
+                                                    qty INTEGER NOT NULL,                               -- OrderItem.qty
+                                                    unit_price INTEGER NOT NULL,                        -- OrderItem.unitPrice
+                                                    price INTEGER NOT NULL,                             -- OrderItem.lineAmount
 
     -- BaseEntity 필드들
-    created_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,
-    updated_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,
-    deleted_at TIMESTAMP,
-    created_by BIGINT,
-    updated_by BIGINT,
-    deleted_by BIGINT
+                                                    created_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,
+                                                    updated_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,
+                                                    deleted_at TIMESTAMP,
+                                                    created_by BIGINT,
+                                                    updated_by BIGINT,
+                                                    deleted_by BIGINT
 );
 
 -- 6. p_order_status_histories 테이블 생성 (OrderStatusHistory Entity와 완전 일치)
 CREATE TABLE IF NOT EXISTS orders.p_order_status_histories (
-    order_status_id UUID PRIMARY KEY,              -- OrderStatusHistory.id (@Id)
-    order_id UUID NOT NULL,                        -- OrderStatusHistory.orderId
-    from_status orders.orderstatus,                -- OrderStatusHistory.fromStatus (@JdbcTypeCode)
-    to_status orders.orderstatus NOT NULL,         -- OrderStatusHistory.toStatus (@JdbcTypeCode)
-    reason VARCHAR(255),                           -- OrderStatusHistory.reason
+                                                               order_status_id UUID PRIMARY KEY,              -- OrderStatusHistory.id (@Id)
+                                                               order_id UUID NOT NULL,                        -- OrderStatusHistory.orderId
+                                                               from_status orders.orderstatus,                -- OrderStatusHistory.fromStatus (@JdbcTypeCode)
+                                                               to_status orders.orderstatus NOT NULL,         -- OrderStatusHistory.toStatus (@JdbcTypeCode)
+                                                               reason VARCHAR(255),                           -- OrderStatusHistory.reason
     changed_at TIMESTAMP NOT NULL,                 -- OrderStatusHistory.changedAt
 
-    -- BaseEntity 필드들
+-- BaseEntity 필드들
     created_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,
     updated_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,
     deleted_at TIMESTAMP,
     created_by BIGINT,
     updated_by BIGINT,
     deleted_by BIGINT
-);
+    );
 
 -- 7. 외래 키 제약 조건
 ALTER TABLE orders.p_order_goods

@@ -8,6 +8,7 @@ import org.apache.kafka.common.TopicPartition;
 import org.apache.kafka.common.config.TopicConfig;
 import org.apache.kafka.common.serialization.StringDeserializer;
 import org.apache.kafka.common.serialization.StringSerializer;
+import org.springframework.beans.factory.annotation.Qualifier;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.context.annotation.*;
 import org.springframework.kafka.annotation.EnableKafka;
@@ -23,8 +24,8 @@ import java.util.Map;
 
 @EnableKafka
 @Slf4j
-@Configuration
-public class KafkaConfig {
+@Configuration("storeKafkaConfig")
+public class StoreKafkaConfig {
 
     @Value("${spring.kafka.bootstrap-servers}")
     private String bootstrapServers;
@@ -50,12 +51,11 @@ public class KafkaConfig {
     // -------------------------
     // Producer (Store 이벤트 발행용)
     // -------------------------
-    @Bean
-    public ProducerFactory<String, String> producerFactory() {
+    @Bean("storeProducerFactory")
+    public ProducerFactory<String, String> storeProducerFactory() {
         Map<String, Object> props = new HashMap<>();
 
         props.put(ProducerConfig.BOOTSTRAP_SERVERS_CONFIG, bootstrapServers);
-
 
         props.put(ProducerConfig.ACKS_CONFIG, "all");
         props.put(ProducerConfig.ENABLE_IDEMPOTENCE_CONFIG, true);
@@ -71,16 +71,17 @@ public class KafkaConfig {
         return new DefaultKafkaProducerFactory<>(props);
     }
 
-    @Bean
-    public KafkaTemplate<String, String> kafkaTemplate(ProducerFactory<String, String> pf) {
+    @Bean("storeKafkaTemplate")
+    public KafkaTemplate<String, String> storeKafkaTemplate(
+            @Qualifier("storeProducerFactory") ProducerFactory<String, String> pf) {
         return new KafkaTemplate<>(pf);
     }
 
     // -------------------------
     // Consumer (Store가 요청 수신용)
     // -------------------------
-    @Bean
-    public ConsumerFactory<String, String> consumerFactory() {
+    @Bean("storeConsumerFactory")
+    public ConsumerFactory<String, String> storeConsumerFactory() {
         Map<String, Object> props = new HashMap<>();
 
         props.put(ConsumerConfig.BOOTSTRAP_SERVERS_CONFIG, bootstrapServers);
@@ -98,9 +99,11 @@ public class KafkaConfig {
         return new DefaultKafkaConsumerFactory<>(props);
     }
 
-    @Bean
-    public ConcurrentKafkaListenerContainerFactory<String, String> kafkaListenerContainerFactory(
+    @Bean("storeKafkaListenerContainerFactory")
+    public ConcurrentKafkaListenerContainerFactory<String, String> storeKafkaListenerContainerFactory(
+            @Qualifier("storeConsumerFactory")
             ConsumerFactory<String, String> cf,
+            @Qualifier("storeErrorHandler")
             DefaultErrorHandler errorHandler
     ) {
         ConcurrentKafkaListenerContainerFactory<String, String> factory =
@@ -122,7 +125,8 @@ public class KafkaConfig {
      * 예) store-requests.DLT
      */
     @Bean
-    public DefaultErrorHandler errorHandler(KafkaTemplate<String, String> template) {
+    public DefaultErrorHandler storeErrorHandler(
+            @Qualifier("storeKafkaTemplate") KafkaTemplate<String, String> template) {
         DeadLetterPublishingRecoverer recoverer = new DeadLetterPublishingRecoverer(
                 template,
                 (record, ex) -> new TopicPartition(record.topic() + ".DLT", record.partition())
