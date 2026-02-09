@@ -11,15 +11,10 @@ import com.popcorn.store.domain.store.dto.StoreDeletedDto;
 import com.popcorn.store.domain.store.dto.StoreStatusUpdatedDto;
 import com.popcorn.store.domain.store.entity.Store;
 import com.popcorn.store.domain.store.entity.StorePublishStatus;
-import com.popcorn.store.domain.store.event.StoreDeletedEvent;
-import com.popcorn.store.domain.store.event.StoreStatusUpdatedEvent;
-import com.popcorn.store.domain.store.event.StoreUpdatedEvent;
 import com.popcorn.store.domain.store.exception.StoreException;
 import com.popcorn.store.domain.store.repository.StoreRepository;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
-import org.springframework.beans.factory.annotation.Autowired;
-import org.springframework.context.ApplicationEventPublisher;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
@@ -37,9 +32,6 @@ public class StoreService {
     private static final String INVALID_CHARS = "<>\"'&;";
 
     private final StoreRepository storeRepository;
-
-    @Autowired
-    private ApplicationEventPublisher eventPublisher;
 
     @Transactional
     public StoreCreatedDto createStore(Long ownerId, CreateStoreRequest request) {
@@ -124,10 +116,6 @@ public class StoreService {
         
         Store updatedStore = storeRepository.save(store);
 
-        if (eventPublisher != null) {
-            eventPublisher.publishEvent(new StoreUpdatedEvent(userId, updatedStore));
-        }
-        
         log.info("[STORE_UPDATED] storeId={}", updatedStore.getId());
         return mapToUpdatedDto(updatedStore);
     }
@@ -152,10 +140,6 @@ public class StoreService {
         store.delete(userId);
         Store deletedStore = storeRepository.save(store);
 
-        if (eventPublisher != null) {
-            eventPublisher.publishEvent(new StoreDeletedEvent(userId, deletedStore));
-        }
-        
         log.info("[STORE_DELETED] storeId={}", storeId);
         return mapToDeletedDto(deletedStore);
     }
@@ -182,11 +166,6 @@ public class StoreService {
         
         Store updatedStore = storeRepository.save(store);
 
-        if (eventPublisher != null) {
-            eventPublisher.publishEvent(new StoreStatusUpdatedEvent(userId, updatedStore));
-            log.info("[EVENT_PUBLISHED] StoreStatusUpdatedEvent for storeId={}", updatedStore.getId());
-        }
-        
         log.info("[STORE_STATUS_UPDATED] storeId={}, status={}", updatedStore.getId(), updatedStore.getPublishStatus());
         return mapToStatusUpdatedDto(updatedStore);
     }

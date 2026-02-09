@@ -41,28 +41,6 @@ public class PerformanceMonitoringConfig {
         }
     }
 
-    @Around("execution(* com.popcorn.store.event.StoreRedisStreamListener.handleScheduleReservationRequested(..))")
-    public Object monitorScheduleReservationProcessing(ProceedingJoinPoint joinPoint) throws Throwable {
-        long startTime = System.currentTimeMillis();
-
-        try {
-            Object result = joinPoint.proceed();
-            long executionTime = System.currentTimeMillis() - startTime;
-
-            if (executionTime > 600) {
-                log.warn("🎯 목표 초과 - 스케줄 예약 처리시간: {}ms (목표: 600ms 이하)", executionTime);
-            } else {
-                log.info("🎯 목표 달성 - 스케줄 예약 처리시간: {}ms ⚡", executionTime);
-            }
-
-            return result;
-        } catch (Exception e) {
-            long executionTime = System.currentTimeMillis() - startTime;
-            log.error("❌ 스케줄 예약 처리 실패 - 실행시간: {}ms, 오류: {}", executionTime, e.getMessage());
-            throw e;
-        }
-    }
-
     @Around("execution(* com.popcorn.store.domain.*.service.*.*(..)) && " +
             "@annotation(org.springframework.transaction.annotation.Transactional)")
     public Object monitorTransactionalMethods(ProceedingJoinPoint joinPoint) throws Throwable {
