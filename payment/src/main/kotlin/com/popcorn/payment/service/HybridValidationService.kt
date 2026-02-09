@@ -491,40 +491,52 @@ class HybridValidationService(
                 } catch (e: Exception) {
                     log.error("💀 [Store API] 배치 가격 검증 실패 - orderId: {}, fallback 검증으로 전환", orderId, e)
 
-                    // Fallback: 더 보수적인 검증 로직
-                    try {
-                        log.info("🔄 [Fallback] 보수적 fallback 검증 시도 - orderId: {}", orderId)
+                    // Store API 오류 유형에 따른 차별적 처리
+                    val isTemporaryFailure = e.message?.contains("503") == true ||
+                                           e.message?.contains("SERVICE_UNAVAILABLE") == true ||
+                                           e.message?.contains("temporarily unavailable") == true
 
-                        // 1. 기본 금액 범위 검사 (예: 1원 ~ 1백만원)
-                        if (expectedAmount != null && (expectedAmount < 1 || expectedAmount > 1_000_000)) {
-                            log.error("💀 [Fallback] 비정상적인 결제 금액 - orderId: {}, amount: {}원", orderId, expectedAmount)
-                            throw PaymentValidationException("비정상적인 결제 금액으로 인한 결제 차단")
-                        }
+                    if (isTemporaryFailure && basicPriceValid) {
+                        // 🔄 임시 장애 + 기본 가격 검증 성공 시 관대하게 처리
+                        log.warn("🔄 [Store API] 임시 장애 감지, 기본 가격 검증 성공으로 결제 허용 - orderId: {}, expected: {}, actual: {}",
+                                orderId, expectedAmount, actualOrderAmount)
+                        true // Store API 임시 장애 시 기본 검증만으로 통과
+                    } else {
+                        // Fallback: 더 보수적인 검증 로직 (심각한 오류나 가격 불일치 시)
+                        try {
+                            log.info("🔄 [Fallback] 보수적 fallback 검증 시도 - orderId: {}", orderId)
 
-                        // 2. 라인 아이템 수량 검사 (예: 최대 10개 제한)
-                        val fallbackLineItems = orderDetail?.lineItems ?: emptyList()
-                        if (fallbackLineItems.size > 10) {
-                            log.error("💀 [Fallback] 과도한 아이템 수량 - orderId: {}, count: {}개", orderId, fallbackLineItems.size)
-                            throw PaymentValidationException("과도한 아이템 수량으로 인한 결제 차단")
-                        }
-
-                        // 3. 개별 아이템 가격 범위 검사
-                        for (lineItem in fallbackLineItems) {
-                            if (lineItem.unitPrice < 1 || lineItem.unitPrice > 100_000) {
-                                log.error("💀 [Fallback] 비정상적인 단가 - orderId: {}, itemId: {}, price: {}원",
-                                    orderId, lineItem.itemId, lineItem.unitPrice)
-                                throw PaymentValidationException("비정상적인 단가로 인한 결제 차단")
+                            // 1. 기본 금액 범위 검사 (예: 1원 ~ 1백만원)
+                            if (expectedAmount != null && (expectedAmount < 1 || expectedAmount > 1_000_000)) {
+                                log.error("💀 [Fallback] 비정상적인 결제 금액 - orderId: {}, amount: {}원", orderId, expectedAmount)
+                                throw PaymentValidationException("비정상적인 결제 금액으로 인한 결제 차단")
                             }
+
+                            // 2. 라인 아이템 수량 검사 (예: 최대 10개 제한)
+                            val fallbackLineItems = orderDetail?.lineItems ?: emptyList()
+                            if (fallbackLineItems.size > 10) {
+                                log.error("💀 [Fallback] 과도한 아이템 수량 - orderId: {}, count: {}개", orderId, fallbackLineItems.size)
+                                throw PaymentValidationException("과도한 아이템 수량으로 인한 결제 차단")
+                            }
+
+                            // 3. 개별 아이템 가격 범위 검사
+                            for (lineItem in fallbackLineItems) {
+                                if (lineItem.unitPrice < 1 || lineItem.unitPrice > 100_000) {
+                                    log.error("💀 [Fallback] 비정상적인 단가 - orderId: {}, itemId: {}, price: {}원",
+                                        orderId, lineItem.itemId, lineItem.unitPrice)
+                                    throw PaymentValidationException("비정상적인 단가로 인한 결제 차단")
+                                }
+                            }
+
+                            log.error("💀 [Fallback] Store API 심각한 오류 시 보안상 결제 중단 - orderId: {}", orderId)
+                            throw PaymentValidationException("Store API 서비스 장애로 인한 결제 처리 불가: 가격 검증 필수")
+
+                        } catch (fallbackException: PaymentValidationException) {
+                            throw fallbackException // 보안 검증 실패는 그대로 전파
+                        } catch (fallbackException: Exception) {
+                            log.error("💀 [Fallback] Fallback 검증 실패 - orderId: {}, 보안상 결제 중단", orderId, fallbackException)
+                            throw PaymentValidationException("Fallback 검증 실패로 인한 결제 처리 불가: ${fallbackException.message}")
                         }
-
-                        log.error("💀 [Fallback] Store API 장애 시 보안상 결제 중단 - orderId: {}", orderId)
-                        throw PaymentValidationException("Store API 서비스 장애로 인한 결제 처리 불가: 가격 검증 필수")
-
-                    } catch (fallbackException: PaymentValidationException) {
-                        throw fallbackException // 보안 검증 실패는 그대로 전파
-                    } catch (fallbackException: Exception) {
-                        log.error("💀 [Fallback] Fallback 검증 실패 - orderId: {}, 보안상 결제 중단", orderId, fallbackException)
-                        throw PaymentValidationException("Fallback 검증 실패로 인한 결제 처리 불가: ${fallbackException.message}")
                     }
                 }
             } else if (hasGoods) {
