@@ -27,26 +27,26 @@ class HybridValidationService(
     private val log = LoggerFactory.getLogger(HybridValidationService::class.java)
 
     /**
-     * 사용자 주소 검증 (HTTP 통신 방식)
+     * 사용자 주소 검증 (보조 검증, 실패해도 결제 진행)
      * User 서비스의 REST API를 호출하여 주소 정보 조회
      */
     suspend fun validateUserAddressHybrid(userId: Long): Boolean {
         return try {
-            log.info("🔍 [HTTP] 사용자 주소 검증 시작 - userId: {}", userId)
+            log.info("🔍 [보조 검증] 사용자 주소 검증 시작 - userId: {} (실패해도 결제 진행)", userId)
 
             // HTTP API 호출로 기본 주소 존재 여부 확인
             val hasDefaultAddress = userServiceClient.hasDefaultAddress(userId)
 
             if (hasDefaultAddress) {
-                log.info("✅ [HTTP] 사용자 주소 검증 성공 - userId: {}, 빠른 HTTP 응답", userId)
+                log.info("✅ [보조 검증] 사용자 주소 검증 성공 - userId: {}", userId)
             } else {
-                log.warn("❌ [HTTP] 사용자 기본 주소 없음 - userId: {}", userId)
+                log.warn("⚠️ [보조 검증] 사용자 기본 주소 없음하지만 결제 진행 - userId: {}", userId)
             }
 
             hasDefaultAddress
         } catch (e: Exception) {
-            log.error("💀 [HTTP] 사용자 주소 검증 실패 - userId: {}, 보안상 결제 중단", userId, e)
-            throw PaymentValidationException("사용자 주소 검증 서비스 장애로 인한 결제 처리 불가: ${e.message}")
+            log.warn("⚠️ [보조 검증] 사용자 주소 검증 실패하지만 결제 진행 - userId: {}, error: {}", userId, e.message)
+            true // 주소 검증 실패해도 결제는 진행 (보조 검증)
         }
     }
 
