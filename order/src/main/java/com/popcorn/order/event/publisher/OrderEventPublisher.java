@@ -78,6 +78,7 @@ public class OrderEventPublisher {
                     order.getId(), goodsId);
 
             /* kafka 굿즈 예약 취소 요청 */
+            storeRequestsProducer.publishGoodsReservationCancelRequested(order,goodsId,quantity);
 
             redisEventPublisher.publishGoodsReservationCancelRequestedEvent(
                     eventId,
@@ -134,6 +135,9 @@ public class OrderEventPublisher {
 
             log.info("결제 취소 요청 이벤트 발행 - orderId: {}, paymentId: {}",
                     order.getId(), paymentId);
+
+            /* kafka payment-cancel-requested 발행 */
+            paymentRequestsProducer.publishPaymentCancelRequested(order, paymentId, reason);
 
             redisEventPublisher.publishPaymentCancelRequestedEvent(
                     eventId,
