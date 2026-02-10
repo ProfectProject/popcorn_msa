@@ -76,12 +76,7 @@ spring:
             - RewritePath=^/api/users/(?<remaining>v3/api-docs.*), /${remaining}
             - RewritePath=^/api/users/(?<remaining>swagger-ui.*), /${remaining}
             - RewritePath=^/api/users/(?<remaining>webjars.*), /${remaining}
-            # 1) CircuitBreaker (Resilience4j 인스턴스명 연결)
-            - name: CircuitBreaker
-              args:
-                name: cbUserService
-                fallbackUri: forward:/fallback/user-service
-            # 2) Retry (Gateway 필터로만 적용) --> 서버 5xx / 502/504 만 재시도
+            # Retry (Gateway 필터로만 적용) --> 서버 5xx / 502/504 만 재시도
             - name: Retry
               args:
                 retries: 2
@@ -99,12 +94,7 @@ spring:
           predicates:
             - Path=/api/user/**          # user (단수형)
           filters:
-            # 1) CircuitBreaker (Resilience4j 인스턴스명 연결)
-            - name: CircuitBreaker
-              args:
-                name: cbUserService
-                fallbackUri: forward:/fallback/user-service
-            # 2) Retry (Gateway 필터로만 적용) --> 서버 5xx / 502/504 만 재시도
+            # Retry (Gateway 필터로만 적용) --> 서버 5xx / 502/504 만 재시도
             - name: Retry
               args:
                 retries: 2
@@ -124,12 +114,7 @@ spring:
             - RewritePath=^/api/stores/(?<remaining>v3/api-docs.*), /${remaining}
             - RewritePath=^/api/stores/(?<remaining>swagger-ui.*), /${remaining}
             - RewritePath=^/api/stores/(?<remaining>webjars.*), /${remaining}
-            # 1) CircuitBreaker (Resilience4j 인스턴스명 연결)
-            - name: CircuitBreaker
-              args:
-                name: cbStoreService
-                fallbackUri: forward:/fallback/store-service
-            # 2) Retry (Gateway 필터로만 적용) --> 서버 5xx / 502/504 만 재시도
+            # Retry (Gateway 필터로만 적용) --> 서버 5xx / 502/504 만 재시도
             - name: Retry
               args:
                 retries: 2

@@ -12,6 +12,9 @@ import com.popcorn.order.kafka.event.order_events.OrderCreateEvent;
 import com.popcorn.order.kafka.event.order_events.OrderLine;
 import com.popcorn.order.kafka.event.order_events.OrderPAIDEvent;
 import com.popcorn.order.kafka.event.order_events.OrderStatusUpdatedEvent;
+import com.popcorn.order.service.lookup.OrderPopupLookupService;
+import com.fasterxml.jackson.core.JsonProcessingException;
+import com.fasterxml.jackson.databind.ObjectMapper;
 
 import lombok.RequiredArgsConstructor;
 import org.springframework.kafka.core.KafkaTemplate;
@@ -31,6 +34,8 @@ import javax.sound.sampled.Line;
 public class OrderEventProducer {
 
     private final KafkaTemplate<String, Object> kafkaTemplate;
+    private final OrderPopupLookupService orderPopupLookupService;
+    private final ObjectMapper objectMapper;
 
     /*
     * ORDER_CREATED
@@ -63,7 +68,7 @@ public class OrderEventProducer {
                 .build();
 
         // key 전략: orderId (같은 주문 이벤트는 같은 파티션으로)
-        kafkaTemplate.send("order-events", order.getId().toString(), event);
+        kafkaTemplate.send("order-events", order.getId().toString(), toJson(event));
     }
 
     /*
@@ -71,6 +76,11 @@ public class OrderEventProducer {
     */
     public void publishOrderPaid(Order order,
                                 boolean hasGoods, boolean hasReservation) {
+        publishOrderPaid(order, hasGoods, hasReservation, null);
+    }
+
+    public void publishOrderPaid(Order order,
+                                boolean hasGoods, boolean hasReservation, String paymentId) {
 
         OrderPAIDEvent event = OrderPAIDEvent.builder()
                 .eventId(UUID.randomUUID())
@@ -84,12 +94,12 @@ public class OrderEventProducer {
                 .hasReservation(hasReservation)
                 .hasGoods(hasGoods)
                 .totalAmount(order.getTotalAmount())
-                //.paymentId()
+                .paymentId(paymentId)
                 .paidAt(order.getPaidAt())
                 .build();
 
         // key 전략: orderId (같은 주문 이벤트는 같은 파티션으로)
-        kafkaTemplate.send("order-events", order.getId().toString(), event);
+        kafkaTemplate.send("order-events", order.getId().toString(), toJson(event));
     }
 
 
@@ -118,7 +128,7 @@ public class OrderEventProducer {
                 .build();
 
         // key 전략: orderId (같은 주문 이벤트는 같은 파티션으로)
-        kafkaTemplate.send("order-events", order.getId().toString(), event);
+        kafkaTemplate.send("order-events", order.getId().toString(), toJson(event));
     }
 
     /*
@@ -126,6 +136,7 @@ public class OrderEventProducer {
     */
     public void publishOrderCompleted(Order order,
                                 boolean hasGoods, boolean hasReservation) {
+        UUID storeId = resolveStoreId(order.getPopupId());
 
         OrderCOMPLETEDEvent event = OrderCOMPLETEDEvent.builder()
                 .eventId(UUID.randomUUID())
@@ -136,14 +147,15 @@ public class OrderEventProducer {
                 .producer("order-service")
                 .orderId(order.getId())
                 .popupId(order.getPopupId())
+                .storeId(storeId)
                 .hasReservation(hasReservation)
                 .hasGoods(hasGoods)
                 .totalAmount(order.getTotalAmount())
-                //.completedAt(order.getConfirmedAt())
+                .completedAt(order.getConfirmedAt())
                 .build();
 
         // key 전략: orderId (같은 주문 이벤트는 같은 파티션으로)
-        kafkaTemplate.send("order-events", order.getId().toString(), event);
+        kafkaTemplate.send("order-events", order.getId().toString(), toJson(event));
     }
 
 
@@ -152,6 +164,7 @@ public class OrderEventProducer {
     */
     public void publishOrderCancelled(Order order,List<OrderItem> orderItems,
                                 boolean hasGoods, boolean hasReservation,LocalDateTime cancleAt) {
+        UUID storeId = resolveStoreId(order.getPopupId());
         List<OrderLine> lines = orderItems.stream()
             .map(this::toLine)
             .toList();
@@ -165,6 +178,7 @@ public class OrderEventProducer {
                 .producer("order-service")
                 .orderId(order.getId())
                 .popupId(order.getPopupId())
+                .storeId(storeId)
                 .hasReservation(hasReservation)
                 .hasGoods(hasGoods)
                 .lines(lines)
@@ -172,7 +186,7 @@ public class OrderEventProducer {
                 .build();
 
         // key 전략: orderId (같은 주문 이벤트는 같은 파티션으로)
-        kafkaTemplate.send("order-events", order.getId().toString(), event);
+        kafkaTemplate.send("order-events", order.getId().toString(), toJson(event));
     }
 
     private OrderLine toLine(OrderItem item) {
@@ -197,4 +211,25 @@ public class OrderEventProducer {
             .lineAmount(item.getLineAmount())
             .build();
 }
+
+    private UUID resolveStoreId(UUID popupId) {
+        if (popupId == null) {
+            return null;
+        }
+        try {
+            return orderPopupLookupService.getPopupInfo(popupId)
+                    .map(info -> info.getStoreId())
+                    .orElse(null);
+        } catch (Exception e) {
+            return null;
+        }
+    }
+
+    private String toJson(Object payload) {
+        try {
+            return objectMapper.writeValueAsString(payload);
+        } catch (JsonProcessingException e) {
+            throw new RuntimeException("Kafka payload 직렬화 실패", e);
+        }
+    }
 }

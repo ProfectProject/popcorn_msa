@@ -100,6 +100,35 @@ class OrderServiceClient(
         return orderInfo?.success == true && isPayableStatus(orderInfo.status)
     }
 
+    suspend fun updateOrderStatus(orderId: UUID, status: String, reason: String): Boolean {
+        return try {
+            val systemPassport = systemPassportGenerator.generateSystemPassport()
+            webClient
+                .patch()
+                .uri { builder ->
+                    builder.path("$orderServiceBaseUrl/api/orders/v1/{orderId}/status")
+                        .queryParam("status", status)
+                        .queryParam("reason", reason)
+                        .build(orderId)
+                }
+                .header("X-Passport", systemPassport)
+                .header("X-Internal-Call", "true")
+                .header("X-Internal-Service", "payment-service")
+                .retrieve()
+                .toBodilessEntity()
+                .awaitSingle()
+            true
+        } catch (ex: WebClientResponseException) {
+            log.error("❌ [HTTP] Order 상태 변경 실패 - orderId: {}, status: {}, httpStatus: {}, error: {}",
+                orderId, status, ex.statusCode, ex.message)
+            false
+        } catch (e: Exception) {
+            log.error("❌ [HTTP] Order 상태 변경 실패 - orderId: {}, status: {}, error: {}",
+                orderId, status, e.message, e)
+            false
+        }
+    }
+
     private fun isPayableStatus(status: String): Boolean {
         return status in listOf("REQUESTED", "RESERVED", "PAYMENT_PENDING")
     }

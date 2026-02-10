@@ -33,6 +33,7 @@ public class OrderCANCELLEDEvent {
 
     private UUID orderId;
     private UUID popupId;
+    private UUID storeId;
     private boolean hasReservation;
     private boolean hasGoods;
     private List<OrderLine> lines;

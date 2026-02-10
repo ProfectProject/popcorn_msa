@@ -13,7 +13,7 @@ import com.popcorn.checkIns.dto.response.QrCodeResponse;
 import com.popcorn.checkIns.dto.response.QrVerifyResponse;
 import com.popcorn.checkIns.event.domain.QrCheckinRequestedEvent;
 import com.popcorn.checkIns.event.domain.BaseCheckinEvent;
-import com.popcorn.checkIns.event.publisher.CheckinRedisEventPublisher;
+import com.popcorn.checkIns.event.domain.CheckinEvents.CheckinEventPublisher;
 import com.popcorn.checkIns.event.kafka.CheckinsKafkaEventPublisher;
 import com.popcorn.checkIns.event.domain.CheckinEvents.QrGeneratedEvent;
 import com.popcorn.checkIns.event.domain.CheckinEvents.CheckinCreatedEvent;
@@ -35,7 +35,7 @@ public class QrCodeService {
 	private final QrCodeRepository qrCodeRepository;
 	private final CheckinRepository checkinRepository;
 	private final ApplicationEventPublisher eventPublisher;
-	private final CheckinRedisEventPublisher checkinRedisEventPublisher;
+	private final CheckinEventPublisher checkinEventPublisher;
 	private final CheckInsMetricsService metricsService;
 	private final com.popcorn.checkIns.outbox.OutboxWriter outboxWriter;
 
@@ -46,14 +46,14 @@ public class QrCodeService {
 	public QrCodeService(QrCodeRepository qrCodeRepository,
 						 CheckinRepository checkinRepository,
 						 ApplicationEventPublisher eventPublisher,
-						 CheckinRedisEventPublisher checkinRedisEventPublisher,
+						 CheckinEventPublisher checkinEventPublisher,
 						 CheckInsMetricsService metricsService,
 						 com.popcorn.checkIns.outbox.OutboxWriter outboxWriter,
 						 Optional<CheckinsKafkaEventPublisher> checkinKafkaEventPublisher) {
 		this.qrCodeRepository = qrCodeRepository;
 		this.checkinRepository = checkinRepository;
 		this.eventPublisher = eventPublisher;
-		this.checkinRedisEventPublisher = checkinRedisEventPublisher;
+		this.checkinEventPublisher = checkinEventPublisher;
 		this.metricsService = metricsService;
 		this.outboxWriter = outboxWriter;
 		this.checkinKafkaEventPublisher = checkinKafkaEventPublisher;
@@ -362,7 +362,7 @@ public class QrCodeService {
 		// 공통 이중 발행 로직 사용
 		publishEventToBothSystems(
 			event,
-			() -> checkinRedisEventPublisher.publishQrGenerated(event),
+			() -> checkinEventPublisher.publishQrGenerated(event),
 			"QR 생성",
 			qrCodeRow.orderId().toString(),
 			null
@@ -392,7 +392,7 @@ public class QrCodeService {
 		// 공통 이중 발행 로직 사용
 		publishEventToBothSystems(
 			event,
-			() -> checkinRedisEventPublisher.publishCheckinCreated(event),
+			() -> checkinEventPublisher.publishCheckinCreated(event),
 			"체크인 생성",
 			qrCodeRow.orderId().toString(),
 			checkinId.toString()

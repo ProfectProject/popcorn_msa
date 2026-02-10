@@ -5,6 +5,7 @@ import com.fasterxml.jackson.databind.ObjectMapper;
 import com.popcorn.store.constants.EventConstants;
 import com.popcorn.store.domain.goods.entity.GoodsOrderReservation;
 import com.popcorn.store.domain.goods.entity.ReservationStatus;
+import com.popcorn.store.domain.goods.entity.ReservationType;
 import com.popcorn.store.domain.goods.service.GoodsOrderReservationService;
 import com.popcorn.store.domain.goods.service.GoodsService;
 import com.popcorn.store.domain.popup.dto.query.response.PopupScheduleCapacity;
@@ -127,6 +128,15 @@ public class StoreRequestsKafkaListener {
             return;
         }
         if (!inventoryHoldService.hasHold(orderId)) {
+            if (hasTerminalReservations(existingReservations, ReservationType.GOODS)) {
+                log.info("ℹ️ [StockDeduction] HOLD 없음 + 이미 종결된 예약 상태, 재발행 생략 - orderId={}", orderId);
+                return;
+            }
+            if (!hasHeldReservations(existingReservations, ReservationType.GOODS)) {
+                log.info("ℹ️ [StockDeduction] HOLD 없음 + 처리 대상 HELD 예약 없음, 재발행 생략 - orderId={}", orderId);
+                return;
+            }
+            markHeldReservationsAsFailed(existingReservations, ReservationType.GOODS, "hold missing");
             log.warn("⚠️ [StockDeduction] Redis HOLD 없음 - orderId={}", orderId);
             eventPublisher.publishStockDeductionFailedEvent(orderId, orderNo, popupId,
                     "Redis HOLD 없음", "HOLD_MISSING", "reservation key missing");
@@ -244,6 +254,17 @@ public class StoreRequestsKafkaListener {
             return;
         }
         if (!inventoryHoldService.hasHold(orderId)) {
+            List<GoodsOrderReservation> existingReservations =
+                    orderId != null ? reservationService.findByOrderId(orderId) : List.of();
+            if (hasTerminalReservations(existingReservations, ReservationType.SCHEDULE)) {
+                log.info("ℹ️ [ScheduleConfirmation] HOLD 없음 + 이미 종결된 예약 상태, 재발행 생략 - orderId={}", orderId);
+                return;
+            }
+            if (!hasHeldReservations(existingReservations, ReservationType.SCHEDULE)) {
+                log.info("ℹ️ [ScheduleConfirmation] HOLD 없음 + 처리 대상 HELD 예약 없음, 재발행 생략 - orderId={}", orderId);
+                return;
+            }
+            markHeldReservationsAsFailed(existingReservations, ReservationType.SCHEDULE, "hold missing");
             log.warn("⚠️ [ScheduleConfirmation] Redis HOLD 없음 - orderId={}", orderId);
             eventPublisher.publishScheduleConfirmationFailedEvent(orderId, orderNo, popupId,
                     "Redis HOLD 없음");
@@ -492,6 +513,42 @@ public class StoreRequestsKafkaListener {
         }
         log.error("💀 [{}] 최대 재시도 실패 (DLQ/알람 필요)", context);
         return false;
+    }
+
+    private boolean hasTerminalReservations(List<GoodsOrderReservation> reservations, ReservationType type) {
+        if (reservations == null || reservations.isEmpty()) {
+            return false;
+        }
+        return reservations.stream()
+                .filter(r -> r != null && r.getReservationType() == type)
+                .anyMatch(r -> r.getStatus() == ReservationStatus.COMMITTED
+                        || r.getStatus() == ReservationStatus.FAILED
+                        || r.getStatus() == ReservationStatus.RELEASED);
+    }
+
+    private boolean hasHeldReservations(List<GoodsOrderReservation> reservations, ReservationType type) {
+        if (reservations == null || reservations.isEmpty()) {
+            return false;
+        }
+        return reservations.stream()
+                .filter(r -> r != null && r.getReservationType() == type)
+                .anyMatch(r -> r.getStatus() == ReservationStatus.HELD);
+    }
+
+    private void markHeldReservationsAsFailed(List<GoodsOrderReservation> reservations,
+                                              ReservationType type,
+                                              String reason) {
+        if (reservations == null || reservations.isEmpty()) {
+            return;
+        }
+        for (GoodsOrderReservation reservation : reservations) {
+            if (reservation == null || reservation.getReservationType() != type) {
+                continue;
+            }
+            if (reservation.getStatus() == ReservationStatus.HELD) {
+                reservationService.updateStatus(reservation, ReservationStatus.FAILED, reason);
+            }
+        }
     }
 
     private List<Map<String, Object>> asListOfMaps(Object value) {

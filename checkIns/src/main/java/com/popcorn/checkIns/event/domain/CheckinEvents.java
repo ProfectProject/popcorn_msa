@@ -160,6 +160,7 @@ public class CheckinEvents {
             payload.put("orderId", orderId);
             payload.put("orderGoodsId", orderGoodsId);
             payload.put("popupId", popupId);
+            payload.put("storeId", storeId);
             payload.put("checkinAt", checkinAt.toString());
             return payload;
         }

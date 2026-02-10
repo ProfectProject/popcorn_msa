@@ -143,98 +143,98 @@ class PaymentKafkaEventPublisher(
         return when (event) {
             // 기존 Payment Events
             is PaymentCreatedEvent -> Triple(
-                EventConstants.Streams.PAYMENT_EVENTS,
+                EventConstants.Topics.PAYMENT_EVENTS,
                 event.eventType,
                 extractPartitionKey(event.paymentId.toString(), event.orderId?.toString())
             )
             is PaymentApprovedEvent -> Triple(
-                EventConstants.Streams.PAYMENT_EVENTS,
+                EventConstants.Topics.PAYMENT_EVENTS,
                 event.eventType,
                 extractPartitionKey(event.paymentId.toString(), event.orderId?.toString())
             )
             is PaymentFailedEvent -> Triple(
-                EventConstants.Streams.PAYMENT_EVENTS,
+                EventConstants.Topics.PAYMENT_EVENTS,
                 event.eventType,
                 extractPartitionKey(event.paymentId.toString(), event.orderId?.toString())
             )
             is PaymentCancelledEvent -> Triple(
-                EventConstants.Streams.PAYMENT_EVENTS,
+                EventConstants.Topics.PAYMENT_EVENTS,
                 event.eventType,
                 extractPartitionKey(event.paymentId.toString(), event.orderId?.toString())
             )
             is PaymentCancelFailedEvent -> Triple(
-                EventConstants.Streams.PAYMENT_EVENTS,
+                EventConstants.Topics.PAYMENT_EVENTS,
                 event.eventType,
                 extractPartitionKey(event.paymentId.toString(), null)
             )
             is PaymentExpiredEvent -> Triple(
-                EventConstants.Streams.PAYMENT_EVENTS,
+                EventConstants.Topics.PAYMENT_EVENTS,
                 event.eventType,
                 extractPartitionKey(event.paymentId.toString(), null)
             )
             is PaymentSuccessEvent -> Triple(
-                EventConstants.Streams.PAYMENT_EVENTS,
+                EventConstants.Topics.PAYMENT_EVENTS,
                 event.eventType,
                 extractPartitionKey(event.paymentId.toString(), event.orderId?.toString())
             )
 
             // 새로운 Payment Events (사용자 요청)
             is PaymentUserCancelledEvent -> Triple(
-                EventConstants.Streams.PAYMENT_EVENTS,
+                EventConstants.Topics.PAYMENT_EVENTS,
                 event.eventType,
                 extractPartitionKey(event.paymentId.toString(), null)
             )
             is PaymentCancelSucceededEvent -> Triple(
-                EventConstants.Streams.PAYMENT_EVENTS,
+                EventConstants.Topics.PAYMENT_EVENTS,
                 event.eventType,
                 extractPartitionKey(event.paymentId.toString(), null)
             )
 
             // 새로운 Payment Requests (사용자 요청)
             is PaymentCreateRequestedEvent -> Triple(
-                EventConstants.Streams.PAYMENT_REQUESTS,
+                EventConstants.Topics.PAYMENT_REQUESTS,
                 event.eventType,
                 extractPartitionKey(null, event.orderId?.toString())
             )
             is PaymentCancelRequestedEvent -> Triple(
-                EventConstants.Streams.PAYMENT_REQUESTS,
+                EventConstants.Topics.PAYMENT_REQUESTS,
                 event.eventType,
                 extractPartitionKey(event.paymentId?.toString(), null)
             )
 
             // 기존 외부 도메인 이벤트들
             is PaymentCompletedEvent -> Triple(
-                EventConstants.Streams.PAYMENT_EVENTS,
+                EventConstants.Topics.PAYMENT_EVENTS,
                 EventConstants.EventTypes.PaymentDomain.PAYMENT_SUCCESS,
                 "completed:${System.currentTimeMillis()}"
             )
             is QrCodeGenerationRequestedEvent -> Triple(
-                EventConstants.Streams.CHECKIN_REQUESTS,
+                EventConstants.Topics.CHECKIN_REQUESTS,
                 event.eventType,
                 extractPartitionKey(null, event.orderId?.toString())
             )
             is QrCodeInvalidationRequestedEvent -> Triple(
-                EventConstants.Streams.CHECKIN_REQUESTS,
+                EventConstants.Topics.CHECKIN_REQUESTS,
                 event.eventType,
                 extractPartitionKey(null, event.orderId?.toString())
             )
             is InventoryConfirmationRequestedEvent -> Triple(
-                EventConstants.Streams.STORE_REQUESTS,
+                EventConstants.Topics.STORE_REQUESTS,
                 event.eventType,
                 extractPartitionKey(null, event.orderId?.toString())
             )
             is OrderStatusUpdateRequestedEvent -> Triple(
-                EventConstants.Streams.ORDER_EVENTS,
+                EventConstants.Topics.ORDER_EVENTS,
                 event.eventType,
                 extractPartitionKey(null, event.orderId?.toString())
             )
             is PaymentCancelRetryEvent -> Triple(
-                EventConstants.Streams.PAYMENT_EVENTS,
+                EventConstants.Topics.PAYMENT_EVENTS,
                 event.eventType,
                 extractPartitionKey(event.paymentId?.toString(), null)
             )
             is PaymentCancelFinalFailureEvent -> Triple(
-                EventConstants.Streams.PAYMENT_EVENTS,
+                EventConstants.Topics.PAYMENT_EVENTS,
                 event.eventType,
                 extractPartitionKey(event.paymentId?.toString(), null)
             )
@@ -243,10 +243,10 @@ class PaymentKafkaEventPublisher(
             is BasePaymentEvent -> {
                 val topic = when (event.eventType) {
                     EventConstants.EventTypes.PaymentRequest.PAYMENT_CREATE_REQUESTED,
-                    EventConstants.EventTypes.PaymentRequest.PAYMENT_CANCEL_REQUESTED -> EventConstants.Streams.PAYMENT_REQUESTS
+                    EventConstants.EventTypes.PaymentRequest.PAYMENT_CANCEL_REQUESTED -> EventConstants.Topics.PAYMENT_REQUESTS
                     EventConstants.EventTypes.Integration.ORDER_INFO_REQUESTED,
-                    EventConstants.EventTypes.Integration.ORDER_QUERY_REQUESTED -> EventConstants.Streams.ORDER_REQUESTS
-                    else -> EventConstants.Streams.PAYMENT_EVENTS
+                    EventConstants.EventTypes.Integration.ORDER_QUERY_REQUESTED -> EventConstants.Topics.ORDER_REQUESTS
+                    else -> EventConstants.Topics.PAYMENT_EVENTS
                 }
                 Triple(
                     topic,

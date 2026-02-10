@@ -32,7 +32,7 @@ class PaymentDlqListener(
      * Payment Events DLQ 토픽 모니터링
      */
     @KafkaListener(
-        topics = [EventConstants.Streams.PAYMENT_EVENTS_DLQ],
+        topics = [EventConstants.Topics.PAYMENT_EVENTS_DLQ],
         groupId = EventConstants.ConsumerGroups.PAYMENT_DLQ_GROUP,
         concurrency = "1" // DLQ는 단일 스레드로 순차 처리
     )
@@ -87,7 +87,7 @@ class PaymentDlqListener(
      * Payment Requests DLQ 토픽 모니터링
      */
     @KafkaListener(
-        topics = [EventConstants.Streams.PAYMENT_REQUESTS_DLQ],
+        topics = [EventConstants.Topics.PAYMENT_REQUESTS_DLQ],
         groupId = EventConstants.ConsumerGroups.PAYMENT_DLQ_GROUP,
         concurrency = "1"
     )
@@ -124,7 +124,7 @@ class PaymentDlqListener(
      * Order Requests DLQ 토픽 모니터링
      */
     @KafkaListener(
-        topics = [EventConstants.Streams.ORDER_REQUESTS_DLQ],
+        topics = [EventConstants.Topics.ORDER_REQUESTS_DLQ],
         groupId = EventConstants.ConsumerGroups.PAYMENT_DLQ_GROUP,
         concurrency = "1"
     )

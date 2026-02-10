@@ -53,6 +53,11 @@ public class OptimizedRedisConfig {
                 .build();
     }
 
+    @Bean("storeOptimizedObjectMapper")
+    public ObjectMapper storeOptimizedObjectMapper() {
+        return new ObjectMapper().registerModule(new JavaTimeModule());
+    }
+
     @Bean
     public LettuceConnectionFactory redisConnectionFactory(ClientResources clientResources) {
         // 🚀 성능 최적화된 클라이언트 옵션

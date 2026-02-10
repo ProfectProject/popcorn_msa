@@ -29,7 +29,7 @@ public class OrderPAIDEvent {
     @JsonFormat(shape = JsonFormat.Shape.STRING)
     private Instant timestamp;
 
-    private String eventType;      // "ORDER_CREATED"
+    private String eventType;      // "ORDER_PAID"
     private String eventVersion;   // "1.0"
     private String producer;       // "order-service"
 
@@ -38,7 +38,7 @@ public class OrderPAIDEvent {
     
     private boolean hasReservation;
     private boolean hasGoods;
-    //private UUID paymentId; // payment event 에서 수신후 listner에서 넘기고 추가
+    private String paymentId;
     private Integer totalAmount;
     private LocalDateTime paidAt;
 }

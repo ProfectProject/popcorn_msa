@@ -122,6 +122,7 @@ sealed class PaymentException(
     companion object {
         // 정적 팩토리 메서드들 (기존 Java 코드와의 호환성을 위해)
         fun paymentNotFound(): PaymentNotFound = PaymentNotFound.create()
+        fun paymentNotFound(message: String): PaymentNotFound = PaymentNotFound(message)
         fun invalidRequest(): InvalidRequest = InvalidRequest.create()
         fun invalidRequest(message: String): InvalidRequest = InvalidRequest.create(message)
         fun duplicatePaymentAttempt(): DuplicatePaymentAttempt = DuplicatePaymentAttempt.create()

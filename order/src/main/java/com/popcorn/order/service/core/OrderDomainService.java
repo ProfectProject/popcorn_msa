@@ -98,10 +98,14 @@ public class OrderDomainService {
                 OrderStatus.CANCELLED        // 취소 (5분 이내만 허용)
         ));
 
+        // 완료 상태에서는 제한적 전이만 허용 (이벤트 순서 문제 해결)
+        transitions.put(OrderStatus.COMPLETED, EnumSet.of(
+                OrderStatus.PAID            // 결제 이벤트가 늦게 도착할 수 있음 (멱등 처리)
+        ));
+
         // 더 이상 변경 불가능한 상태들
         transitions.put(OrderStatus.REJECTED, EnumSet.noneOf(OrderStatus.class));
         transitions.put(OrderStatus.CANCELLED, EnumSet.noneOf(OrderStatus.class));
-        transitions.put(OrderStatus.COMPLETED, EnumSet.noneOf(OrderStatus.class));
 
         return transitions;
     }

@@ -74,7 +74,7 @@ public class BatchPriceValidationController extends BaseController {
 
         // 🔍 JSON 응답 로깅
         try {
-            BaseResponse<BatchPriceValidationResponse> finalResponse = ok(response);
+            ResponseEntity<BaseResponse<BatchPriceValidationResponse>> finalResponse = ok(response);
             String responseJson = new com.fasterxml.jackson.databind.ObjectMapper().writeValueAsString(finalResponse);
             log.info("🔍 [Store] 실제 JSON 응답 - orderId: {}, response: {}",
                     response.getOrderId(), responseJson);

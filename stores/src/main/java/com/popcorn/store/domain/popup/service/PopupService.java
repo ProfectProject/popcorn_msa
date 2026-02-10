@@ -23,9 +23,11 @@ import com.popcorn.store.domain.popup.repository.PopupScheduleReservationReposit
 import com.popcorn.store.domain.popup.repository.view.PopupScheduleView;
 
 import lombok.RequiredArgsConstructor;
+import lombok.extern.slf4j.Slf4j;
 
 @Service
 @RequiredArgsConstructor
+@Slf4j
 public class PopupService {
 
 	private final PopupQueryService popupQueryService;

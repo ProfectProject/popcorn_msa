@@ -203,8 +203,6 @@ public class OrderCommandService {
         // 즉시 응답: 예약과 동시에 결제 URL 생성
         Order latestOrder = orderRepository.findById(savedOrder.getId()).orElse(savedOrder);
         List<OrderItem> latestOrderItems = orderItemRepository.findByOrderId(latestOrder.getId());
-        latestOrder.setOrderItems(latestOrderItems);
-        //latestOrder.setOrderItems(orderItemRepository.findByOrderId(latestOrder.getId()););
         String paymentMethod = determinePaymentMethod(latestOrder);
 
         // 즉시 결제 URL 생성
@@ -215,6 +213,7 @@ public class OrderCommandService {
 
         OrderCreateResponse response = OrderCreateResponse.fromOrderWithPayment(
                 latestOrder,
+                latestOrderItems,
                 null,
                 paymentStatus,
                 paymentMethod,
@@ -235,7 +234,7 @@ public class OrderCommandService {
                 isNewUltraFast ? "✅ ULTRA-FAST v2 달성!" : totalElapsed < 1000 ? "⚠️ 목표 미달성" : "❌ 성능 문제");
 
         // 주문 생성 이벤트 발행 (중복 제거 완료)
-        eventPublisher.publishEvent(new OrderCreatedEvent(latestOrder, null));
+        eventPublisher.publishEvent(new OrderCreatedEvent(latestOrder, latestOrderItems.size(), null));
         
         /*
         * kafka 이벤트 발행
@@ -413,6 +412,17 @@ public class OrderCommandService {
         responseType = Order.class
     )
     public Order updateOrderStatus(UUID orderId, String status, String reason) {
+        return updateOrderStatus(orderId, status, reason, null);
+    }
+
+    @Transactional
+    @Idempotent(
+        keyExpression = "#orderId + ':' + #status",
+        keyPrefix = "order:status",
+        ttlSeconds = 60,
+        responseType = Order.class
+    )
+    public Order updateOrderStatus(UUID orderId, String status, String reason, String paymentId) {
         log.info("주문 상태 변경 - 주문ID: {}, 새상태: {}, 이유: {}", orderId, status, reason);
 
         // 1. 주문 조회
@@ -440,8 +450,15 @@ public class OrderCommandService {
             return order;
         }
 
-        // 4. 도메인 규칙 검증
+        // 4. 도메인 규칙 검증 (이벤트 순서 문제 고려)
         if (!orderDomainService.canChangeStatus(currentStatus, newStatus)) {
+            // 늦게 도착한 결제 이벤트는 역전 갱신 대신 멱등 처리한다.
+            if (currentStatus == OrderStatus.COMPLETED
+                    && (newStatus == OrderStatus.PAYMENT_PENDING || newStatus == OrderStatus.PAID)) {
+                log.info("완료 주문에 대한 지연 결제 이벤트 수신 - 멱등 처리 - 주문ID: {}, 요청상태: {}, 현재상태: {}",
+                        orderId, newStatus, currentStatus);
+                return order;
+            }
             throw new RuntimeException(String.format("상태 변경이 불가능해요: %s → %s", currentStatus, newStatus));
         }
 
@@ -449,9 +466,11 @@ public class OrderCommandService {
         order.setStatus(newStatus);
         Order savedOrder = orderRepository.save(order);
         
-        boolean hasGoodsItems = savedOrder.getOrderItems().stream()
+        List<OrderItem> persistedOrderItems = orderItemRepository.findByOrderId(savedOrder.getId());
+
+        boolean hasGoodsItems = persistedOrderItems.stream()
             .anyMatch(item -> ItemType.GOODS.equals(item.getOrderItemType()));
-        boolean hasReservationItems = savedOrder.getOrderItems().stream()
+        boolean hasReservationItems = persistedOrderItems.stream()
             .anyMatch(item -> ItemType.RESERVATION.equals(item.getOrderItemType()));
 
 
@@ -481,21 +500,18 @@ public class OrderCommandService {
         ));
 
         if (newStatus == OrderStatus.PAID) {
-            List<OrderItem> orderItems = orderItemRepository.findByOrderId(savedOrder.getId());
-            savedOrder.setOrderItems(orderItems);
             orderEventPublisher.publishOrderPaidEvent(savedOrder);
 
             /*
             * kafka : order-paid 발행
             * boolean hasGoodsItems = savedOrder.getOrderItems().stream()
              */
-            orderEventProducer.publishOrderPaid(savedOrder,hasGoodsItems,hasReservationItems);
+            orderEventProducer.publishOrderPaid(savedOrder, hasGoodsItems, hasReservationItems, paymentId);
 
         }
 
         // 8. 특별한 상태 변경시 추가 이벤트
         if (newStatus == OrderStatus.CANCELLED) {
-            List<OrderItem> orderItems = orderItemRepository.findByOrderId(savedOrder.getId());
             eventPublisher.publishEvent(new OrderCancelledEvent(
                     savedOrder.getId(),
                     savedOrder.getCustomerId(),
@@ -508,7 +524,7 @@ public class OrderCommandService {
             /*
             * kafka order_cancelled 발행
             */
-            orderEventProducer.publishOrderCancelled(savedOrder,orderItems,hasGoodsItems,hasReservationItems,LocalDateTime.now());
+            orderEventProducer.publishOrderCancelled(savedOrder, persistedOrderItems, hasGoodsItems, hasReservationItems, LocalDateTime.now());
         }
 
         log.info("주문 상태 변경 완료 - 주문ID: {}, {} → {}", orderId, currentStatus, newStatus);
@@ -816,7 +832,7 @@ public class OrderCommandService {
      */
     private String generateOrderName(Order order) {
         try {
-            List<OrderItem> items = order.getOrderItems();
+            List<OrderItem> items = orderItemRepository.findByOrderId(order.getId());
             if (items.isEmpty()) {
                 return "팝콘 주문";
             }
@@ -992,8 +1008,8 @@ public class OrderCommandService {
                 orderEventPublisher.publishGoodsReservationCancelRequestedEvent(
                         order,
                         item.getGoodsId(),
-                        item.getQty()
-                        //reason
+                        item.getQty(),
+                        "PARTIAL_ROLLBACK"
                 );
 
                 log.info("굿즈 재고 예약 취소 성공 - 주문번호: {}, 굿즈변형ID: {}",
@@ -1100,7 +1116,8 @@ public class OrderCommandService {
                     orderEventPublisher.publishGoodsReservationCancelRequestedEvent(
                             order,
                             item.getGoodsId(),
-                            item.getQty()
+                            item.getQty(),
+                            "PAYMENT_FAILED_OR_CANCELLED"
                     );
 
                     log.info("✅ 굿즈 재고 예약 취소 완료 - orderId: {}, 굿즈변형ID: {}",
@@ -1147,7 +1164,8 @@ public class OrderCommandService {
 
             storeRequestsProducer.publishScheduleReservationCancelRequested(
                     order,
-                    scheduleId
+                    scheduleId,
+                    "PAYMENT_FAILED_OR_CANCELLED"
             );
 
             log.info("📅 스케줄 해제 요청 발행 - orderId: {}, scheduleId: {}",
@@ -1172,10 +1190,16 @@ public class OrderCommandService {
             Order order = orderRepository.findById(orderId)
                     .orElseThrow(() -> new RuntimeException("주문을 찾을 수 없어요: " + orderId));
 
+            // 이미 완료/취소된 주문은 보상 결제 취소를 다시 요청하지 않는다.
+            if (order.getStatus() == OrderStatus.COMPLETED || order.getStatus() == OrderStatus.CANCELLED) {
+                log.info("ℹ️ 결제 취소 요청 생략 - 종결 상태 주문 - orderId: {}, status: {}", orderId, order.getStatus());
+                return;
+            }
+
             // 결제 취소 요청 이벤트 발행 (Payment 서비스가 처리)
             orderEventPublisher.publishPaymentCancelRequestedEvent(
                     order,
-                    paymentId != null ? paymentId : "",
+                    paymentId,
                     reason != null ? reason : "주문 결제 실패로 인한 자동 취소"
             );
 
@@ -1186,6 +1210,13 @@ public class OrderCommandService {
                     orderId, paymentId, e.getMessage(), e);
             // 결제 취소 실패도 주문 상태 변경에 영향을 주지 않음 (로그만 남김)
         }
+    }
+
+    @Transactional(readOnly = true)
+    public OrderStatus getOrderStatus(UUID orderId) {
+        return orderRepository.findById(orderId)
+                .map(Order::getStatus)
+                .orElse(null);
     }
 
     /**
@@ -1342,7 +1373,8 @@ public class OrderCommandService {
             // 4) Kafka 발행
             storeRequestsProducer.publishScheduleReleaseRequested(
                     order,
-                    releaseItems
+                    releaseItems,
+                    "PAYMENT_CANCEL_SUCCEEDED"
             );
 
             log.info("✅ 스케줄 예약 해제 요청 완료 - orderId: {}, 해제 세션 수: {}",
@@ -1396,7 +1428,8 @@ public class OrderCommandService {
             // 4) Kafka 발행
             storeRequestsProducer.publishStockReleaseRequested(
                     order,
-                    releaseItems
+                    releaseItems,
+                    "PAYMENT_CANCEL_SUCCEEDED"
             );
 
             log.info("✅ 굿즈 예약 해제 요청 완료 - orderId: {}, 해제 굿즈 수: {}",

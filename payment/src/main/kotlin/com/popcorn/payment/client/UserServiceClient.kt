@@ -1,5 +1,6 @@
 package com.popcorn.payment.client
 
+import com.fasterxml.jackson.annotation.JsonProperty
 import com.popcorn.payment.util.SystemPassportGenerator
 import kotlinx.coroutines.reactor.awaitSingle
 import org.slf4j.LoggerFactory
@@ -30,7 +31,20 @@ class UserServiceClient(
      */
     suspend fun getUserAddresses(userId: Long): List<UserAddressResponse> {
         return try {
-            log.debug("🔍 [HTTP] User 서비스 주소 API 호출 시작 - userId: {}", userId)
+            getUserAddressesInternal(userId)
+        } catch (ex: WebClientResponseException) {
+            log.error("❌ [HTTP] User API 호출 실패 - userId: {}, status: {}, error: {}",
+                userId, ex.statusCode, ex.message)
+            emptyList()
+        } catch (e: Exception) {
+            log.error("❌ [HTTP] User 서비스 통신 실패 - userId: {}, error: {}",
+                userId, e.message, e)
+            emptyList()
+        }
+    }
+
+    private suspend fun getUserAddressesInternal(userId: Long): List<UserAddressResponse> {
+        log.debug("🔍 [HTTP] User 서비스 주소 API 호출 시작 - userId: {}", userId)
 
             // 실제 사용자 ID로 Passport 생성
             val userPassport = systemPassportGenerator.generateUserPassport(userId)
@@ -49,16 +63,7 @@ class UserServiceClient(
             log.info("✅ [HTTP] 사용자 주소 목록 조회 성공 - userId: {}, 주소 개수: {}",
                 userId, response.size)
 
-            response
-        } catch (ex: WebClientResponseException) {
-            log.error("❌ [HTTP] User API 호출 실패 - userId: {}, status: {}, error: {}",
-                userId, ex.statusCode, ex.message)
-            emptyList()
-        } catch (e: Exception) {
-            log.error("❌ [HTTP] User 서비스 통신 실패 - userId: {}, error: {}",
-                userId, e.message, e)
-            emptyList()
-        }
+        return response
     }
 
     /**
@@ -66,16 +71,20 @@ class UserServiceClient(
      */
     suspend fun hasDefaultAddress(userId: Long): Boolean {
         return try {
-            val addresses = getUserAddresses(userId)
+            val addresses = getUserAddressesInternal(userId)
             val hasDefault = addresses.any { it.isDefault == true }  // nullable Boolean 처리
 
             log.debug("🔍 [HTTP] 기본 주소 존재 여부 - userId: {}, 전체주소: {}개, hasDefault: {}",
                 userId, addresses.size, hasDefault)
 
             hasDefault
+        } catch (ex: WebClientResponseException) {
+            log.warn("⚠️ [HTTP] 기본 주소 확인 실패(서비스 오류, 결제 진행) - userId: {}, status: {}",
+                userId, ex.statusCode)
+            true
         } catch (e: Exception) {
-            log.error("❌ [HTTP] 기본 주소 확인 실패 - userId: {}, error: {}", userId, e.message, e)
-            false
+            log.warn("⚠️ [HTTP] 기본 주소 확인 실패(결제 진행) - userId: {}, error: {}", userId, e.message)
+            true
         }
     }
 
@@ -125,5 +134,6 @@ data class UserAddressResponse(
     val address1: String,
     val address2: String?,
     val postalCode: String,
+    @JsonProperty("isDefault")
     val isDefault: Boolean?    // nullable Boolean
 )

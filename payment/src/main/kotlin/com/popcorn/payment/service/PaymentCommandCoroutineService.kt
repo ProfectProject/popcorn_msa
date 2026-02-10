@@ -239,6 +239,28 @@ class PaymentCommandCoroutineService(
     }
 
     /**
+     * 결제 ID로 결제 조회
+     *
+     * @param paymentId 결제 ID
+     * @return 결제 상세 정보
+     */
+    @Transactional(readOnly = true)
+    suspend fun getPaymentById(paymentId: UUID): PaymentDetailResult {
+        val payment = paymentRepository.findById(paymentId)
+            .orElseThrow { PaymentException.paymentNotFound("결제 정보를 찾을 수 없습니다. paymentId: $paymentId") }
+
+        return PaymentDetailResult(
+            paymentId = payment.id,
+            orderId = payment.orderId,
+            paymentKey = payment.paymentKey,
+            status = payment.status.name,
+            amount = payment.amount,
+            approvedAt = payment.approvedAt,
+            rawPayload = payment.rawPayload
+        )
+    }
+
+    /**
      * 결제 생성 입력값 검증
      */
     private fun validatePaymentCreation(paymentMethod: String, amount: Int) {

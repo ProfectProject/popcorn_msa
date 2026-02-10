@@ -49,7 +49,7 @@ public class CheckinsKafkaListener {
      * Consumer Group: checkin-service-group
      */
     @KafkaListener(
-            topics = EventConstants.Streams.CHECKIN_REQUESTS,
+            topics = EventConstants.Topics.CHECKIN_REQUESTS,
             groupId = EventConstants.ConsumerGroups.CHECKIN_SERVICE_GROUP
     )
     public void handleCheckinRequests(
@@ -185,7 +185,7 @@ public class CheckinsKafkaListener {
      * Consumer Group: checkin-service-group
      */
     @KafkaListener(
-            topics = EventConstants.Streams.PAYMENT_EVENTS,
+            topics = EventConstants.Topics.PAYMENT_EVENTS,
             groupId = EventConstants.ConsumerGroups.CHECKIN_SERVICE_GROUP
     )
     public void handlePaymentEvents(
@@ -239,7 +239,7 @@ public class CheckinsKafkaListener {
      * Consumer Group: checkin-service-group
      */
     @KafkaListener(
-            topics = EventConstants.Streams.ORDER_EVENTS,
+            topics = EventConstants.Topics.ORDER_EVENTS,
             groupId = EventConstants.ConsumerGroups.CHECKIN_SERVICE_GROUP
     )
     public void handleOrderEvents(

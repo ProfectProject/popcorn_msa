@@ -2,7 +2,6 @@ package com.popcorn.payment.event.publisher
 
 import com.popcorn.payment.event.base.BasePaymentEvent
 import com.popcorn.payment.event.base.BasePaymentEventPublisher
-import com.popcorn.payment.event.listener.PaymentRedisEventPublisher
 import com.popcorn.payment.event.kafka.PaymentKafkaEventPublisher
 import com.popcorn.payment.outbox.OutboxWriter
 import com.popcorn.payment.event.domain.payment.*
@@ -24,7 +23,6 @@ import org.springframework.stereotype.Component
 @Component
 class BasePaymentEventPublisherImpl(
     private val applicationEventPublisher: ApplicationEventPublisher,
-    private val paymentRedisEventPublisher: PaymentRedisEventPublisher,
     private val outboxWriter: OutboxWriter
 ) : BasePaymentEventPublisher {
 
@@ -40,7 +38,6 @@ class BasePaymentEventPublisherImpl(
      * - 이중 발행: Redis Stream + Kafka (점진적 전환)
      */
     override suspend fun publish(event: BasePaymentEvent) {
-        var redisSuccess = false
         var kafkaSuccess = false
 
         try {
@@ -52,16 +49,7 @@ class BasePaymentEventPublisherImpl(
             // 1. 로컬 이벤트 발행
             applicationEventPublisher.publishEvent(event)
 
-            // 2. Redis Stream 발행
-            try {
-                paymentRedisEventPublisher.publish(event)
-                redisSuccess = true
-                log.debug("✅ Redis 이벤트 발행 성공: {}", event::class.simpleName)
-            } catch (e: Exception) {
-                log.warn("⚠️ Redis 이벤트 발행 실패: {} - error: {}", event::class.simpleName, e.message)
-            }
-
-            // 3. Kafka 발행 (활성화된 경우에만)
+            // 2. Kafka 발행 (활성화된 경우에만)
             paymentKafkaEventPublisher?.let { kafkaPublisher ->
                 try {
                     kafkaPublisher.publishAsync(event)
@@ -73,12 +61,12 @@ class BasePaymentEventPublisherImpl(
             }
 
             // 성공률 로깅
-            val totalChannels = if (paymentKafkaEventPublisher != null) 2 else 1
-            val successChannels = (if (redisSuccess) 1 else 0) + (if (kafkaSuccess) 1 else 0)
+            val totalChannels = if (paymentKafkaEventPublisher != null) 1 else 0
+            val successChannels = if (kafkaSuccess) 1 else 0
 
             if (successChannels < totalChannels) {
-                log.warn("⚠️ 이벤트 발행 부분 실패: {} - 성공: {}/{} (Redis: {}, Kafka: {})",
-                    event::class.simpleName, successChannels, totalChannels, redisSuccess,
+                log.warn("⚠️ 이벤트 발행 부분 실패: {} - 성공: {}/{} (Kafka: {})",
+                    event::class.simpleName, successChannels, totalChannels,
                     if (paymentKafkaEventPublisher != null) kafkaSuccess else "N/A")
             }
 

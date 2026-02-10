@@ -82,11 +82,6 @@ passport:
   secret: ${PASSPORT_SECRET:passport-shared-secret}
   ttl-seconds: 60
 
-# Redis 이벤트 설정
-redis:
-  events:
-    enabled: true
-
 jwt:
   secret: ${JWT_SECRET:dGVzdC1qd3Qtc2VjcmV0LWtleS1mb3ItbG9jYWwtZGV2ZWxvcG1lbnQtb25seS1kb25vdC11c2UtaW4tcHJvZHVjdGlvbg==}
   expiration: 3600000

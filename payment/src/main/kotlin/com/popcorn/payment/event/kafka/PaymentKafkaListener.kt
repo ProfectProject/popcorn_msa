@@ -45,7 +45,7 @@ class PaymentKafkaListener(
      * - 자체 이벤트 포함
      */
     @KafkaListener(
-        topics = [EventConstants.Streams.PAYMENT_EVENTS],
+        topics = [EventConstants.Topics.PAYMENT_EVENTS],
         groupId = EventConstants.ConsumerGroups.PAYMENT_SERVICE_GROUP
     )
     fun handlePaymentEvents(
@@ -110,7 +110,7 @@ class PaymentKafkaListener(
      * - Order 서비스로부터의 결제 요청 처리
      */
     @KafkaListener(
-        topics = [EventConstants.Streams.PAYMENT_REQUESTS],
+        topics = [EventConstants.Topics.PAYMENT_REQUESTS],
         groupId = EventConstants.ConsumerGroups.PAYMENT_SERVICE_GROUP
     )
     fun handlePaymentRequests(
@@ -170,7 +170,7 @@ class PaymentKafkaListener(
      * - Order 서비스로부터의 주문 정보 응답 수신
      */
     @KafkaListener(
-        topics = [EventConstants.Streams.ORDER_REQUESTS],
+        topics = [EventConstants.Topics.ORDER_REQUESTS],
         groupId = EventConstants.ConsumerGroups.PAYMENT_SERVICE_GROUP
     )
     fun handleOrderRequests(
@@ -384,40 +384,54 @@ class PaymentKafkaListener(
      */
     private fun handlePaymentCancelRequested(eventData: Map<String, Any>) {
         val orderIdRaw = eventData["orderId"]?.toString()?.trim()?.trim('"')
-        val reason = eventData["reason"]?.toString()?.trim()?.trim('"') ?: "주문 취소"
+        val paymentIdRaw = eventData["paymentId"]?.toString()?.trim()?.trim('"')
+        val reason = eventData["cancelReason"]?.toString()?.trim()?.trim('"')
+            ?: eventData["reason"]?.toString()?.trim()?.trim('"')
+            ?: "주문 취소"
         val orderNo = eventData["orderNo"]?.toString()?.trim()?.trim('"') ?: orderIdRaw
         val customerIdRaw = eventData["customerId"]?.toString()?.trim()?.trim('"')
         val customerId = customerIdRaw?.toLongOrNull()
 
-        if (orderIdRaw.isNullOrBlank()) {
-            log.warn("⚠️ [PAYMENT] 결제 취소 요청 필수 데이터 누락 - eventData: {}", eventData)
+        if (paymentIdRaw.isNullOrBlank() && orderIdRaw.isNullOrBlank()) {
+            log.warn("⚠️ [PAYMENT] 결제 취소 요청 필수 데이터 누락(paymentId/orderId) - eventData: {}", eventData)
             return
         }
 
-        val orderId = java.util.UUID.fromString(orderIdRaw)
+        val orderId = parseUuidOrNull(orderIdRaw, "orderId")
+        val paymentId = parseUuidOrNull(paymentIdRaw, "paymentId")
+        if (orderId == null && paymentId == null) {
+            log.warn("⚠️ [PAYMENT] 결제 취소 요청 UUID 파싱 실패(paymentId/orderId) - eventData: {}", eventData)
+            return
+        }
 
         eventScope.launch {
             try {
-                val result = tossPaymentCoroutineService.cancelPayment(orderId, reason)
+                val result = when {
+                    paymentId != null -> tossPaymentCoroutineService.cancelPaymentByPaymentId(paymentId, reason)
+                    orderId != null -> tossPaymentCoroutineService.cancelPayment(orderId, reason)
+                    else -> return@launch
+                }
 
                 paymentEventPublisher.publishPaymentCancelled(
                     paymentId = result.paymentId,
-                    orderId = orderId,
-                    orderNo = orderNo ?: orderId.toString(),
+                    orderId = result.orderId,
+                    orderNo = orderNo ?: result.orderId.toString(),
                     cancelAmount = result.cancelAmount,
                     cancelReason = result.cancelReason,
                     customerId = customerId
                 )
 
-                log.info("✅ [PAYMENT] 결제 취소 처리 완료 - orderId={}, paymentId={}", orderId, result.paymentId)
+                log.info("✅ [PAYMENT] 결제 취소 처리 완료 - orderId={}, paymentId={}", result.orderId, result.paymentId)
 
             } catch (e: Exception) {
-                log.error("🚨 [PAYMENT] 결제 취소 처리 실패 - orderId={}, error={}", orderId, e.message, e)
+                val fallbackOrderId = orderId ?: java.util.UUID(0, 0)
+                log.error("🚨 [PAYMENT] 결제 취소 처리 실패 - paymentId={}, orderId={}, error={}",
+                    paymentId, fallbackOrderId, e.message, e)
                 paymentEventPublisher.publishAsync(
                     PaymentCancelFailedEvent(
-                        _paymentId = java.util.UUID(0, 0),
-                        orderId = orderId,
-                        orderNo = orderNo ?: orderId.toString(),
+                        _paymentId = paymentId ?: java.util.UUID(0, 0),
+                        orderId = fallbackOrderId,
+                        orderNo = orderNo ?: fallbackOrderId.toString(),
                         cancelReason = reason,
                         failureReason = e.message ?: "결제 취소 실패",
                         retryCount = 0,
@@ -426,6 +440,18 @@ class PaymentKafkaListener(
                 )
             }
         }
+    }
+
+    private fun parseUuidOrNull(raw: String?, fieldName: String): UUID? {
+        val value = raw?.trim()?.trim('"')
+        if (value.isNullOrBlank()) {
+            return null
+        }
+        return runCatching { UUID.fromString(value) }
+            .onFailure { ex ->
+                log.warn("⚠️ [PAYMENT] UUID 파싱 실패 - field: {}, value: {}, error: {}", fieldName, value, ex.message)
+            }
+            .getOrNull()
     }
 
     /**
@@ -609,7 +635,7 @@ class PaymentKafkaListener(
      * - ORDER_CREATED, ORDER_PAID, ORDER_COMPLETED 등 처리
      */
     @KafkaListener(
-        topics = [EventConstants.Streams.ORDER_EVENTS],
+        topics = [EventConstants.Topics.ORDER_EVENTS],
         groupId = EventConstants.ConsumerGroups.PAYMENT_SERVICE_GROUP
     )
     fun handleOrderEvents(
@@ -627,14 +653,11 @@ class PaymentKafkaListener(
             log.info("📦 [PAYMENT] Order 이벤트 수신 - topic: {}, partition: {}, offset: {}, key: {}, eventType: {}, eventId: {}",
                 topic, partition, offset, key, eventType, eventId)
 
-            // 멱등성 체크
-            val idempotencyKey = eventData[EventConstants.MetadataKeys.IDEMPOTENCY_KEY] as? String
-                ?: "$topic-$partition-$offset"
-
-            val isAlreadyProcessed = idempotencyService.isAlreadyProcessed(idempotencyKey)
-            if (isAlreadyProcessed) {
+            // 멱등성 체크 (eventId 우선)
+            val dedupKey = eventId ?: "$topic-$partition-$offset"
+            if (kafkaIdempotencyService.isDuplicateEvent(dedupKey)) {
                 log.info("🔄 [PAYMENT] Order 이벤트 중복 처리 건너뛰기 - eventType: {}, eventId: {}, key: {}",
-                    eventType, eventId, idempotencyKey)
+                    eventType, eventId, dedupKey)
                 acknowledgment.acknowledge()
                 return
             }
@@ -642,8 +665,15 @@ class PaymentKafkaListener(
             // 이벤트 타입별 처리
             handleOrderDomainEvent(eventType, eventData)
 
-            // 멱등성 키 저장
-            idempotencyService.markAsProcessed(idempotencyKey)
+            // 멱등성 기록
+            kafkaIdempotencyService.recordProcessedEvent(
+                dedupKey,
+                eventType,
+                topic,
+                partition,
+                offset,
+                System.currentTimeMillis() - startTime
+            )
 
             // Kafka 메시지 커밋
             acknowledgment.acknowledge()

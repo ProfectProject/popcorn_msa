@@ -382,6 +382,62 @@ class TossPaymentCoroutineService(
         return result
     }
 
+    /**
+     * 토스 결제 취소 처리 (paymentId 기반)
+     *
+     * @param paymentId 결제 ID
+     * @param cancelReason 취소 사유
+     * @return 결제 취소 결과
+     */
+    @CircuitBreaker(name = "tossPaymentCancel", fallbackMethod = "cancelPaymentByPaymentIdFallback")
+    suspend fun cancelPaymentByPaymentId(
+        paymentId: UUID,
+        cancelReason: String
+    ): TossPaymentCancelResult {
+        log.info("🔄 토스 결제 취소 요청(paymentId): paymentId={}, cancelReason={}", paymentId, cancelReason)
+
+        val payment = paymentCommandService.getPaymentById(paymentId)
+        val orderId = payment.orderId
+            ?: throw PaymentException.invalidRequest("결제에 연결된 주문 ID가 없습니다: $paymentId")
+
+        if (payment.status != "PAID") {
+            throw PaymentException.invalidStatusTransition("결제 완료 상태가 아닙니다: ${payment.status}")
+        }
+
+        val order = orderQueryService.getOrder(orderId)
+        log.debug("주문 확인 완료(paymentId): orderId={}, orderNo={}, status={}", order.id, order.orderNo, order.status)
+
+        val paymentKey = payment.paymentKey
+            ?: extractPaymentKeyFromRawPayload(payment.rawPayload)
+            ?: throw PaymentException.invalidRequest("결제 키를 찾을 수 없습니다")
+
+        val cancelResponse = tossClient.cancel(
+            paymentKey = paymentKey,
+            request = TossPaymentCancelRequest(
+                cancelReason = cancelReason
+            )
+        )
+
+        paymentCommandService.updatePaymentStatus(
+            paymentId = payment.paymentId,
+            status = EventConstants.EventStatus.CANCELLED,
+            rawPayload = serializeResponse(cancelResponse)
+        )
+
+        val result = TossPaymentCancelResult(
+            paymentId = payment.paymentId,
+            orderId = orderId,
+            cancelAmount = cancelResponse.totalAmount,
+            status = cancelResponse.status,
+            cancelReason = cancelReason
+        )
+
+        log.info("✅ 토스 결제 취소 완료(paymentId): paymentId={}, cancelAmount={}원",
+            result.paymentId, result.cancelAmount)
+
+        return result
+    }
+
     @Suppress("unused")
     suspend fun confirmPaymentFallback(
         paymentKey: String,
@@ -423,6 +479,27 @@ class TossPaymentCoroutineService(
         throwable: Throwable
     ): Any {
         log.error("🚨 토스 결제 취소 CircuitBreaker OPEN - orderId={}, error={}", orderId, throwable.message, throwable)
+        throw PaymentException.externalApiError("토스 결제 취소 실패(서킷 브레이커): ${throwable.message}")
+    }
+
+    @Suppress("unused")
+    suspend fun cancelPaymentByPaymentIdFallback(
+        paymentId: UUID,
+        cancelReason: String,
+        throwable: Throwable
+    ): TossPaymentCancelResult {
+        log.error("🚨 토스 결제 취소 CircuitBreaker OPEN - paymentId={}, error={}", paymentId, throwable.message, throwable)
+        throw PaymentException.externalApiError("토스 결제 취소 실패(서킷 브레이커): ${throwable.message}")
+    }
+
+    @Suppress("unused")
+    fun cancelPaymentByPaymentIdFallback(
+        paymentId: UUID,
+        cancelReason: String,
+        continuation: Continuation<*>,
+        throwable: Throwable
+    ): Any {
+        log.error("🚨 토스 결제 취소 CircuitBreaker OPEN - paymentId={}, error={}", paymentId, throwable.message, throwable)
         throw PaymentException.externalApiError("토스 결제 취소 실패(서킷 브레이커): ${throwable.message}")
     }
 

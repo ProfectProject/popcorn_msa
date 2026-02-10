@@ -85,16 +85,7 @@ order:
   validation:
     max-quantity: ${ORDER_MAX_QUANTITY:100}
 
-# Redis Stream 설정 (타임아웃 해결)
-redis:
-  events:
-    enabled: true       # Redis Stream 다시 활성화
-  stream:
-    poll-timeout: 5000  # 5초 폴링 타임아웃
-    batch-size: 5       # 작은 배치 크기
-    error-retry-delay: 1000  # 에러 후 재시도 대기시간 (1초)
-
-# 비동기 주문 처리 비활성화 (Redis Stream 사용)
+# 비동기 주문 처리 비활성화
 async:
   order:
     enabled: false      # 비동기 주문 처리 비활성화

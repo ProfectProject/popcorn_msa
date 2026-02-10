@@ -18,18 +18,18 @@ public final class EventConstants {
 
         // ================ Order가 발행하는 이벤트들 ================
 
-        // Order events (order-events stream) - UPPER_SNAKE_CASE
+        // Order events (order-events topic) - UPPER_SNAKE_CASE
         public static final String ORDER_CREATED = "ORDER_CREATED";
         public static final String ORDER_PAID = "ORDER_PAID";
         public static final String ORDER_STATUS_UPDATED = "ORDER_STATUS_UPDATED";  // 표준 이름
         public static final String ORDER_COMPLETED = "ORDER_COMPLETED";
         public static final String ORDER_CANCELLED = "ORDER_CANCELLED";
 
-        // Payment requests (payment-requests stream)
+        // Payment requests (payment-requests topic)
         public static final String PAYMENT_CANCEL_REQUESTED = "PAYMENT_CANCEL_REQUESTED";
         public static final String PAYMENT_CREATE_REQUESTED = "PAYMENT_CREATE_REQUESTED";
 
-        // Store requests (store-requests stream)
+        // Store requests (store-requests topic)
         public static final String STOCK_DEDUCTION_REQUESTED = "STOCK_DEDUCTION_REQUESTED";
         public static final String SCHEDULE_CONFIRMATION_REQUESTED = "SCHEDULE_CONFIRMATION_REQUESTED";
         public static final String GOODS_RESERVATION_REQUESTED = "GOODS_RESERVATION_REQUESTED";
@@ -42,7 +42,7 @@ public final class EventConstants {
 
         // ================ Order가 수신하는 이벤트들 ================
 
-        // Payment events (payment-events stream)
+        // Payment events (payment-events topic)
         public static final String PAYMENT_CREATED = "PAYMENT_CREATED";
         public static final String PAYMENT_COMPLETED = "PAYMENT_COMPLETED";
         public static final String PAYMENT_APPROVED = "PAYMENT_APPROVED";
@@ -54,7 +54,7 @@ public final class EventConstants {
         public static final String PAYMENT_VALIDATION_FAILED = "PAYMENT_VALIDATION_FAILED";
         public static final String ORDER_COMPENSATION_REQUESTED = "ORDER_COMPENSATION_REQUESTED";
 
-        // Store events (store-events stream)
+        // Store events (store-events topic)
         public static final String GOODS_RESERVATION_SUCCEEDED = "GOODS_RESERVATION_SUCCEEDED";
         public static final String GOODS_RESERVATION_FAILED = "GOODS_RESERVATION_FAILED";
         public static final String SCHEDULE_RESERVATION_SUCCEEDED = "SCHEDULE_RESERVATION_SUCCEEDED";
@@ -73,11 +73,11 @@ public final class EventConstants {
         public static final String POPUP_INFO_UPDATED = "POPUP_INFO_UPDATED";
 
 
-        // CheckIn events (checkin-events stream)
+        // CheckIn events (checkin-events topic)
         public static final String QR_GENERATED = "QR_GENERATED";
         public static final String CHECKIN_CREATED = "CHECKIN_CREATED";
 
-        // Order requests (order-requests stream)
+        // Order requests (order-requests topic)
         public static final String ORDER_INFO_REQUESTED = "ORDER_INFO_REQUESTED";
         public static final String ORDER_QUERY_REQUESTED = "ORDER_QUERY_REQUESTED";
 
@@ -90,15 +90,15 @@ public final class EventConstants {
     }
 
     /**
-     * Redis Stream 이름들
+     * Kafka Topic 이름들
      */
-    public static final class Streams {
+    public static final class Topics {
 
-        // Order가 발행하는 스트림들
+        // Order가 발행하는 토픽들
         public static final String ORDER_EVENTS = "order-events";
         public static final String ORDER_REQUESTS = "order-requests";
 
-        // Order가 구독하는 외부 스트림들
+        // Order가 구독하는 외부 토픽들
         public static final String PAYMENT_EVENTS = "payment-events";
         public static final String PAYMENT_REQUESTS = "payment-requests";
         public static final String STORE_EVENTS = "store-events";
@@ -106,7 +106,7 @@ public final class EventConstants {
         public static final String CHECKIN_EVENTS = "checkin-events";
         public static final String CHECKIN_REQUESTS = "checkin-requests";
 
-        private Streams() {}
+        private Topics() {}
     }
 
     /**

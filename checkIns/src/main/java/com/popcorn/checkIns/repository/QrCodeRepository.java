@@ -141,7 +141,7 @@ public class QrCodeRepository {
 		return jdbcTemplate.update(
 				"""
 				UPDATE checkins.qr_order_qr_codes
-				SET expires_at = ?, updated_at = CURRENT_TIMESTAMP
+				SET expires_at = ?
 				WHERE qr_id = ?
 				""",
 				toTimestamp(expiresAt),

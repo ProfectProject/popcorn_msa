@@ -68,9 +68,9 @@ object EventConstants {
     }
 
     /**
-     * Redis Stream 이름들
+     * Kafka Topic 이름들
      */
-    object Streams {
+    object Topics {
         const val PAYMENT_EVENTS = "payment-events"
         const val PAYMENT_REQUESTS = "payment-requests"
         const val ORDER_INFO_REQUESTS = "order-info-requests"
@@ -89,7 +89,7 @@ object EventConstants {
      * Consumer Group 이름들
      */
     object ConsumerGroups {
-        const val PAYMENT_SERVICE_GROUP = "payment-service-group"  // Redis Stream & Kafka 공통 사용
+        const val PAYMENT_SERVICE_GROUP = "payment-service-group"
         const val PAYMENT_DLQ_GROUP = "payment-dlq-group"
     }
 

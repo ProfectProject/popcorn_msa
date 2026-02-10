@@ -305,7 +305,6 @@ public class OrderService {
             Order savedOrder = orderRepository.save(order);
 
             List<OrderItem> orderItems = orderItemRepository.findByOrderId(savedOrder.getId());
-            savedOrder.setOrderItems(orderItems);
 
             // 4. 주문 상태 변경 이력 기록
             saveOrderStatusHistory(order, oldStatus, "결제 완료");

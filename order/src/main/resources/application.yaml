@@ -215,10 +215,10 @@ external:
     enabled: true  # HTTP 기반 외부 서비스 호출 활성화
   services:
     users:
-      base-url: ${USERS_SERVICE_URL:http://localhost:8082}
+      base-url: ${USERS_SERVICE_URL:http://popcorn-gateway:8080}
       timeout: 5000ms
     store:
-      base-url: ${STORE_SERVICE_URL:http://localhost:8083}
+      base-url: ${STORE_SERVICE_URL:http://popcorn-gateway:8080}
       timeout: 5000ms
 
 # 프론트엔드 주소 설정

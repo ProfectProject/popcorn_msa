@@ -81,12 +81,7 @@ passport:
   secret: ${PASSPORT_SECRET:passport-shared-secret}
   ttl-seconds: 60
 
-# Redis 이벤트 설정 (타임아웃 해결)
-redis:
-  events:
-    enabled: true      # Redis Stream 활성화
-
-# 비동기 주문 처리 비활성화 (Redis Stream 사용)
+# 비동기 주문 처리 비활성화
 async:
   order:
     enabled: false      # 비동기 주문 처리 비활성화
@@ -188,8 +183,8 @@ logging:
 external:
   services:
     users:
-      base-url: ${USERS_SERVICE_BASE_URL:http://localhost:8082}
+      base-url: ${USERS_SERVICE_BASE_URL:http://popcorn-gateway:8080}
     store:
-      base-url: ${STORE_SERVICE_BASE_URL:http://localhost:8083}
+      base-url: ${STORE_SERVICE_BASE_URL:http://popcorn-gateway:8080}
   http:
     enabled: true  # HTTP 기반 외부 서비스 호출 활성화 (개발환경)

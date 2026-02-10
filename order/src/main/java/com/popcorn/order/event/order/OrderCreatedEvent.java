@@ -29,13 +29,13 @@ import lombok.Getter;
 public class OrderCreatedEvent extends BaseOrderEvent {
 
     // 이벤트에 포함할 주요 정보들
-    private final Order order;                 // 생성된 주문 정보 전체
     private final String orderNo;              // 주문 번호 (O20260120-000001 형태)
     private final ItemType orderType;         // 주문 타입 (예약/구매)
     private final OrderStatus orderStatus;     // 주문 상태
     private final Integer totalAmount;         // 총 주문 금액
     private final Integer itemCount;           // 주문 항목 개수
     private final String idempotencyKey;      // 중복 방지용 키
+    private final java.time.LocalDateTime createdAt;
 
     /**
      * 주문 생성 이벤트 만들기
@@ -43,23 +43,23 @@ public class OrderCreatedEvent extends BaseOrderEvent {
      * @param order 생성된 주문
      * @param idempotencyKey 중복 방지용 키 (같은 요청이 여러 번 와도 한 번만 처리)
      */
-    public OrderCreatedEvent(Order order, String idempotencyKey) {
+    public OrderCreatedEvent(Order order, Integer itemCount, String idempotencyKey) {
         // 부모 클래스에 이벤트 기본 정보 전달
         super(
             order.getId(),                      // 주문 ID
             EventConstants.EventTypes.ORDER_CREATED,  // 이벤트 타입 이름
             order.getCustomerId(),              // 주문한 고객 ID
-            createEventMetadata(order, idempotencyKey)  // 추가 메타데이터
+            createEventMetadata(order, itemCount, idempotencyKey)  // 추가 메타데이터
         );
 
         // 이 이벤트만의 정보들 저장
-        this.order = order;
         this.orderNo = order.getOrderNo();
         this.orderType = order.getOrderType();
         this.orderStatus = order.getStatus();
         this.totalAmount = order.getTotalAmount();
-        this.itemCount = order.getOrderItems() != null ? order.getOrderItems().size() : 0;
+        this.itemCount = itemCount != null ? itemCount : 0;
         this.idempotencyKey = idempotencyKey;
+        this.createdAt = order.getCreatedAt();
     }
 
     /**
@@ -70,12 +70,12 @@ public class OrderCreatedEvent extends BaseOrderEvent {
      * 예를 들어, 주문 정보가 실제 데이터라면,
      * "이 주문이 언제 만들어졌는지", "어떤 타입인지" 같은 부가 정보가 메타데이터예요.
      */
-    private static Map<String, Object> createEventMetadata(Order order, String idempotencyKey) {
+    private static Map<String, Object> createEventMetadata(Order order, Integer itemCount, String idempotencyKey) {
         return Map.of(
             "orderType", order.getOrderType().name(),           // "RESERVATION" 또는 "PURCHASE"
             "status", order.getStatus().name(),                 // "REQUESTED" 등
             "totalAmount", order.getTotalAmount(),              // 총 금액
-            "itemCount", order.getOrderItems().size(),          // 항목 개수
+            "itemCount", itemCount != null ? itemCount : 0,     // 항목 개수
             "idempotencyKey", idempotencyKey != null ? idempotencyKey : ""  // 중복 방지 키
         );
     }
@@ -100,7 +100,7 @@ public class OrderCreatedEvent extends BaseOrderEvent {
             "totalAmount", totalAmount,
             "itemCount", itemCount,
             "idempotencyKey", idempotencyKey != null ? idempotencyKey : "",
-            "createdAt", order.getCreatedAt()
+            "createdAt", createdAt
         );
     }
 
