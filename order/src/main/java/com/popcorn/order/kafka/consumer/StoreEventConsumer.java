@@ -63,27 +63,35 @@ public class StoreEventConsumer {
                             "차감/확정 성공 이벤트 수신");
                     orderCommandService.publishOrderCompletedEvent(orderId);
                     break;
-                /*case "goods-reservation-failed":
-                case "schedule-reservation-failed":
+                case "GOODS_RESERVATION_FAILED":
+                case "SCHEDULE_RESERVATION_FAILED":
                     orderCommandService.updateOrderStatus(orderId, OrderStatus.REJECTED.name(),
                             "예약 실패 이벤트 수신");
+
+                    String reason = (String)map.get("reason");
+                    log.warn(" 재고 예약 실패 처리 - orderId: {}, reason: {}", orderId, reason);
+
+                    orderCommandService.updateOrderStatus(orderId, OrderStatus.CANCELLED.name(),
+                        " 재고 예약 실패 처리 : " + (reason != null ? reason : "재고 부족"));
                     break;
-                case "reservation-expired":
-                    orderCommandService.updateOrderStatus(orderId, OrderStatus.EXPIRED.name(),
+                case "RESERVATION_EXPIRED":
+                    orderCommandService.updateOrderStatus(orderId, OrderStatus.REJECTED.name(),
                             "예약 만료 이벤트 수신");
                     break;
-                case "stock-deduction-failed":
-                case "schedule-confirmation-failed":
-                    orderCommandService.updateOrderStatus(orderId, OrderStatus.CANCELLED.name(),
-                            "차감/확정 실패 이벤트 수신");
-                    orderCommandService.cancelPaymentForOrder(orderId, getString(payload, "paymentId"),
+                case "STOCK_DEDUCTION_FAILED":
+                case "SCHEDULE_CONFIRMATION_FAILED":
+                    /*orderCommandService.updateOrderStatus(orderId, OrderStatus.CANCELLED.name(),
+                            "차감/확정 실패 이벤트 수신");*/
+                    //String paymentId = (String)map.get("paymentId");
+                    orderCommandService.cancelPaymentForOrder(orderId, null,
                             "차감/확정 실패로 인한 결제 취소");
                     break;
-                case "stock-released":
-                case "schedule-released":
+                case "STOCK_RELEASED":
+                case "SCHEDULE_RELEASED":
+                    // 최종적으로 여기서 cancel?
                     orderCommandService.updateOrderStatus(orderId, OrderStatus.CANCELLED.name(),
                             "재고/스케줄 해제 이벤트 수신");
-                    break;*/
+                    break;
                 default:
                     log.info("Unhandled store eventType: {}", eventType);
         }

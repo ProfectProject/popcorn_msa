@@ -1,7 +1,9 @@
 package com.popcorn.order.service.core;
 
 import java.time.LocalDateTime;
+import java.util.HashMap;
 import java.util.List;
+import java.util.Map;
 import java.util.UUID;
 import java.util.concurrent.CompletableFuture;
 import java.util.concurrent.atomic.AtomicLong;
@@ -84,7 +86,7 @@ public class OrderCommandService {
     private final PaymentCacheService paymentCacheService;
     private final PaymentPerformanceMonitor paymentPerformanceMonitor;
 
-    @org.springframework.beans.factory.annotation.Value("${frontend.base-url:${FRONTEND_BASE_URL:http://localhost:3000}}")
+    @org.springframework.beans.factory.annotation.Value("${frontend.base-url:http://localhost:3000}")
     private String frontendBaseUrl;
 
     @org.springframework.beans.factory.annotation.Value("${order.reservation.wait-timeout-ms:0}")
@@ -962,6 +964,7 @@ public class OrderCommandService {
      * @param order 주문
      * @param goodsItems 모든 굿즈 항목들
      * @param failedItem 실패한 항목 (이 항목 이전까지만 롤백)
+     *
      */
     private void rollbackStockReservations(Order order, List<OrderItem> goodsItems, OrderItem failedItem) {
         log.info("재고 예약 롤백 시작 - 주문번호: {}", order.getOrderNo());
@@ -984,6 +987,7 @@ public class OrderCommandService {
                         order,
                         item.getGoodsId(),
                         item.getQty()
+                        //reason
                 );
 
                 log.info("굿즈 재고 예약 취소 성공 - 주문번호: {}, 굿즈변형ID: {}",
@@ -1052,7 +1056,7 @@ public class OrderCommandService {
     }
 
     /**
-     * 주문의 재고 예약 취소 (결제 실패 시 호출)
+     * 주문의 재고 예약 취소 (결제 실패 시 호출) --> paid 전에
      */
     public void cancelStockReservationsForOrder(UUID orderId) {
         try {
@@ -1109,6 +1113,45 @@ public class OrderCommandService {
         } catch (Exception e) {
             log.error("❌ 주문 재고 예약 취소 실패 - orderId: {}, error: {}", orderId, e.getMessage(), e);
             // 재고 예약 취소 실패도 주문 상태 변경에 영향을 주지 않음 (로그만 남김)
+        }
+    }
+
+    /**
+     * 주문의 스케줄 예약 취소 (결제 실패/취소 시 호출)
+     */
+    public void cancelScheduleReservationsCfororder(UUID orderId) {
+        try {
+            log.info("주문 스케줄 예약 해제 검증 시작 - orderId: {}", orderId);
+
+            Order order = orderRepository.findById(orderId)
+                    .orElseThrow(() -> new RuntimeException("주문을 찾을 수 없어요: " + orderId));
+
+            List<OrderItem> scheduleItems = orderItemRepository.findByOrderId(orderId).stream()
+                    .filter(item -> ItemType.RESERVATION.equals(item.getOrderItemType()))
+                    .filter(item -> item.getSessionOptionId() != null)
+                    .toList();
+
+            if (scheduleItems.isEmpty()) {
+                log.info("스케줄 항목이 없어 해제를 건너뜁니다 - orderId: {}", orderId);
+                return;
+            }
+
+            for (OrderItem item : scheduleItems) {
+            UUID scheduleId = item.getSessionOptionId();
+
+            storeRequestsProducer.publishScheduleReservationCancelRequested(
+                    order,
+                    scheduleId
+            );
+
+            log.info("📅 스케줄 해제 요청 발행 - orderId: {}, scheduleId: {}",
+                    orderId, scheduleId);
+        }
+
+            log.info("✅ 스케줄 예약 해제 요청 완료 - orderId: {}, 해제 세션 수: {}",
+                    orderId);
+        } catch (Exception e) {
+            log.error("❌ 주문 스케줄 예약 해제 실패 - orderId: {}, error: {}", orderId, e.getMessage(), e);
         }
     }
 
@@ -1249,6 +1292,118 @@ public class OrderCommandService {
             // 스케줄 확정 요청 실패도 주문 상태 변경에 영향을 주지 않음 (로그만 남김)
         }
     }
+
+    /**
+     * 스케줄 예약 해제 (결제 실패/취소 등 보상 트랜잭션에서 호출)
+     * - 해당 orderId에 RESERVATION(스케줄)이 있는지 확인
+     * - 주문 상태가 PAID인지 확인 (요구사항)
+     */
+    public void releaseScheduleReservationsForOrder(UUID orderId) {
+        try {
+            log.info("스케줄 예약 해제 검증 시작 - orderId: {}", orderId);
+
+            Order order = orderRepository.findById(orderId)
+                    .orElseThrow(() -> new RuntimeException("주문을 찾을 수 없어요: " + orderId));
+
+            /*/ 1) 상태 검증: PAID만 허용
+            if (order.getStatus() != OrderStatus.PAID) {
+                log.info("스케줄 예약 해제 스킵 - 상태가 PAID 아님 - orderId: {}, status: {}",
+                        orderId, order.getStatus());
+                return;
+            }*/
+
+            // 2) RESERVATION 필터링 (scheduleId = sessionOptionId)
+            List<OrderItem> scheduleItems = orderItemRepository.findByOrderId(orderId).stream()
+                    .filter(item -> ItemType.RESERVATION.equals(item.getOrderItemType()))
+                    .filter(item -> item.getSessionOptionId() != null)
+                    .toList();
+
+            if (scheduleItems.isEmpty()) {
+                log.info("스케줄 항목이 없어 해제를 건너뜁니다 - orderId: {}", orderId);
+                return;
+            }
+
+            // 3) 각 스케줄에 대해 해제 요청 발행
+            List<Map<String, Object>> releaseItems = scheduleItems.stream()
+                    .map(item -> {
+                        Map<String, Object> map = new HashMap<>();
+                        map.put("sessionId", item.getSessionOptionId());
+                        map.put("qty", item.getQty());
+                        return map;
+                    })
+                    .toList();
+
+            // 4) Kafka 발행
+            storeRequestsProducer.publishScheduleReleaseRequested(
+                    order,
+                    releaseItems
+            );
+
+            log.info("✅ 스케줄 예약 해제 요청 완료 - orderId: {}, 해제 세션 수: {}",
+                    orderId, scheduleItems.size());
+
+        } catch (Exception e) {
+            log.error("❌ 스케줄 예약 해제 실패 - orderId: {}, error: {}", orderId, e.getMessage(), e);
+        }
+    }
+
+    /**
+     * 굿즈 재고 예약 해제 (결제 실패/취소 등 보상 트랜잭션에서 호출)
+     * - 해당 orderId에 GOODS가 있는지 확인
+     * - 주문 상태가 PAID인지 확인 (요구사항)
+     */
+    public void realeaseGoodsReservationsForOrder(UUID orderId) {
+        try {
+            log.info("굿즈 예약 해제 검증 시작 - orderId: {}", orderId);
+
+            Order order = orderRepository.findById(orderId)
+                    .orElseThrow(() -> new RuntimeException("주문을 찾을 수 없어요: " + orderId));
+
+            /*/ 1) 상태 검증: PAID만 허용
+            if (order.getStatus() != OrderStatus.PAID) {
+                log.info("굿즈 예약 해제 스킵 - 상태가 PAID 아님 - orderId: {}, status: {}",
+                        orderId, order.getStatus());
+                return;
+            }*/
+
+            // 2) GOODS 필터링
+            List<OrderItem> goodsItems = orderItemRepository.findByOrderId(orderId).stream()
+                    .filter(item -> ItemType.GOODS.equals(item.getOrderItemType()))
+                    .filter(item -> item.getGoodsId() != null)
+                    .toList();
+
+            if (goodsItems.isEmpty()) {
+                log.info("굿즈 항목이 없어 해제를 건너뜁니다 - orderId: {}", orderId);
+                return;
+            }
+
+            // 3) 각 굿즈 아이템에 대해 해제 요청 발행
+            List<Map<String, Object>> releaseItems = goodsItems.stream()
+                .map(item -> {
+                    Map<String, Object> map = new HashMap<>();
+                    map.put("goodsId", item.getGoodsId());
+                    map.put("qty", item.getQty());
+                    return map;
+                })
+                .toList();
+
+            // 4) Kafka 발행
+            storeRequestsProducer.publishStockReleaseRequested(
+                    order,
+                    releaseItems
+            );
+
+            log.info("✅ 굿즈 예약 해제 요청 완료 - orderId: {}, 해제 굿즈 수: {}",
+                    orderId, goodsItems.size());
+
+        } catch (Exception e) {
+            log.error("❌ 굿즈 예약 해제 실패 - orderId: {}, error: {}", orderId, e.getMessage(), e);
+        }
+    }
+
+
+
+
 
     /**
      * OrderItem에서 세션 시간 정보 생성
