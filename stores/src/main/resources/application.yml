@@ -12,11 +12,11 @@ spring:
     default: local
 
 passport:
-  secret: ${PASSPORT_SECRET:passport-shared-secret}
+  secret: ${PASSPORT_SECRET}
   ttl-seconds: 60
 
 jwt:
-  secret: ${JWT_SECRET:dGVzdC1qd3Qtc2VjcmV0LWtleS1mb3ItbG9jYWwtZGV2ZWxvcG1lbnQtb25seS1kb25vdC11c2UtaW4tcHJvZHVjdGlvbg==}
+  secret: ${JWT_SECRET}
   expiration: 3600000
   refresh-expiration-ms: 1209600000
 
@@ -144,8 +144,4 @@ spring:
     activate:
       on-profile: test
 
-# 기본 테스트 환경 설정 (application-test.yml이 추가 설정 제공)
-jwt:
-  secret: ${JWT_SECRET:dGVzdC1qd3Qtc2VjcmV0LWtleS1mb3ItbG9jYWwtZGV2ZWxvcG1lbnQtb25seS1kb25vdC11c2UtaW4tcHJvZHVjdGlvbg==}
-  expiration: 3600000
-  refresh-expiration-ms: 1209600000
+
