@@ -20,18 +20,17 @@ public class StoreRequestsProducer {
     private final KafkaTemplate<String, Object> kafkaTemplate;
 
     public void publishGoodsReservationCancelRequested(Order order, UUID goodsId, int quantity) {
-        Map<String, Object> payload = new HashMap<>();
-        payload.put("eventId", UUID.randomUUID().toString());
-        payload.put("eventType", "GOODS_RESERVATION_CANCEL_REQUESTED");
+        Map<String, Object> payload = basePayload(order, "GOODS_RESERVATION_CANCEL_REQUESTED");
         payload.put("goodsId", goodsId != null ? goodsId.toString() : null);
         payload.put("qty", quantity);
+        //payload.put("reason", reason);
         kafkaTemplate.send(STORE_REQUESTS_TOPIC, order.getId().toString(), payload);
     }
 
-    public void publishScheduleReservationCancelRequested(Order order, UUID scheduleId, int quantity) {
+    public void publishScheduleReservationCancelRequested(Order order, UUID scheduleId) {
         Map<String, Object> payload = basePayload(order, "SCHEDULE_RESERVATION_CANCEL_REQUESTED");
         payload.put("scheduleId", scheduleId != null ? scheduleId.toString() : null);
-        payload.put("quantity", quantity);
+        //payload.put("reason", reason);
         kafkaTemplate.send(STORE_REQUESTS_TOPIC, order.getId().toString(), payload);
     }
 
@@ -51,12 +50,14 @@ public class StoreRequestsProducer {
     public void publishStockReleaseRequested(Order order, List<Map<String, Object>> releaseItems) {
         Map<String, Object> payload = basePayload(order, "STOCK_RELEASE_REQUESTED");
         payload.put("releaseItems", releaseItems);
+        //payload.put("reason", reason);
         kafkaTemplate.send(STORE_REQUESTS_TOPIC, order.getId().toString(), payload);
     }
 
     public void publishScheduleReleaseRequested(Order order, List<Map<String, Object>> releaseItems) {
         Map<String, Object> payload = basePayload(order, "SCHEDULE_RELEASE_REQUESTED");
         payload.put("releaseItems", releaseItems);
+        //payload.put("reason", reason);
         kafkaTemplate.send(STORE_REQUESTS_TOPIC, order.getId().toString(), payload);
     }
 
