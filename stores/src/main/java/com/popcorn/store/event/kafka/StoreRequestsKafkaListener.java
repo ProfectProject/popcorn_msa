@@ -17,6 +17,7 @@ import lombok.extern.slf4j.Slf4j;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.kafka.annotation.KafkaListener;
 import org.springframework.stereotype.Component;
+import org.springframework.util.StringUtils;
 
 import java.time.LocalDateTime;
 import java.util.ArrayList;
@@ -111,11 +112,14 @@ public class StoreRequestsKafkaListener {
 
     private void handleStockDeduction(Map<String, Object> envelope) {
         UUID orderId = asUUID(envelope.get("orderId"));
-        String orderNo = asString(envelope.get("orderNo"));
-        UUID popupId = asUUID(envelope.get("popupId"));
+        String providedOrderNo = asString(envelope.get("orderNo"));
         List<Map<String, Object>> deductionItems = asListOfMaps(envelope.get("deductionItems"));
+        List<GoodsOrderReservation> existingReservations =
+                orderId != null ? reservationService.findByOrderId(orderId) : List.of();
+        UUID popupId = resolvePopupId(orderId, asUUID(envelope.get("popupId")), existingReservations, deductionItems);
+        String orderNo = resolveOrderNo(existingReservations, providedOrderNo);
         if (orderId == null || popupId == null) {
-            log.warn("⚠️ [StockDeduction] orderId 또는 popupId 누락");
+            log.warn("⚠️ [StockDeduction] orderId 또는 popupId 누락 - derived orderId={}, popupId={}", orderId, popupId);
             return;
         }
         if (deductionItems.isEmpty()) {
@@ -326,11 +330,6 @@ public class StoreRequestsKafkaListener {
             if (reservation.getStatus() == ReservationStatus.RELEASED) {
                 anySuccess = true;
                 log.info("ℹ️ [ScheduleRelease] 이미 릴리즈된 상태 - orderId={}, scheduleId={}", orderId, scheduleId);
-                continue;
-            }
-            if (reservation.getStatus() != ReservationStatus.HELD) {
-                log.info("ℹ️ [ScheduleRelease] 처리할 상태 아님 - orderId={}, status={}",
-                        orderId, reservation.getStatus());
                 continue;
             }
             boolean success = runWithRetry("schedule-release scheduleId=" + scheduleId,
@@ -550,6 +549,52 @@ public class StoreRequestsKafkaListener {
             UUID uuid = asUUID(candidate);
             if (uuid != null) {
                 return uuid;
+            }
+        }
+        return null;
+    }
+
+    private UUID resolvePopupId(UUID orderId,
+                                UUID providedPopupId,
+                                List<GoodsOrderReservation> existingReservations,
+                                List<Map<String, Object>> deductionItems) {
+        if (providedPopupId != null) {
+            return providedPopupId;
+        }
+        for (GoodsOrderReservation reservation : existingReservations) {
+            if (reservation != null && reservation.getPopupId() != null) {
+                return reservation.getPopupId();
+            }
+        }
+        for (Map<String, Object> item : deductionItems) {
+            UUID goodsId = firstNotNullUUID(item.get("goodsVariantId"), item.get("goodsId"));
+            if (goodsId == null) {
+                continue;
+            }
+            try {
+                UUID resolved = goodsService.resolvePopupId(goodsId);
+                if (resolved != null) {
+                    return resolved;
+                }
+            } catch (Exception e) {
+                log.debug("⚠️ [StockDeduction] popupId lookup 실패 - goodsVariantId={} orderId={} error={}",
+                        goodsId, orderId, e.getMessage());
+            }
+        }
+        return null;
+    }
+
+    private String resolveOrderNo(List<GoodsOrderReservation> existingReservations, String providedOrderNo) {
+        if (StringUtils.hasText(providedOrderNo)) {
+            return providedOrderNo;
+        }
+        for (GoodsOrderReservation reservation : existingReservations) {
+            if (reservation == null) {
+                continue;
+            }
+            String candidate = reservation.getOrderNo();
+            if (StringUtils.hasText(candidate)) {
+                return candidate;
             }
         }
         return null;

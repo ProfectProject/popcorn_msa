@@ -77,12 +77,11 @@ public class GoodsReservationRepository  {
     public GoodsStockResponse completeStock(UUID goodsId, int quantity){
         String sql = """
                 UPDATE goods_variants
-                   SET reservation_stock = reservation_stock - :quantity,
+                   SET reservation_stock = reservation_stock + :quantity,
                        stock = stock - :quantity,
                        updated_at = now()
                  WHERE goods_id = :goodsId
-                   AND reservation_stock >= :quantity
-                   AND stock >= :quantity
+                   AND stock - reservation_stock>= :quantity
                    AND deleted_at IS NULL
                 RETURNING goods_id, stock, reservation_stock
                 """;
