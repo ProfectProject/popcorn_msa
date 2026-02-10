@@ -1,11 +1,9 @@
 package com.popcorn.store.event.inventory;
 
 import com.popcorn.store.event.order.*;
-import com.popcorn.store.event.StoreRedisEventPublisher;
 import com.popcorn.store.event.kafka.KafkaPublisher;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
-import org.springframework.context.ApplicationEventPublisher;
 import org.springframework.stereotype.Component;
 
 import java.time.LocalDateTime;
@@ -17,10 +15,7 @@ import java.util.UUID;
 @Slf4j
 public class StoreInventoryEventPublisher {
 
-    private final ApplicationEventPublisher applicationEventPublisher;
-    private final StoreRedisEventPublisher redisEventPublisher;
     private final KafkaPublisher kafkaPublisher;
-
     public void publishStockReservedEvent(OrderPaidEvent event,
                                           List<StockReservedEvent.ReservedStockItem> reservedItems) {
         if (reservedItems == null || reservedItems.isEmpty()) {
@@ -35,23 +30,12 @@ public class StoreInventoryEventPublisher {
         );
         log.info("📦 [STORES] 재고 예약 성공 이벤트 발행 - orderId={}, items={}", event.getOrderId(), reservedItems.size());
 
-        // 1. Spring Events로 내부 발행
-        applicationEventPublisher.publishEvent(stockReservedEvent);
-
-        // 2. Redis로 굿즈 예약 성공 이벤트 발행 (각 항목별로)
+        // 2. Kafka로 굿즈 예약 성공 이벤트 전파
         LocalDateTime reservedExpiresAt = LocalDateTime.now().plusMinutes(10);
         for (StockReservedEvent.ReservedStockItem item : reservedItems) {
             if (item.getGoodsId() == null || item.getQuantity() == null) {
                 continue;
             }
-            redisEventPublisher.publishGoodsReservedEvent(
-                    event.getOrderId(),
-                    event.getOrderNo(),
-                    event.getPopupId(),
-                    item.getGoodsId(),
-                    item.getQuantity()
-            );
-            // Kafka에도 동일한 예약 성공 이벤트를 전송하여 외부 시스템과 동기화
             kafkaPublisher.publishGoodsReservationSucceeded(
                     event.getOrderId(),
                     item.getGoodsId(),
@@ -76,7 +60,6 @@ public class StoreInventoryEventPublisher {
                 failureReason
         );
         log.warn("재고 예약 실패 이벤트 발행 - orderId={}, reason={}", event.getOrderId(), failureReason);
-        applicationEventPublisher.publishEvent(failedEvent);
         // 실패 항목별로 Kafka store-events에도 실패 정보를 전송
         for (StockReservationFailedEvent.FailedStockItem item : failedItems) {
             if (item.getGoodsId() == null) {
@@ -96,13 +79,7 @@ public class StoreInventoryEventPublisher {
         );
         log.info("📦 [STORES] 재고 차감 성공 이벤트 발행 - orderId={}", orderId);
 
-        // 1. Spring Events로 내부 발행
-        applicationEventPublisher.publishEvent(event);
-
-        // 2. Redis로 외부 마이크로서비스들에게 발행
-        redisEventPublisher.publishStockDeductionSuccessEvent(event);
-
-        // 3. Kafka로 store-events에 전파
+        // 2. Kafka로 store-events에 전파
         kafkaPublisher.publishStockDeductionSucceeded(orderId, event.getStockDetails(), event.getSucceededAt());
     }
 
@@ -118,13 +95,7 @@ public class StoreInventoryEventPublisher {
         );
         log.warn("⚠️ [STORES] 재고 차감 실패 이벤트 발행 - orderId={}, reason={}", orderId, reason);
 
-        // 1. Spring Events로 내부 발행
-        applicationEventPublisher.publishEvent(event);
-
-        // 2. Redis로 외부 마이크로서비스들에게 발행
-        redisEventPublisher.publishStockDeductionFailedEvent(event);
-
-        // 3. Kafka로 store-events에 전파
+        // 2. Kafka로 store-events에 전파
         kafkaPublisher.publishStockDeductionFailed(orderId, event.getReason(),
                 isRetryable(event.getFailureCode()), event.getFailedAt());
     }

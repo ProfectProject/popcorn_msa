@@ -17,7 +17,6 @@ import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
 import org.mockito.Mock;
 import org.mockito.MockitoAnnotations;
-import org.springframework.context.ApplicationEventPublisher;
 import org.springframework.test.util.ReflectionTestUtils;
 
 import com.popcorn.store.domain.goods.dto.GoodsCreateRequest;
@@ -26,10 +25,6 @@ import com.popcorn.store.domain.goods.dto.GoodsListResponse;
 import com.popcorn.store.domain.goods.dto.GoodsStatusUpdateRequest;
 import com.popcorn.store.domain.goods.dto.GoodsUpdateRequest;
 import com.popcorn.store.domain.goods.entity.GoodsVariant;
-import com.popcorn.store.domain.goods.event.GoodsCreatedEvent;
-import com.popcorn.store.domain.goods.event.GoodsDeletedEvent;
-import com.popcorn.store.domain.goods.event.GoodsStatusUpdatedEvent;
-import com.popcorn.store.domain.goods.event.GoodsUpdatedEvent;
 import com.popcorn.store.domain.goods.exception.GoodsNotFoundException;
 import com.popcorn.store.domain.goods.repository.GoodsVariantRepository;
 import com.popcorn.store.domain.popup.entity.Popup;
@@ -48,9 +43,6 @@ class GoodsOwnerServiceTest {
 	private OwnerPopupRepository ownerPopupRepository;
 
 	@Mock
-	private ApplicationEventPublisher eventPublisher;
-
-	@Mock
 	private PopupDetailCacheManager popupDetailCacheManager;
 
 	private GoodsOwnerService service;
@@ -58,7 +50,7 @@ class GoodsOwnerServiceTest {
 	@BeforeEach
 	void setUp() {
 		MockitoAnnotations.openMocks(this);
-		service = new GoodsOwnerService(goodsVariantRepository, ownerPopupRepository, eventPublisher, popupDetailCacheManager);
+		service = new GoodsOwnerService(goodsVariantRepository, ownerPopupRepository, popupDetailCacheManager);
 	}
 
 	@Test
@@ -112,7 +104,6 @@ class GoodsOwnerServiceTest {
 		GoodsIdResponse response = service.create(ownerId, popupId, request);
 
 		assertThat(response.getId()).isEqualTo(goodsId);
-		verify(eventPublisher).publishEvent(any(GoodsCreatedEvent.class));
 	}
 
 	@Test
@@ -156,7 +147,6 @@ class GoodsOwnerServiceTest {
 		GoodsIdResponse response = service.update(ownerId, popupId, goodsId, request);
 
 		assertThat(response.getId()).isEqualTo(goodsId);
-		verify(eventPublisher).publishEvent(any(GoodsUpdatedEvent.class));
 	}
 
 	@Test
@@ -193,7 +183,6 @@ class GoodsOwnerServiceTest {
 
 		service.updateStatus(ownerId, popupId, goodsId, request);
 
-		verify(eventPublisher).publishEvent(any(GoodsStatusUpdatedEvent.class));
 	}
 
 	@Test
@@ -212,7 +201,6 @@ class GoodsOwnerServiceTest {
 
 		service.delete(ownerId, popupId, goodsId);
 
-		verify(eventPublisher).publishEvent(any(GoodsDeletedEvent.class));
 	}
 
 	private Popup stubPopup(UUID popupId, Long ownerId) {

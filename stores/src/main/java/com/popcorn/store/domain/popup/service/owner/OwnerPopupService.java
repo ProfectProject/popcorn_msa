@@ -5,7 +5,6 @@ import java.util.List;
 import java.util.UUID;
 
 import com.popcorn.store.domain.popup.entity.OutboxEvent;
-import org.springframework.context.ApplicationEventPublisher;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 import com.popcorn.store.domain.popup.dto.PopupResponseCode;
@@ -25,13 +24,6 @@ import com.popcorn.store.domain.popup.entity.Popup;
 import com.popcorn.store.domain.popup.entity.enums.PopupStatus;
 import com.popcorn.store.domain.popup.exception.PopupException;
 import com.popcorn.store.domain.popup.exception.owner.OwnerPopupException;
-import com.popcorn.store.domain.popup.event.PopupCreatedEvent;
-import com.popcorn.store.domain.popup.event.PopupDeletedEvent;
-import com.popcorn.store.domain.popup.event.PopupScheduleCreatedEvent;
-import com.popcorn.store.domain.popup.event.PopupScheduleDeletedEvent;
-import com.popcorn.store.domain.popup.event.PopupScheduleUpdatedEvent;
-import com.popcorn.store.domain.popup.event.PopupStatusUpdatedEvent;
-import com.popcorn.store.domain.popup.event.PopupUpdatedEvent;
 import com.popcorn.store.domain.popup.cache.PopupDetailCacheManager;
 import com.popcorn.store.domain.popup.repository.owner.OwnerPopupRepository;
 import com.popcorn.store.domain.popup.repository.owner.OwnerPopupScheduleRepository;
@@ -56,7 +48,6 @@ public class OwnerPopupService {
     private final OwnerPopupRepository ownerPopupRepository;
     private final OwnerPopupScheduleRepository ownerPopupScheduleRepository;
     private final OwnerPopupValidationService validationService;
-    private final ApplicationEventPublisher eventPublisher;
     private final PopupDetailCacheManager popupDetailCacheManager;
     private final OutboxEventRepository outboxEventRepository;
 
@@ -187,7 +178,6 @@ public class OwnerPopupService {
         Popup updatedPopup = ownerPopupRepository.save(popup);
         applyScheduleChanges(updatedPopup.getId(), request, ownerId);
 
-        eventPublisher.publishEvent(new PopupUpdatedEvent(ownerId, updatedPopup));
         // 팝업/스케줄 변경 결과가 상세 응답에 반영되도록 캐시 삭제
         popupDetailCacheManager.evictDetail(updatedPopup.getId());
 
@@ -218,7 +208,6 @@ public class OwnerPopupService {
                     ownerId);
         }
 
-        eventPublisher.publishEvent(new PopupStatusUpdatedEvent(ownerId, updatedPopup));
         queuePopupStatusUpdatedOutboxEntry(updatedPopup, fromStatus, request.getStatus(), ownerId);
 
         // 상태 변경 후 상세 캐시 무효화
@@ -245,7 +234,6 @@ public class OwnerPopupService {
         Popup deletedPopup = ownerPopupRepository.save(popup);
         ownerPopupScheduleRepository.softDeleteSchedulesByPopup(deletedPopup.getId(), LocalDateTime.now(), ownerId);
 
-        eventPublisher.publishEvent(new PopupDeletedEvent(ownerId, deletedPopup));
         // 삭제 후 상세 캐시 무효화
         popupDetailCacheManager.evictDetail(deletedPopup.getId());
 
@@ -455,15 +443,6 @@ public class OwnerPopupService {
                     ownerId,
                     ownerId
             );
-            eventPublisher.publishEvent(new PopupScheduleCreatedEvent(
-                    ownerId,
-                    popupId,
-                    scheduleId,
-                    schedule.getStartAt(),
-                    schedule.getEndAt(),
-                    schedule.getPrice(),
-                    schedule.getCapacity()
-            ));
         }
     }
 
@@ -488,15 +467,6 @@ public class OwnerPopupService {
                         ownerId,
                         ownerId
                 );
-                eventPublisher.publishEvent(new PopupScheduleCreatedEvent(
-                        ownerId,
-                        popupId,
-                        scheduleId,
-                        schedule.getStartAt(),
-                        schedule.getEndAt(),
-                        schedule.getPrice(),
-                        schedule.getCapacity()
-                ));
             }
         }
 
@@ -519,16 +489,6 @@ public class OwnerPopupService {
                     throw OwnerPopupException.of(
                             com.popcorn.store.domain.popup.dto.owner.OwnerPopupResponseCode.SCHEDULE_UPDATE_NOT_FOUND);
                 }
-                eventPublisher.publishEvent(new PopupScheduleUpdatedEvent(
-                        ownerId,
-                        popupId,
-                        schedule.getScheduleId(),
-                        schedule.getStartAt(),
-                        schedule.getEndAt(),
-                        schedule.getPrice(),
-                        schedule.getCapacity(),
-                        schedule.getActive()
-                ));
             }
         }
 
@@ -540,11 +500,6 @@ public class OwnerPopupService {
                     throw OwnerPopupException.of(
                             com.popcorn.store.domain.popup.dto.owner.OwnerPopupResponseCode.SCHEDULE_DELETE_NOT_FOUND);
                 }
-                eventPublisher.publishEvent(new PopupScheduleDeletedEvent(
-                        ownerId,
-                        popupId,
-                        scheduleId
-                ));
             }
         }
     }

@@ -9,7 +9,6 @@ import java.util.UUID;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
 import org.mockito.Mockito;
-import org.springframework.context.ApplicationEventPublisher;
 import org.springframework.data.redis.core.RedisTemplate;
 
 import com.popcorn.store.domain.popup.dto.query.PopupDetailQuery;
@@ -31,7 +30,6 @@ class PopupServiceTest {
 		PopupScheduleQueryService scheduleQueryService = Mockito.mock(PopupScheduleQueryService.class);
 		PopupValidationService validationService = Mockito.mock(PopupValidationService.class);
 		PopupScheduleReservationRepository reservationRepository = Mockito.mock(PopupScheduleReservationRepository.class);
-		ApplicationEventPublisher eventPublisher = Mockito.mock(ApplicationEventPublisher.class);
 		PopupScheduleQueryRepository scheduleQueryRepository = Mockito.mock(PopupScheduleQueryRepository.class);
 		RedisTemplate<String, Object> redisTemplate = Mockito.mock(RedisTemplate.class);
 		PopupDetailCacheService popupDetailCacheService = Mockito.mock(PopupDetailCacheService.class);
@@ -40,7 +38,6 @@ class PopupServiceTest {
 				scheduleQueryService,
 				validationService,
 				reservationRepository,
-				eventPublisher,
 				scheduleQueryRepository,
 				redisTemplate,
 				popupDetailCacheService);
@@ -78,7 +75,6 @@ class PopupServiceTest {
 		PopupScheduleQueryService scheduleQueryService = Mockito.mock(PopupScheduleQueryService.class);
 		PopupValidationService validationService = Mockito.mock(PopupValidationService.class);
 		PopupScheduleReservationRepository reservationRepository = Mockito.mock(PopupScheduleReservationRepository.class);
-		ApplicationEventPublisher eventPublisher = Mockito.mock(ApplicationEventPublisher.class);
 		PopupScheduleQueryRepository scheduleQueryRepository = Mockito.mock(PopupScheduleQueryRepository.class);
 		RedisTemplate<String, Object> redisTemplate = Mockito.mock(RedisTemplate.class);
 		PopupDetailCacheService popupDetailCacheService = Mockito.mock(PopupDetailCacheService.class);
@@ -87,7 +83,6 @@ class PopupServiceTest {
 				scheduleQueryService,
 				validationService,
 				reservationRepository,
-				eventPublisher,
 				scheduleQueryRepository,
 				redisTemplate,
 				popupDetailCacheService);
@@ -116,7 +111,6 @@ class PopupServiceTest {
 		PopupScheduleQueryService scheduleQueryService = Mockito.mock(PopupScheduleQueryService.class);
 		PopupValidationService validationService = Mockito.mock(PopupValidationService.class);
 		PopupScheduleReservationRepository reservationRepository = Mockito.mock(PopupScheduleReservationRepository.class);
-		ApplicationEventPublisher eventPublisher = Mockito.mock(ApplicationEventPublisher.class);
 		PopupScheduleQueryRepository scheduleQueryRepository = Mockito.mock(PopupScheduleQueryRepository.class);
 		RedisTemplate<String, Object> redisTemplate = Mockito.mock(RedisTemplate.class);
 		PopupDetailCacheService popupDetailCacheService = Mockito.mock(PopupDetailCacheService.class);
@@ -125,7 +119,6 @@ class PopupServiceTest {
 				scheduleQueryService,
 				validationService,
 				reservationRepository,
-				eventPublisher,
 				scheduleQueryRepository,
 				redisTemplate,
 				popupDetailCacheService);
