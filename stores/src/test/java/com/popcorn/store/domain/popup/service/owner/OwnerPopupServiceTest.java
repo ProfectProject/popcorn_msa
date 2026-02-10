@@ -18,7 +18,6 @@ import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
 import org.mockito.Mock;
 import org.mockito.MockitoAnnotations;
-import org.springframework.context.ApplicationEventPublisher;
 
 import com.popcorn.store.domain.popup.dto.PopupResponseCode;
 import com.popcorn.store.domain.popup.dto.owner.OwnerPopupResponseCode;
@@ -34,17 +33,11 @@ import com.popcorn.store.domain.popup.entity.enums.PopupCategory;
 import com.popcorn.store.domain.popup.entity.enums.PopupStatus;
 import com.popcorn.store.domain.popup.exception.PopupException;
 import com.popcorn.store.domain.popup.exception.owner.OwnerPopupException;
-import com.popcorn.store.domain.popup.event.PopupScheduleCreatedEvent;
-import com.popcorn.store.domain.popup.event.PopupScheduleDeletedEvent;
-import com.popcorn.store.domain.popup.event.PopupScheduleUpdatedEvent;
-import com.popcorn.store.domain.popup.event.PopupStatusUpdatedEvent;
-import com.popcorn.store.domain.popup.event.PopupUpdatedEvent;
 import com.popcorn.store.domain.popup.repository.owner.OwnerPopupRepository;
 import com.popcorn.store.domain.popup.repository.owner.OwnerPopupScheduleRepository;
 import com.popcorn.store.domain.popup.repository.owner.outbox.OutboxEventRepository;
 import com.popcorn.store.domain.popup.repository.owner.view.OwnerPopupScheduleView;
 import com.popcorn.store.domain.popup.cache.PopupDetailCacheManager;
-import com.popcorn.store.event.standard.StandardStoreEventPublisher;
 
 class OwnerPopupServiceTest {
 
@@ -58,12 +51,6 @@ class OwnerPopupServiceTest {
 	private OwnerPopupValidationService validationService;
 
 	@Mock
-	private ApplicationEventPublisher eventPublisher;
-
-	@Mock
-	private StandardStoreEventPublisher standardStoreEventPublisher;
-
-	@Mock
 	private PopupDetailCacheManager popupDetailCacheManager;
 
 	@Mock
@@ -74,8 +61,8 @@ class OwnerPopupServiceTest {
 	@BeforeEach
 	void setUp() {
 		MockitoAnnotations.openMocks(this);
-		service = new OwnerPopupService(ownerPopupRepository, ownerPopupScheduleRepository, validationService, eventPublisher,
-				standardStoreEventPublisher, popupDetailCacheManager, outboxEventRepository);
+		service = new OwnerPopupService(ownerPopupRepository, ownerPopupScheduleRepository, validationService,
+				popupDetailCacheManager, outboxEventRepository);
 	}
 
 	@Test
@@ -117,7 +104,6 @@ class OwnerPopupServiceTest {
 		verify(ownerPopupScheduleRepository, times(1)).insertSchedule(any(), eq(savedPopup.getId()),
 				eq(schedule.getStartAt()), eq(schedule.getEndAt()), eq(10000), eq(20), eq(20), eq(false),
 				any(), eq(ownerId), eq(ownerId));
-		verify(eventPublisher).publishEvent(any(PopupScheduleCreatedEvent.class));
 		verify(outboxEventRepository).save(any());
 	}
 
@@ -181,7 +167,6 @@ class OwnerPopupServiceTest {
 
 		assertThat(response.getStatus()).isEqualTo(PopupStatus.CLOSED);
 		verify(ownerPopupScheduleRepository).deactivateActiveSchedulesByPopup(eq(popupId), any(), eq(ownerId));
-		verify(eventPublisher).publishEvent(any(PopupStatusUpdatedEvent.class));
 	}
 
 	@Test
@@ -328,10 +313,6 @@ class OwnerPopupServiceTest {
 
 		service.updatePopup(ownerId, popupId, request);
 
-		verify(eventPublisher).publishEvent(any(PopupUpdatedEvent.class));
-		verify(eventPublisher).publishEvent(any(PopupScheduleCreatedEvent.class));
-		verify(eventPublisher).publishEvent(any(PopupScheduleUpdatedEvent.class));
-		verify(eventPublisher).publishEvent(any(PopupScheduleDeletedEvent.class));
 	}
 
 	@Test

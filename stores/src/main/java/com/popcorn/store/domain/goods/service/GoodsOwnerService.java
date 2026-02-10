@@ -8,10 +8,6 @@ import com.popcorn.store.domain.goods.dto.GoodsStatusResponse;
 import com.popcorn.store.domain.goods.dto.GoodsStatusUpdateRequest;
 import com.popcorn.store.domain.goods.dto.GoodsUpdateRequest;
 import com.popcorn.store.domain.goods.entity.GoodsVariant;
-import com.popcorn.store.domain.goods.event.GoodsCreatedEvent;
-import com.popcorn.store.domain.goods.event.GoodsDeletedEvent;
-import com.popcorn.store.domain.goods.event.GoodsStatusUpdatedEvent;
-import com.popcorn.store.domain.goods.event.GoodsUpdatedEvent;
 import com.popcorn.store.domain.goods.exception.GoodsNotFoundException;
 import com.popcorn.store.domain.goods.repository.GoodsVariantRepository;
 import com.popcorn.store.domain.popup.cache.PopupDetailCacheManager;
@@ -20,7 +16,6 @@ import com.popcorn.store.domain.popup.repository.owner.OwnerPopupRepository;
 import java.util.List;
 import java.util.UUID;
 import java.util.stream.Collectors;
-import org.springframework.context.ApplicationEventPublisher;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.stereotype.Service;
@@ -33,7 +28,6 @@ public class GoodsOwnerService {
 
     private final GoodsVariantRepository goodsVariantRepository;
     private final OwnerPopupRepository ownerPopupRepository;
-    private final ApplicationEventPublisher eventPublisher;
     private final PopupDetailCacheManager popupDetailCacheManager;
 
     @Transactional(readOnly = true)
@@ -64,7 +58,6 @@ public class GoodsOwnerService {
                 isActive
         );
         goodsVariantRepository.save(goods);
-        eventPublisher.publishEvent(new GoodsCreatedEvent(ownerId, goods));
         // 굿즈 변경 사항이 상세 응답에 반영되도록 캐시 삭제
         popupDetailCacheManager.evictDetail(popupId);
         return new GoodsIdResponse(goods.getId());
@@ -89,7 +82,6 @@ public class GoodsOwnerService {
                 request.getGoodsPrice(),
                 request.getStock()
         );
-        eventPublisher.publishEvent(new GoodsUpdatedEvent(ownerId, goods));
         // 굿즈 변경 시 상세 캐시 무효화
         popupDetailCacheManager.evictDetail(popupId);
         return new GoodsIdResponse(goods.getId());
@@ -107,7 +99,6 @@ public class GoodsOwnerService {
         requireOwnedPopup(ownerId, popupId);
         GoodsVariant goods = getGoods(popupId, goodsId);
         goods.updateStatus(request.getIsActive());
-        eventPublisher.publishEvent(new GoodsStatusUpdatedEvent(ownerId, goods));
         // 굿즈 상태 변경 시 상세 캐시 무효화
         popupDetailCacheManager.evictDetail(popupId);
         return new GoodsStatusResponse(goods.getId(), goods.isActive());
@@ -119,7 +110,6 @@ public class GoodsOwnerService {
         requireOwnedPopup(ownerId, popupId);
         GoodsVariant goods = getGoods(popupId, goodsId);
         goods.softDelete();
-        eventPublisher.publishEvent(new GoodsDeletedEvent(ownerId, goods));
         // 굿즈 삭제 시 상세 캐시 무효화
         popupDetailCacheManager.evictDetail(popupId);
     }

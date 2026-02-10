@@ -21,7 +21,6 @@ public interface PopupScheduleQueryRepository extends Repository<PopupSchedule, 
 			       ps.price AS price,
 			       ps.capacity AS capacity,
 			       ps.remaining_capacity AS remainingCapacity,
-				   ps.reservation_capacity AS reservationCapacity,
 			       ps.is_active AS isActive
 			  FROM popup_schedules ps
 			 WHERE ps.deleted_at IS NULL
@@ -55,7 +54,6 @@ public interface PopupScheduleQueryRepository extends Repository<PopupSchedule, 
 			       ps.price AS price,
 			       ps.capacity AS capacity,
 			       ps.remaining_capacity AS remainingCapacity,
-			       ps.reservation_capacity AS reservationCapacity,
 			       ps.is_active AS isActive
 			  FROM popup_schedules ps
 			 WHERE ps.deleted_at IS NULL

@@ -9,7 +9,6 @@ import com.popcorn.store.event.standard.EventLineItem;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.beans.factory.annotation.Value;
-import org.springframework.context.ApplicationEventPublisher;
 import org.springframework.stereotype.Component;
 
 import java.util.List;
@@ -18,7 +17,7 @@ import java.util.UUID;
 
 /**
  * Kafka order-events 토픽을 구독하여 ORDER_CREATED 이벤트를 처리한다.
- * payload를 OrderCreatedEvent로 변환한 뒤 Spring Application Event로 전달한다.
+ * payload를 OrderCreatedEvent로 변환하여 주문 예약 로직을 직접 호출한다.
  */
 @Component
 @RequiredArgsConstructor
@@ -26,7 +25,6 @@ import java.util.UUID;
 public class KafkaListener {
 
     private final ObjectMapper objectMapper;
-    private final ApplicationEventPublisher eventPublisher;
     private final OrderCreatedReservationService reservationService;
 
     @Value("${popcorn.kafka.topics.orderEvents:order-events}")
@@ -55,7 +53,6 @@ public class KafkaListener {
             }
 
             OrderCreatedEvent storeEvent = buildOrderCreatedEvent(envelope);
-            eventPublisher.publishEvent(storeEvent);
             reservationService.reserveForOrderCreated(storeEvent);
             log.info("✅ [KafkaListener] ORDER_CREATED 전달 완료 - orderId={}, eventId={}",
                     storeEvent.getOrderId(), storeEvent.getEventId());

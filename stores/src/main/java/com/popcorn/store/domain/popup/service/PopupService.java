@@ -5,7 +5,6 @@ import java.util.List;
 import java.util.Map;
 import java.util.UUID;
 
-import org.springframework.context.ApplicationEventPublisher;
 import org.springframework.data.redis.core.RedisTemplate;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
@@ -18,7 +17,6 @@ import com.popcorn.store.domain.popup.dto.query.response.PopupListResponse;
 import com.popcorn.store.domain.popup.dto.query.response.PopupScheduleCapacity;
 import com.popcorn.store.domain.popup.dto.query.response.PopupScheduleListResponse;
 import com.popcorn.store.domain.popup.dto.query.response.SessionPriceResponse;
-import com.popcorn.store.domain.popup.event.PopupScheduleReservationEvent;
 import com.popcorn.store.domain.popup.exception.PopupException;
 import com.popcorn.store.domain.popup.repository.PopupScheduleQueryRepository;
 import com.popcorn.store.domain.popup.repository.PopupScheduleReservationRepository;
@@ -34,7 +32,6 @@ public class PopupService {
 	private final PopupScheduleQueryService popupScheduleQueryService;
 	private final PopupValidationService popupValidationService;
 	private final PopupScheduleReservationRepository popupScheduleReservationRepository;
-	private final ApplicationEventPublisher eventPublisher;
 	private final PopupScheduleQueryRepository popupScheduleQueryRepository;
 	private final RedisTemplate<String, Object> redisTemplate;
 	private final PopupDetailCacheService popupDetailCacheService;
@@ -61,16 +58,6 @@ public class PopupService {
 		return popupScheduleQueryService.getProductSessions(normalizedQuery);
 	}
 
-	@Transactional
-	public PopupScheduleCapacity reservationPopupSchedule(UUID popupId, UUID scheduleId, Integer quantity) {
-		PopupScheduleCapacity capacity = popupScheduleReservationRepository.reserveCapacity(popupId, scheduleId, quantity);
-		if (capacity == null) {
-			throw PopupException.insufficientReservationCapacity();
-		}
-		eventPublisher.publishEvent(new PopupScheduleReservationEvent(
-				PopupScheduleReservationEvent.Action.RESERVE, popupId, scheduleId, quantity));
-		return capacity;
-	}
 
 	@Transactional
 	public PopupScheduleCapacity cancelPopupScheduleReservation(UUID scheduleId, Integer quantity) {
@@ -78,8 +65,6 @@ public class PopupService {
 		if (capacity == null) {
 			throw PopupException.insufficientReservationCapacity();
 		}
-		eventPublisher.publishEvent(new PopupScheduleReservationEvent(
-				PopupScheduleReservationEvent.Action.CANCEL, null, scheduleId, quantity));
 		return capacity;
 	}
 
@@ -89,8 +74,6 @@ public class PopupService {
 		if (capacity == null) {
 			throw PopupException.insufficientReservationCapacity();
 		}
-		eventPublisher.publishEvent(new PopupScheduleReservationEvent(
-				PopupScheduleReservationEvent.Action.FAIL, null, scheduleId, quantity));
 		return capacity;
 	}
 
@@ -100,8 +83,6 @@ public class PopupService {
 		if (capacity == null) {
 			throw PopupException.insufficientReservationCapacity();
 		}
-		eventPublisher.publishEvent(new PopupScheduleReservationEvent(
-				PopupScheduleReservationEvent.Action.COMPLETE, null, scheduleId, quantity));
 		return capacity;
 	}
 
