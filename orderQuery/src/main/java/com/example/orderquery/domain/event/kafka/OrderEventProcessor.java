@@ -9,6 +9,7 @@ import java.util.ArrayList;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
+import java.util.Set;
 import java.util.UUID;
 
 import org.springframework.stereotype.Service;
@@ -68,9 +69,10 @@ public class OrderEventProcessor {
             case "PAYMENT_FAILED" -> handlePaymentStatus(payload, PaymentStatus.FAILED, null);
             case "PAYMENT_USER_CANCELLED" -> handlePaymentStatus(payload, PaymentStatus.CANCELLED, null);
             case "CHECKIN_CREATED" -> handleCheckInCreated(eventId, payload, eventTime);
-            case "POPUP_CREATED" -> handlePopupLifecycle(eventId, payload, EventType.POPUP_CREATED);
-            case "POPUP_STATUS_UPDATED" -> handlePopupLifecycle(eventId, payload, EventType.POPUP_STATUS_UPDATED);
-            case "POPUP_INFO_UPDATED" -> handlePopupLifecycle(eventId, payload, EventType.POPUP_INFO_UPDATED);
+            case "POPUP_CREATED" -> handlePopupLifecycle(eventId, payload, EventType.POPUP_CREATED, rawEventType, normalizedEventType);
+            case "POPUP_STATUS_UPDATED" -> handlePopupLifecycle(eventId, payload, EventType.POPUP_STATUS_UPDATED, rawEventType, normalizedEventType);
+            case "POPUP_INFO_UPDATED" -> handlePopupLifecycle(eventId, payload, EventType.POPUP_INFO_UPDATED, rawEventType, normalizedEventType);
+            case "POPUP_UPDATED" -> handlePopupLifecycle(eventId, payload, EventType.POPUP_INFO_UPDATED, rawEventType, normalizedEventType);
             default -> log.debug("Unsupported event type received: {}", rawEventType);
         }
     }
@@ -179,7 +181,8 @@ public class OrderEventProcessor {
         checkInItemUpsertService.updateFromCheckIn(storeId, popupId, orderGoodsId, checkinAt);
     }
 
-    private void handlePopupLifecycle(UUID eventId, Map<String, Object> payload, EventType eventType) {
+    private void handlePopupLifecycle(UUID eventId, Map<String, Object> payload, EventType eventType,
+                                     String rawEventType, String normalizedEventType) {
         UUID popupId = parseUUID(payload, "popupId", "popup_id");
         UUID storeId = parseUUID(payload, "storeId", "store_id");
         String title = getString(payload, "title");
@@ -201,8 +204,21 @@ public class OrderEventProcessor {
             return;
         }
 
-        popupSummaryUpsertService.updateFromPopup(
-                eventId, eventType, popupId, storeId, ownerId, title, status, addressRoad, addressDetail, reservationOpenAt);
+        boolean isStatusEvent = "PopupStatusUpdatedEvent".equals(rawEventType) || "POPUP_STATUS_UPDATED".equals(normalizedEventType);
+        boolean isInfoEvent = Set.of("PopupUpdatedEvent", "PopupInfoUpdatedEvent").contains(rawEventType)
+                || "POPUP_INFO_UPDATED".equals(normalizedEventType)
+                || "POPUP_UPDATED".equals(normalizedEventType);
+
+        if (isStatusEvent) {
+            popupSummaryUpsertService.updateStatusFromPopup(
+                    eventId, EventType.POPUP_STATUS_UPDATED, popupId, storeId, ownerId, status);
+        } else if (isInfoEvent) {
+            popupSummaryUpsertService.updateInfoFromPopup(
+                    eventId, EventType.POPUP_INFO_UPDATED, popupId, storeId, ownerId, title, status, addressRoad,
+                    addressDetail, reservationOpenAt);
+        } else {
+            log.debug("Unsupported popup lifecycle event type: {} / {}", rawEventType, normalizedEventType);
+        }
     }
 
     // --- helpers ---
