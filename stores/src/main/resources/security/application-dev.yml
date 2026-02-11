@@ -6,9 +6,9 @@ spring:
     activate:
       on-profile: dev
   datasource:
-    url: jdbc:postgresql://${DB_HOST:localhost}:${DB_PORT:5430}/${DB_NAME:popcorn_db}
-    username: ${STORE_DB_USERNAME:store_app}
-    password: ${STORE_DB_PASSWORD:store123}
+    url: jdbc:postgresql://${DB_HOST}:${DB_PORT}/${DB_NAME}
+    username: ${STORE_DB_USERNAME}
+    password: ${STORE_DB_PASSWORD}
     driver-class-name: org.postgresql.Driver
   jpa:
     open-in-view: false
@@ -25,9 +25,9 @@ spring:
   # Redis 설정 (Order 서비스와 동일한 database 사용) - ⚡ 극한 성능 최적화
   data:
     redis:
-      host: ${REDIS_HOST:localhost}
-      port: ${REDIS_PORT:6379}
-      password: ${REDIS_PASSWORD:}
+      host: ${REDIS_HOST}
+      port: ${REDIS_PORT}
+      password: ${REDIS_PASSWORD}
       timeout: 2000ms  # Redis Stream 안정성 위해 기본 타임아웃 복구
       database: 0  # Payment, Order 서비스와 동일한 database 0 사용
       connection-timeout: 2000ms  # 연결 지연에 대비해 타임아웃 완화
@@ -45,8 +45,8 @@ spring:
 
   flyway:
     enabled: true
-    user: ${STORE_FLYWAY_USERNAME:store_migrator}
-    password: ${STORE_FLYWAY_PASSWORD:store123}
+    user: ${STORE_FLYWAY_USERNAME}
+    password: ${STORE_FLYWAY_PASSWORD}
     default-schema: store
     schemas: store
     locations: classpath:db/migration/schema,classpath:db/migration/seed
@@ -54,10 +54,10 @@ spring:
     validate-on-migrate: true
     clean-disabled: false
     placeholders:
-      STORE_MIGRATOR_PASSWORD: ${STORE_MIGRATOR_PASSWORD:store321}
+      STORE_MIGRATOR_PASSWORD: ${STORE_MIGRATOR_PASSWORD}
 
   kafka:
-    bootstrap-servers: ${KAFKA_BOOTSTRAP_SERVERS:localhost:29092}
+    bootstrap-servers: ${KAFKA_BOOTSTRAP_SERVERS}
 
     producer:
       acks: all
@@ -67,7 +67,7 @@ spring:
       value-serializer: org.apache.kafka.common.serialization.StringSerializer
 
     consumer:
-      group-id: ${KAFKA_CONSUMER_GROUP_ID:store-inventory-cg}
+      group-id: ${KAFKA_CONSUMER_GROUP_ID}
       auto-offset-reset: earliest
       enable-auto-commit: false
       key-deserializer: org.apache.kafka.common.serialization.StringDeserializer
@@ -75,11 +75,11 @@ spring:
 
     listener:
       ack-mode: manual
-      concurrency: ${KAFKA_LISTENER_CONCURRENCY:3}
+      concurrency: ${KAFKA_LISTENER_CONCURRENCY}
 
 # 인증 설정
 passport:
-  secret: ${PASSPORT_SECRET:passport-shared-secret}
+  secret: ${PASSPORT_SECRET}
   ttl-seconds: 60
 
 # Redis 이벤트 설정
@@ -88,7 +88,7 @@ redis:
     enabled: true
 
 jwt:
-  secret: ${JWT_SECRET:dGVzdC1qd3Qtc2VjcmV0LWtleS1mb3ItbG9jYWwtZGV2ZWxvcG1lbnQtb25seS1kb25vdC11c2UtaW4tcHJvZHVjdGlvbg==}
+  secret: ${JWT_SECRET}
   expiration: 3600000
   refresh-expiration-ms: 1209600000
 
@@ -117,6 +117,6 @@ popcorn:
     topics:
       storeEvents: store-events
     topic:
-      replicas: ${KAFKA_TOPIC_REPLICAS:1}
+      replicas: ${KAFKA_TOPIC_REPLICAS}
     partitions:
-      storeEvents: ${STORE_EVENTS_PARTITIONS:12}
+      storeEvents: ${STORE_EVENTS_PARTITIONS}

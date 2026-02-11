@@ -1,6 +1,7 @@
 package com.popcorn.store.event.kafka;
 
 import com.popcorn.store.constants.EventConstants;
+import com.popcorn.store.domain.outbox.StoreOutboxEventPublisher;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.stereotype.Component;
@@ -19,14 +20,9 @@ import java.util.UUID;
 @Slf4j
 public class KafkaPublisher {
 
-    private final KafkaProducerService producerService;
-    private final String storeEventsTopic;
-
-    public KafkaPublisher(
-            KafkaProducerService producerService,
-            @Value("${popcorn.kafka.topics.storeEvents:store-events}") String storeEventsTopic) {
-        this.producerService = producerService;
-        this.storeEventsTopic = storeEventsTopic;
+    private final StoreOutboxEventPublisher outboxPublisher;
+    public KafkaPublisher(StoreOutboxEventPublisher outboxPublisher) {
+        this.outboxPublisher = outboxPublisher;
     }
 
     /**
@@ -47,7 +43,7 @@ public class KafkaPublisher {
         log.info("📣 [KafkaPublisher] 굿즈 예약 성공 이벤트 준비 - orderId={}, goodsId={}, qty={}",
                 orderId, goodsId, quantity);
 
-        producerService.publish(storeEventsTopic, keyOrDefault(orderId, eventId), eventData);
+        publishEvent(orderId, EventConstants.EventTypes.GOODS_RESERVATION_SUCCEEDED, eventData);
     }
 
     /**
@@ -67,7 +63,7 @@ public class KafkaPublisher {
         log.warn("📣 [KafkaPublisher] 굿즈 예약 실패 이벤트 준비 - orderId={}, goodsId={}, reason={}",
                 orderId, goodsId, reason);
 
-        producerService.publish(storeEventsTopic, keyOrDefault(orderId, eventId), eventData);
+        publishEvent(orderId, EventConstants.EventTypes.GOODS_RESERVATION_FAILED, eventData);
     }
 
     /**
@@ -88,7 +84,7 @@ public class KafkaPublisher {
         log.info("📣 [KafkaPublisher] 스케줄 예약 성공 이벤트 준비 - orderId={}, scheduleId={}, qty={}",
                 orderId, scheduleId, quantity);
 
-        producerService.publish(storeEventsTopic, keyOrDefault(orderId, eventId), eventData);
+        publishEvent(orderId, EventConstants.EventTypes.SCHEDULE_RESERVATION_SUCCEEDED, eventData);
     }
 
     /**
@@ -108,7 +104,7 @@ public class KafkaPublisher {
         log.warn("📣 [KafkaPublisher] 스케줄 예약 실패 이벤트 준비 - orderId={}, scheduleId={}, reason={}",
                 orderId, scheduleId, reason);
 
-        producerService.publish(storeEventsTopic, keyOrDefault(orderId, eventId), eventData);
+        publishEvent(orderId, EventConstants.EventTypes.SCHEDULE_RESERVATION_FAILED, eventData);
     }
 
     /**
@@ -131,7 +127,7 @@ public class KafkaPublisher {
         log.info("📣 [KafkaPublisher] 예약 만료 이벤트 준비 - orderId={}, reservationType={}",
                 orderId, reservationType);
 
-        producerService.publish(storeEventsTopic, keyOrDefault(orderId, eventId), eventData);
+        publishEvent(orderId, EventConstants.EventTypes.RESERVATION_EXPIRED, eventData);
     }
 
     /**
@@ -256,10 +252,6 @@ public class KafkaPublisher {
         return value != null ? value.toString() : null;
     }
 
-    private String keyOrDefault(UUID orderId, String eventId) {
-        return safeUuid(orderId) != null ? orderId.toString() : eventId;
-    }
-
     private String formatTime(LocalDateTime time) {
         return time != null ? time.toString() : null;
     }
@@ -273,7 +265,7 @@ public class KafkaPublisher {
         eventData.put("occurredAt", LocalDateTime.now().toString());
         eventData.put("producer", "store-service");
 
-        producerService.publish(storeEventsTopic, keyOrDefault(orderId, eventId), eventData);
+        outboxPublisher.publishStoreEvent("store", orderId, eventType, eventData);
     }
 
 

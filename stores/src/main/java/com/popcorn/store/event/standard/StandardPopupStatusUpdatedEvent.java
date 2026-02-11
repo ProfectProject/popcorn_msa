@@ -6,6 +6,7 @@ import lombok.EqualsAndHashCode;
 import lombok.NoArgsConstructor;
 import lombok.experimental.SuperBuilder;
 
+import java.time.LocalDateTime;
 import java.util.UUID;
 
 /**
@@ -30,6 +31,11 @@ public class StandardPopupStatusUpdatedEvent extends StandardBaseEvent {
     private String toStatus;
 
     /**
+     * 마지막 업데이트 시각
+     */
+    private LocalDateTime updatedAt;
+
+    /**
      * 정적 팩토리 메서드
      */
     public static StandardPopupStatusUpdatedEvent create(UUID popupId, UUID storeId, String fromStatus, String toStatus) {
@@ -40,6 +46,7 @@ public class StandardPopupStatusUpdatedEvent extends StandardBaseEvent {
                 .storeId(storeId)
                 .fromStatus(fromStatus)
                 .toStatus(toStatus)
+                .updatedAt(LocalDateTime.now())
                 .build();
 
         event.setDefaults();
@@ -56,6 +63,7 @@ public class StandardPopupStatusUpdatedEvent extends StandardBaseEvent {
         // Popup 상태 변경 전용 필드 추가
         if (fromStatus != null) map.put("fromStatus", fromStatus);
         if (toStatus != null) map.put("toStatus", toStatus);
+        if (updatedAt != null) map.put("updatedAt", updatedAt.toString());
 
         return map;
     }
@@ -65,6 +73,7 @@ public class StandardPopupStatusUpdatedEvent extends StandardBaseEvent {
         java.util.Map<String, Object> map = super.toOutboxMap();
         if (fromStatus != null) map.put("fromStatus", fromStatus);
         if (toStatus != null) map.put("toStatus", toStatus);
+        if (updatedAt != null) map.put("updatedAt", updatedAt.toString());
         return map;
     }
 }

@@ -102,4 +102,24 @@ public class OrderSummary extends BaseEntity {
         this.addressDetail = addressDetail;
         this.reservationOpenAt = reservationOpenAt;
     }
+
+    public void setPopupTitle(String popupTitle) {
+        this.popupTitle = popupTitle;
+    }
+
+    public void setPopupStatus(String popupStatus) {
+        this.popupStatus = popupStatus;
+    }
+
+    public void setAddressRoad(String addressRoad) {
+        this.addressRoad = addressRoad;
+    }
+
+    public void setAddressDetail(String addressDetail) {
+        this.addressDetail = addressDetail;
+    }
+
+    public void setReservationOpenAt(LocalDateTime reservationOpenAt) {
+        this.reservationOpenAt = reservationOpenAt;
+    }
 }
