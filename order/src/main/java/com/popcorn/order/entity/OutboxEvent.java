@@ -12,7 +12,7 @@ import java.util.Map;
 import java.util.UUID;
 
 @Entity
-@Table(name = "outbox_events",
+@Table(name = "outbox_events",schema = "orders",
         indexes = {
                 @Index(name = "idx_outbox_created_at", columnList = "created_at"),
                 @Index(name = "idx_outbox_aggregate",
@@ -43,9 +43,9 @@ public class OutboxEvent {
     @Column(name = "aggregate_id", nullable = false, updatable = false, length = 255)
     private String aggregateId;
 
-    @Enumerated(EnumType.STRING)
+    //@Enumerated(EnumType.STRING)
     @Column(name = "event_type", nullable = false, updatable = false, length = 100)
-    private StandardEventType eventType;
+    private String eventType;
 
     @Column(name = "topic", nullable = false, updatable = false, length = 255)
     private String topic;
@@ -76,7 +76,7 @@ public class OutboxEvent {
             UUID eventId,
             String aggregateType,
             String aggregateId,
-            StandardEventType eventType,
+            String eventType,
             String topic,
             String partitionKey,
             Integer schemaVersion,
@@ -101,7 +101,7 @@ public class OutboxEvent {
             String topic,
             String aggregateType,
             String aggregateId,
-            StandardEventType eventType,
+            String eventType,
             Map<String, Object> payload,
             Map<String, Object> headers
     ) {

@@ -1,11 +1,13 @@
 package com.popcorn.order.kafka.producer;
 
-import com.popcorn.common.event.BaseEvent;
+import com.fasterxml.jackson.core.type.TypeReference;
+import com.fasterxml.jackson.databind.ObjectMapper;
 import com.popcorn.order.entity.ItemType;
 import com.popcorn.order.entity.Order;
 import com.popcorn.order.entity.OrderItem;
 import com.popcorn.order.entity.OrderStatus;
-import com.popcorn.order.kafka.event.MetaEvent;
+import com.popcorn.order.entity.OutboxEvent;
+import com.popcorn.order.repository.OutboxEventRepository;
 import com.popcorn.order.kafka.event.order_events.OrderCANCELLEDEvent;
 import com.popcorn.order.kafka.event.order_events.OrderCOMPLETEDEvent;
 import com.popcorn.order.kafka.event.order_events.OrderCreateEvent;
@@ -21,6 +23,7 @@ import java.time.Instant;
 import java.time.LocalDateTime;
 import java.time.ZoneOffset;
 import java.util.List;
+import java.util.HashMap;
 import java.util.Map;
 import java.util.UUID;
 
@@ -32,6 +35,12 @@ public class OrderEventProducer {
 
     private final KafkaTemplate<String, Object> kafkaTemplate;
 
+    private static final String ORDER_EVENTS_TOPIC = "order-events";
+    private static final String AGGREGATE_TYPE_ORDER = "ORDER";
+
+    private final OutboxEventRepository outboxEventRepository;
+    private final ObjectMapper objectMapper;
+
     /*
     * ORDER_CREATED
     */
@@ -40,10 +49,14 @@ public class OrderEventProducer {
         List<OrderLine> lines = orderItems.stream()
             .map(this::toLine)
             .toList();
+        UUID eventId = UUID.randomUUID();
+        UUID correlationId = UUID.randomUUID();
 
         OrderCreateEvent event = OrderCreateEvent.builder()
-                .eventId(UUID.randomUUID())
-                .correlationId(UUID.randomUUID())
+                //.eventId(UUID.randomUUID())
+                //.correlationId(UUID.randomUUID())
+                .eventId(eventId)
+                .correlationId(correlationId)
                 .timestamp(Instant.now())
                 .eventType("ORDER_CREATED")
                 .eventVersion("1.0")
@@ -63,7 +76,9 @@ public class OrderEventProducer {
                 .build();
 
         // key 전략: orderId (같은 주문 이벤트는 같은 파티션으로)
-        kafkaTemplate.send("order-events", order.getId().toString(), event);
+        //kafkaTemplate.send("order-events", order.getId().toString(), event);
+
+        saveToOutbox(order.getId(), event.getEventType(), event, eventId, correlationId);
     }
 
     /*
@@ -175,26 +190,47 @@ public class OrderEventProducer {
         kafkaTemplate.send("order-events", order.getId().toString(), event);
     }
 
-    private OrderLine toLine(OrderItem item) {
-    if (item.getOrderItemType() == ItemType.GOODS) {
-        return OrderLine.builder()
-                .itemId(item.getId())
-                .itemType("GOODS")
-                .goodsId(item.getGoodsId())
-                .qty(item.getQty())
-                .unitPrice(item.getUnitPrice())
-                .lineAmount(item.getLineAmount())
-                .build();
+    private void saveToOutbox(UUID orderId, String eventType, Object event, UUID eventId, UUID correlationId) {
+        Map<String, Object> payload = objectMapper.convertValue(event, new TypeReference<>() {
+        });
+
+        Map<String, Object> headers = new HashMap<>();
+        headers.put("eventId", eventId.toString());
+        headers.put("correlationId", correlationId.toString());
+        headers.put("producer", "order-service");
+
+        OutboxEvent outboxEvent = OutboxEvent.of(
+                ORDER_EVENTS_TOPIC,
+                AGGREGATE_TYPE_ORDER,
+                orderId.toString(),
+                eventType,
+                payload,
+                headers
+        );
+
+        outboxEventRepository.save(outboxEvent);
     }
 
-    // 예약/스케줄
-    return OrderLine.builder()
-            .itemId(item.getId())
-            .itemType("SCHEDULE")
-            .scheduleId(item.getSessionOptionId())
-            .qty(item.getQty())
-            .unitPrice(item.getUnitPrice()) // 있으면
-            .lineAmount(item.getLineAmount())
-            .build();
-}
+    private OrderLine toLine(OrderItem item) {
+        if (item.getOrderItemType() == ItemType.GOODS) {
+                return OrderLine.builder()
+                        .itemId(item.getId())
+                        .itemType("GOODS")
+                        .goodsId(item.getGoodsId())
+                        .qty(item.getQty())
+                        .unitPrice(item.getUnitPrice())
+                        .lineAmount(item.getLineAmount())
+                        .build();
+        }
+
+        // 예약/스케줄
+        return OrderLine.builder()
+                .itemId(item.getId())
+                .itemType("SCHEDULE")
+                .scheduleId(item.getSessionOptionId())
+                .qty(item.getQty())
+                .unitPrice(item.getUnitPrice()) // 있으면
+                .lineAmount(item.getLineAmount())
+                .build();
+        }
 }
