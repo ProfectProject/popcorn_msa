@@ -2,8 +2,10 @@ package com.popcorn.coupon.domain.entity
 
 import com.fasterxml.jackson.databind.JsonNode
 import com.popcorn.coupon.domain.entity.common.BaseEntity
-import com.popcorn.coupon.domain.entity.converter.JsonNodeConverter
 import jakarta.persistence.*
+import org.hibernate.annotations.ColumnTransformer
+import org.hibernate.annotations.JdbcTypeCode
+import org.hibernate.type.SqlTypes
 import java.time.LocalDateTime
 
 @Entity
@@ -25,7 +27,8 @@ data class CouponOutboxEvent(
     val eventType: String,
 
     @Column(name = "event_data", columnDefinition = "JSON")
-    @Convert(converter = JsonNodeConverter::class)
+    @JdbcTypeCode(SqlTypes.JSON)
+    @ColumnTransformer(write = "?::json")
     val eventData: JsonNode,
 
     // 처리 상태

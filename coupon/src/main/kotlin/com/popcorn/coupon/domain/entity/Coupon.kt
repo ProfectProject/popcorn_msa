@@ -2,8 +2,10 @@ package com.popcorn.coupon.domain.entity
 
 import com.fasterxml.jackson.databind.JsonNode
 import com.popcorn.coupon.domain.entity.common.BaseEntity
-import com.popcorn.coupon.domain.entity.converter.JsonNodeConverter
 import jakarta.persistence.*
+import org.hibernate.annotations.ColumnTransformer
+import org.hibernate.annotations.JdbcTypeCode
+import org.hibernate.type.SqlTypes
 import java.math.BigDecimal
 import java.time.LocalDateTime
 
@@ -22,8 +24,9 @@ data class Coupon(
     val description: String? = null,
 
     // 할인 정보
-    @Column(name = "discount_type", nullable = false, length = 20)
+    @Column(name = "discount_type", nullable = false, columnDefinition = "coupons.discount_type")
     @Enumerated(EnumType.STRING)
+    @JdbcTypeCode(SqlTypes.NAMED_ENUM)
     val discountType: DiscountType,
 
     @Column(name = "discount_amount", precision = 10, scale = 2)
@@ -56,17 +59,20 @@ data class Coupon(
     val validUntil: LocalDateTime,
 
     // 상태 및 타입
-    @Column(name = "status", nullable = false, length = 20)
+    @Column(name = "status", nullable = false, columnDefinition = "coupons.coupon_status")
     @Enumerated(EnumType.STRING)
+    @JdbcTypeCode(SqlTypes.NAMED_ENUM)
     val status: CouponStatus = CouponStatus.ACTIVE,
 
-    @Column(name = "target_type", nullable = false, length = 20)
+    @Column(name = "target_type", nullable = false, columnDefinition = "coupons.target_type")
     @Enumerated(EnumType.STRING)
+    @JdbcTypeCode(SqlTypes.NAMED_ENUM)
     val targetType: TargetType = TargetType.ALL_USERS,
 
     // 추가 조건 (JSON)
+    @JdbcTypeCode(SqlTypes.JSON)
+    @ColumnTransformer(write = "?::json")
     @Column(name = "conditions", columnDefinition = "JSON")
-    @Convert(converter = JsonNodeConverter::class)
     val conditions: JsonNode? = null,
 
     // 메타데이터

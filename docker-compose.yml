@@ -368,6 +368,45 @@ services:
         condition: service_healthy
     restart: always
 
+  orderquery:
+    build:
+      context: ./orderQuery
+    image: popcorn/orderquery:local
+    container_name: popcorn-orderquery
+    env_file:
+      - ./.env
+    environment:
+      DB_HOST: db
+      DB_PORT: 5432
+      DB_NAME: ${DB_NAME:-popcorn_db}
+      JWT_SECRET: ${JWT_SECRET}
+      ORDER_QUERY_DB_USERNAME: order_query_app
+      ORDER_QUERY_DB_PASSWORD: quary123
+      ORDER_QUERY_FLYWAY_USERNAME: order_query_migrator
+      ORDER_QUERY_FLYWAY_PASSWORD: quary321
+      REDIS_HOST: redis
+      SPRING_DATA_REDIS_HOST: redis
+      SPRING_DATA_REDIS_PORT: 6379
+      SPRING_REDIS_HOST: redis
+      SPRING_REDIS_PORT: 6379
+      KAFKA_BOOTSTRAP_SERVERS: kafka-1:9092,kafka-2:9092,kafka-3:9092
+      SPRING_PROFILES_ACTIVE: local
+      SPRING_KAFKA_BOOTSTRAP_SERVERS: kafka-1:9092,kafka-2:9092,kafka-3:9092
+      STORE_SERVICE_BASE_URL: http://popcorn-gateway:8080
+      USERS_SERVICE_BASE_URL: http://popcorn-gateway:8080
+    depends_on:
+      db:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+      kafka-1:
+        condition: service_healthy
+      kafka-2:
+        condition: service_healthy
+      kafka-3:
+        condition: service_healthy
+    restart: always
+
   payment:
     build:
       context: ./payment

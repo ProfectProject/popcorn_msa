@@ -2,8 +2,10 @@ package com.popcorn.coupon.domain.entity
 
 import com.fasterxml.jackson.databind.JsonNode
 import com.popcorn.coupon.domain.entity.common.BaseEntity
-import com.popcorn.coupon.domain.entity.converter.JsonNodeConverter
 import jakarta.persistence.*
+import org.hibernate.annotations.ColumnTransformer
+import org.hibernate.annotations.JdbcTypeCode
+import org.hibernate.type.SqlTypes
 import java.math.BigDecimal
 
 @Entity
@@ -46,7 +48,8 @@ data class CouponHistory(
 
     // 컨텍스트 정보
     @Column(name = "context", columnDefinition = "JSON")
-    @Convert(converter = JsonNodeConverter::class)
+    @JdbcTypeCode(SqlTypes.JSON)
+    @ColumnTransformer(write = "?::json")
     val context: JsonNode? = null
 
 ) : BaseEntity() {

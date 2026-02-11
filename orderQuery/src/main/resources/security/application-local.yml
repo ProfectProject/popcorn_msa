@@ -78,13 +78,6 @@ management:
     redis:
       enabled: false
 
-spring:
-  data:
-    redis:
-      host: redis
-      port: 6379
-      password: ""
-
 logging:
   level:
     com.popcorn.store: DEBUG

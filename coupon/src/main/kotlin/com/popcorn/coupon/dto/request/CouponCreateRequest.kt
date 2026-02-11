@@ -1,5 +1,6 @@
 package com.popcorn.coupon.dto.request
 
+import com.fasterxml.jackson.annotation.JsonAlias
 import com.popcorn.coupon.domain.entity.DiscountType
 import com.popcorn.coupon.domain.entity.TargetType
 import jakarta.validation.constraints.*
@@ -10,38 +11,49 @@ import java.time.LocalDateTime
  * 쿠폰 생성 요청 DTO
  */
 data class CouponCreateRequest(
+    @JsonAlias("name")
     @field:NotBlank(message = "쿠폰명은 필수입니다")
     @field:Size(max = 100, message = "쿠폰명은 100자 이하여야 합니다")
     val name: String,
 
+    @JsonAlias("description")
     @field:Size(max = 500, message = "설명은 500자 이하여야 합니다")
     val description: String?,
 
+    @JsonAlias("discountType")
     @field:NotNull(message = "할인 타입은 필수입니다")
     val discountType: DiscountType,
 
+    @JsonAlias("discountAmount")
     @field:DecimalMin(value = "0.01", message = "할인 금액은 0.01 이상이어야 합니다")
     val discountAmount: BigDecimal?,
 
+    @JsonAlias("discountPercentage")
     @field:Min(value = 1, message = "할인 비율은 1% 이상이어야 합니다")
     @field:Max(value = 100, message = "할인 비율은 100% 이하여야 합니다")
     val discountPercentage: Int?,
 
+    @JsonAlias("minOrderAmount")
     @field:DecimalMin(value = "0", message = "최소 주문 금액은 0 이상이어야 합니다")
     val minOrderAmount: BigDecimal?,
 
+    @JsonAlias("maxDiscountAmount")
     @field:DecimalMin(value = "0.01", message = "최대 할인 금액은 0.01 이상이어야 합니다")
     val maxDiscountAmount: BigDecimal?,
 
+    @JsonAlias("totalQuantity")
     @field:Min(value = 1, message = "총 수량은 1개 이상이어야 합니다")
     val totalQuantity: Int?,
 
+    @JsonAlias("validFrom")
     @field:NotNull(message = "유효 시작일은 필수입니다")
     val validFrom: LocalDateTime,
 
+    @JsonAlias("validUntil")
     @field:NotNull(message = "유효 종료일은 필수입니다")
     val validUntil: LocalDateTime,
 
+    @JsonAlias("targetType")
     @field:NotNull(message = "대상 타입은 필수입니다")
     val targetType: TargetType
 )

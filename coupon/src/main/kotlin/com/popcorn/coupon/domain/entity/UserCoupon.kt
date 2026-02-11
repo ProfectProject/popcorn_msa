@@ -2,8 +2,10 @@ package com.popcorn.coupon.domain.entity
 
 import com.fasterxml.jackson.databind.JsonNode
 import com.popcorn.coupon.domain.entity.common.BaseEntity
-import com.popcorn.coupon.domain.entity.converter.JsonNodeConverter
 import jakarta.persistence.*
+import org.hibernate.annotations.ColumnTransformer
+import org.hibernate.annotations.JdbcTypeCode
+import org.hibernate.type.SqlTypes
 import java.math.BigDecimal
 import java.time.LocalDateTime
 
@@ -35,8 +37,9 @@ data class UserCoupon(
     val couponCode: String,
 
     // 상태 관리 (개선된 상태 머신)
-    @Column(name = "status", nullable = false, length = 20)
+    @Column(name = "status", nullable = false, columnDefinition = "coupons.user_coupon_status")
     @Enumerated(EnumType.STRING)
+    @JdbcTypeCode(SqlTypes.NAMED_ENUM)
     val status: UserCouponStatus = UserCouponStatus.ISSUED,
 
     // 시간 정보 (상태 전이 추적)
@@ -64,7 +67,8 @@ data class UserCoupon(
 
     // 메타데이터
     @Column(name = "metadata", columnDefinition = "JSON")
-    @Convert(converter = JsonNodeConverter::class)
+    @JdbcTypeCode(SqlTypes.JSON)
+    @ColumnTransformer(write = "?::json")
     val metadata: JsonNode? = null
 
 ) : BaseEntity() {

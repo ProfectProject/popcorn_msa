@@ -50,6 +50,7 @@ class SecurityConfig(
                     // Health check
                     .requestMatchers("/actuator/**").permitAll()
                     .requestMatchers("/h2-console/**").permitAll()
+                    .requestMatchers("/error", "/error/**").permitAll()
 
                     // Public endpoints
                     .requestMatchers(HttpMethod.GET, "/api/v1/coupons/available/**").permitAll()

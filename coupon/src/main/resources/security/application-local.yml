@@ -117,7 +117,7 @@ coupon:
     expire-schedule: "0 */5 * * * *"  # 5분마다
   security:
     jwt:
-      secret: ${JWT_SECRET:popcorn_coupon_jwt_secret_key_2024_very_long_and_secure}
+      secret: ${JWT_SECRET:dGVzdC1qd3Qtc2VjcmV0LWtleS1mb3ItbG9jYWwtZGV2ZWxvcG1lbnQtb25seS1kb25vdC11c2UtaW4tcHJvZHVjdGlvbg==}
       expiration: 3600000  # 1시간
 
 logging:
