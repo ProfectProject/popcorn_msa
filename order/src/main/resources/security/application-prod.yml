@@ -119,10 +119,6 @@ management:
   endpoint:
     health:
       show-details: never  # 프로덕션에서는 상세 정보 숨김
-  metrics:
-    export:
-      prometheus:
-        enabled: true
 
 passport:
   secret: ${PASSPORT_SECRET:passport-shared-secret}

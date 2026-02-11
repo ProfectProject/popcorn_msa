@@ -240,7 +240,7 @@ public class OrderCommandService {
         /*
         * kafka 이벤트 발행
         */
-        orderEventProducer.publishOrderCreated(latestOrder,latestOrderItems,hasGoodsItems,hasReservationItems);
+        //orderEventProducer.publishOrderCreated(latestOrder,latestOrderItems,hasGoodsItems,hasReservationItems);
 
         orderCacheService.evictMyOrdersCache(latestOrder.getCustomerId());
 
@@ -322,6 +322,9 @@ public class OrderCommandService {
         boolean hasReservationItems = savedOrder.getOrderItems().stream()
                 .anyMatch(item -> ItemType.RESERVATION.equals(item.getOrderItemType()));
 
+        // 6단계 * outbox 저장 *
+        orderEventProducer.publishOrderCreated(savedOrder,savedOrder.getOrderItems(),hasGoodsItems,hasReservationItems);
+
         long totalTime = System.currentTimeMillis() - startTime;
         log.info("🚀 [OPTIMIZED] 주문 생성 완료 - userId: {}, 총 시간: {}ms", command.getUserId(), totalTime);
 
@@ -364,6 +367,8 @@ public class OrderCommandService {
 
         boolean hasReservationItems = savedOrder.getOrderItems().stream()
                 .anyMatch(item -> ItemType.RESERVATION.equals(item.getOrderItemType()));
+        
+        orderEventProducer.publishOrderCreated(savedOrder,savedOrder.getOrderItems(),hasGoodsItems,hasReservationItems);
 
         return new OrderCreationResult(savedOrder, hasReservationItems, hasGoodsItems);
     }

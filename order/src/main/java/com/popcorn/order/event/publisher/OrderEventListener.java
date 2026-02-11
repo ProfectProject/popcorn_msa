@@ -56,7 +56,6 @@ public class OrderEventListener {
     private final OrderStatusHistoryRepository orderStatusHistoryRepository;
     private final OrderEventPublisher orderEventPublisher;
     private final ApplicationEventPublisher eventPublisher;
-    private final RedisEventPublisher redisEventPublisher;
     private final ObjectMapper objectMapper;
     private final OrderCommandService orderCommandService;
     private final OrderReservationAwaiter orderReservationAwaiter;

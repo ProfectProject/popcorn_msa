@@ -46,6 +46,27 @@ spring:
     default-schema: orders
     schemas: orders
 
+  kafka:
+    bootstrap-servers: ${KAFKA_BOOTSTRAP_SERVERS}
+
+    producer:
+      acks: all
+      properties:
+        enable.idempotence: true
+      key-serializer: org.apache.kafka.common.serialization.StringSerializer
+      value-serializer: org.apache.kafka.common.serialization.StringSerializer
+
+    consumer:
+      group-id: ${KAFKA_CONSUMER_GROUP_ID}
+      auto-offset-reset: earliest
+      enable-auto-commit: false
+      key-deserializer: org.apache.kafka.common.serialization.StringDeserializer
+      value-deserializer: org.apache.kafka.common.serialization.StringDeserializer
+
+    listener:
+      ack-mode: manual
+      concurrency: ${KAFKA_LISTENER_CONCURRENCY}
+
   # Redis 설정 (타임아웃 문제 해결)
   data:
     redis:
@@ -70,6 +91,10 @@ logging:
     org.hibernate.SQL: WARN           # DEBUG -> WARN (SQL 로깅 제거)
     org.hibernate.type.descriptor.sql.BasicBinder: ERROR # TRACE -> ERROR
     org.springframework.data.redis: WARN  # Redis 로깅 최소화
+    com.adjh.springbootkafka: DEBUG
+    org:
+      apache.kafka: INFO
+      springframework.kafka: INFO
 
 # 이벤트 기반 아키텍처 - HTTP 통신 제거
 # microservices 통신은 Redis Stream 이벤트로 대체
@@ -85,15 +110,6 @@ order:
   validation:
     max-quantity: ${ORDER_MAX_QUANTITY:100}
 
-# Redis Stream 설정 (타임아웃 해결)
-redis:
-  events:
-    enabled: true       # Redis Stream 다시 활성화
-  stream:
-    poll-timeout: 5000  # 5초 폴링 타임아웃
-    batch-size: 5       # 작은 배치 크기
-    error-retry-delay: 1000  # 에러 후 재시도 대기시간 (1초)
-
 # 비동기 주문 처리 비활성화 (Redis Stream 사용)
 async:
   order:
@@ -107,3 +123,12 @@ jwt:
   secret: ${JWT_SECRET:dGVzdC1qd3Qtc2VjcmV0LWtleS1mb3ItbG9jYWwtZGV2ZWxvcG1lbnQtb25seS1kb25vdC11c2UtaW4tcHJvZHVjdGlvbg==}
   expiration: 3600000
   refresh-expiration-ms: 1209600000
+
+popcorn:
+  kafka:
+    topics:
+      storeEvents: order-events
+    topic:
+      replicas: ${KAFKA_TOPIC_REPLICAS}
+    partitions:
+      storeEvents: ${STORE_EVENTS_PARTITIONS}
