@@ -50,9 +50,6 @@ public class OrderQueryKafkaConsumer {
 
     private Map<String, Object> parseEnvelope(String rawMessage) throws JsonProcessingException {
         JsonNode rootNode = objectMapper.readTree(rawMessage);
-        if (rootNode.isTextual()) {
-            rootNode = objectMapper.readTree(rootNode.textValue());
-        }
         return objectMapper.convertValue(rootNode, MAP_TYPE);
     }
 }

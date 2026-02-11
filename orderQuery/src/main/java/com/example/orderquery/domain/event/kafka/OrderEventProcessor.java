@@ -240,7 +240,7 @@ public class OrderEventProcessor {
         if (value == null) {
             return null;
         }
-        return value.toString().replace("\"", "").trim();
+        return value.toString().trim();
     }
 
     private String normalizeEventType(String raw) {
@@ -262,7 +262,7 @@ public class OrderEventProcessor {
             return uuid;
         }
         try {
-            return UUID.fromString(value.toString().replace("\"", "").trim());
+            return UUID.fromString(value.toString().trim());
         } catch (IllegalArgumentException ex) {
             log.debug("UUID parsing failed for value: {}", value);
             return null;
@@ -289,7 +289,7 @@ public class OrderEventProcessor {
                 return number.longValue();
             }
             try {
-                return Long.parseLong(value.toString().replace("\"", "").trim());
+                return Long.parseLong(value.toString().trim());
             } catch (NumberFormatException ex) {
                 log.debug("Long parsing failed for key {} value {}", key, value);
             }
@@ -303,7 +303,7 @@ public class OrderEventProcessor {
             if (value == null) {
                 continue;
             }
-            String result = value.toString().replace("\"", "").trim();
+            String result = value.toString().trim();
             if (!result.isEmpty()) {
                 return result;
             }
@@ -341,7 +341,7 @@ public class OrderEventProcessor {
             return LocalDateTime.ofInstant(instant, ZoneOffset.UTC);
         }
         if (value instanceof String text) {
-            String cleaned = text.replace("\"", "").trim();
+            String cleaned = text.trim();
             if (cleaned.isEmpty()) {
                 return null;
             }
@@ -474,7 +474,7 @@ public class OrderEventProcessor {
             }
             if (value != null) {
                 try {
-                    return Integer.parseInt(value.toString().replace("\"", "").trim());
+                    return Integer.parseInt(value.toString().trim());
                 } catch (NumberFormatException ignored) {
                 }
             }
@@ -530,7 +530,7 @@ public class OrderEventProcessor {
             if (value instanceof Boolean bool) {
                 return bool;
             }
-            String text = value.toString().replace("\"", "").trim();
+            String text = value.toString().trim();
             if (text.equalsIgnoreCase("true")) {
                 return true;
             }
