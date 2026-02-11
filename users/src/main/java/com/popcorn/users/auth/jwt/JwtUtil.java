@@ -13,7 +13,6 @@ import io.jsonwebtoken.SignatureAlgorithm;
 import io.jsonwebtoken.io.Decoders;
 import io.jsonwebtoken.security.Keys;
 
-// jwt 발급, 검증 담당 클래스
 @Component
 public class JwtUtil {
 
