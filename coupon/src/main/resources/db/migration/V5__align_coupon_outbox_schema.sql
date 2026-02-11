@@ -27,13 +27,9 @@ BEGIN
           AND event_data IS NOT NULL;
     END IF;
 
-    -- payload 기본값/NOT NULL 보장
-    UPDATE coupon_outbox_events
-    SET payload = '{}'::json
-    WHERE payload IS NULL;
-
+    -- payload 컬럼은 구버전(event_data writer) 호환을 위해 NULL 허용
     ALTER TABLE coupon_outbox_events
-        ALTER COLUMN payload SET NOT NULL;
+        ALTER COLUMN payload DROP NOT NULL;
 
     -- 애플리케이션 이벤트 타입 확장을 위해 legacy CHECK 제약 제거
     ALTER TABLE coupon_outbox_events DROP CONSTRAINT IF EXISTS valid_event_type;
