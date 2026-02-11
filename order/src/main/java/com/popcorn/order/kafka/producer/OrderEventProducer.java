@@ -53,8 +53,6 @@ public class OrderEventProducer {
         UUID correlationId = UUID.randomUUID();
 
         OrderCreateEvent event = OrderCreateEvent.builder()
-                //.eventId(UUID.randomUUID())
-                //.correlationId(UUID.randomUUID())
                 .eventId(eventId)
                 .correlationId(correlationId)
                 .timestamp(Instant.now())
@@ -87,9 +85,12 @@ public class OrderEventProducer {
     public void publishOrderPaid(Order order,
                                 boolean hasGoods, boolean hasReservation) {
 
+        UUID eventId = UUID.randomUUID();
+        UUID correlationId = UUID.randomUUID();
+
         OrderPAIDEvent event = OrderPAIDEvent.builder()
-                .eventId(UUID.randomUUID())
-                .correlationId(UUID.randomUUID())
+                .eventId(eventId)
+                .correlationId(correlationId)
                 .timestamp(Instant.now())
                 .eventType("ORDER_PAID")
                 .eventVersion("1.0")
@@ -104,7 +105,8 @@ public class OrderEventProducer {
                 .build();
 
         // key 전략: orderId (같은 주문 이벤트는 같은 파티션으로)
-        kafkaTemplate.send("order-events", order.getId().toString(), event);
+        //kafkaTemplate.send("order-events", order.getId().toString(), event);
+        saveToOutbox(order.getId(), event.getEventType(), event, eventId, correlationId);
     }
 
 
@@ -115,9 +117,12 @@ public class OrderEventProducer {
                                 OrderStatus fromStatus, OrderStatus toStatus,
                                 boolean hasGoods, boolean hasReservation) {
 
+        UUID eventId = UUID.randomUUID();
+        UUID correlationId = UUID.randomUUID();
+
         OrderStatusUpdatedEvent event = OrderStatusUpdatedEvent.builder()
-                .eventId(UUID.randomUUID())
-                .correlationId(UUID.randomUUID())
+                .eventId(eventId)
+                .correlationId(correlationId)
                 .timestamp(Instant.now())
                 .eventType("ORDER_STATUS_UPDATED")
                 .eventVersion("1.0")
@@ -133,7 +138,8 @@ public class OrderEventProducer {
                 .build();
 
         // key 전략: orderId (같은 주문 이벤트는 같은 파티션으로)
-        kafkaTemplate.send("order-events", order.getId().toString(), event);
+        //kafkaTemplate.send("order-events", order.getId().toString(), event);
+        saveToOutbox(order.getId(), event.getEventType(), event, eventId, correlationId);
     }
 
     /*
@@ -142,9 +148,12 @@ public class OrderEventProducer {
     public void publishOrderCompleted(Order order,
                                 boolean hasGoods, boolean hasReservation) {
 
+        UUID eventId = UUID.randomUUID();
+        UUID correlationId = UUID.randomUUID();
+
         OrderCOMPLETEDEvent event = OrderCOMPLETEDEvent.builder()
-                .eventId(UUID.randomUUID())
-                .correlationId(UUID.randomUUID())
+                .eventId(eventId)
+                .correlationId(correlationId)
                 .timestamp(Instant.now())
                 .eventType("ORDER_COMPLETED")
                 .eventVersion("1.0")
@@ -158,7 +167,8 @@ public class OrderEventProducer {
                 .build();
 
         // key 전략: orderId (같은 주문 이벤트는 같은 파티션으로)
-        kafkaTemplate.send("order-events", order.getId().toString(), event);
+        //kafkaTemplate.send("order-events", order.getId().toString(), event);
+        saveToOutbox(order.getId(), event.getEventType(), event, eventId, correlationId);
     }
 
 
@@ -170,10 +180,12 @@ public class OrderEventProducer {
         List<OrderLine> lines = orderItems.stream()
             .map(this::toLine)
             .toList();
+        UUID eventId = UUID.randomUUID();
+        UUID correlationId = UUID.randomUUID();
 
         OrderCANCELLEDEvent event = OrderCANCELLEDEvent.builder()
-                .eventId(UUID.randomUUID())
-                .correlationId(UUID.randomUUID())
+                .eventId(eventId)
+                .correlationId(correlationId)
                 .timestamp(Instant.now())
                 .eventType("ORDER_CANCELLED")
                 .eventVersion("1.0")
