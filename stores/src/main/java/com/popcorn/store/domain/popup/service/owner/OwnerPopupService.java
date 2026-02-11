@@ -4,6 +4,7 @@ import java.time.LocalDateTime;
 import java.util.List;
 import java.util.UUID;
 
+import com.popcorn.store.domain.outbox.OutboxHeaders;
 import com.popcorn.store.domain.popup.entity.OutboxEvent;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
@@ -36,7 +37,6 @@ import com.popcorn.store.event.standard.StandardPopupStatusUpdatedEvent;
 import com.popcorn.store.event.standard.StandardEventType;
 import com.popcorn.store.constants.EventConstants;
 
-import java.util.HashMap;
 import java.util.Map;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
@@ -513,7 +513,7 @@ public class OwnerPopupService {
     private void persistPopupCreatedOutboxEntry(Popup popup, StandardPopupCreatedEvent event) {
         try {
             Map<String, Object> payload = event.toOutboxMap();
-            Map<String, Object> headers = Map.of("producer", event.getProducer());
+            Map<String, Object> headers = OutboxHeaders.of(event.getProducer());
             OutboxEvent outbox = OutboxEvent.of(
                     event.getTopic(),
                     EventConstants.AggregateTypes.POPUP,
@@ -556,7 +556,7 @@ public class OwnerPopupService {
     private void persistPopupStatusUpdatedOutboxEntry(Popup popup, StandardPopupStatusUpdatedEvent event) {
         try {
             Map<String, Object> payload = event.toOutboxMap();
-            Map<String, Object> headers = Map.of("producer", event.getProducer());
+            Map<String, Object> headers = OutboxHeaders.of(event.getProducer());
             OutboxEvent outbox = OutboxEvent.of(
                     event.getTopic(),
                     EventConstants.AggregateTypes.POPUP,
@@ -601,7 +601,7 @@ public class OwnerPopupService {
     private void persistPopupInfoUpdatedOutboxEntry(Popup popup, StandardPopupInfoUpdatedEvent event) {
         try {
             Map<String, Object> payload = event.toOutboxMap();
-            Map<String, Object> headers = Map.of("producer", event.getProducer());
+            Map<String, Object> headers = OutboxHeaders.of(event.getProducer());
             OutboxEvent outbox = OutboxEvent.of(
                     event.getTopic(),
                     EventConstants.AggregateTypes.POPUP,
