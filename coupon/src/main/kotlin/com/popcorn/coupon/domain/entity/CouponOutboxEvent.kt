@@ -26,7 +26,7 @@ data class CouponOutboxEvent(
     @Column(name = "event_type", nullable = false, length = 100)
     val eventType: String,
 
-    @Column(name = "event_data", columnDefinition = "JSON")
+    @Column(name = "payload", nullable = false, columnDefinition = "JSON")
     @JdbcTypeCode(SqlTypes.JSON)
     @ColumnTransformer(write = "?::json")
     val eventData: JsonNode,
