@@ -12,11 +12,15 @@ import lombok.RequiredArgsConstructor;
 import org.springframework.kafka.core.KafkaTemplate;
 import org.springframework.stereotype.Component;
 
+import com.popcorn.order.entity.OutboxEvent;
+import com.popcorn.order.repository.OutboxEventRepository;
+
 @Component
 @RequiredArgsConstructor
 public class StoreRequestsProducer {
     private static final String STORE_REQUESTS_TOPIC = "store-requests";
-
+    private static final String AGGREGATE_TYPE_ORDER = "ORDER";
+    private final OutboxEventRepository outboxEventRepository;
     private final KafkaTemplate<String, Object> kafkaTemplate;
 
     public void publishGoodsReservationCancelRequested(Order order, UUID goodsId, int quantity) {
@@ -24,41 +28,47 @@ public class StoreRequestsProducer {
         payload.put("goodsId", goodsId != null ? goodsId.toString() : null);
         payload.put("qty", quantity);
         //payload.put("reason", reason);
-        kafkaTemplate.send(STORE_REQUESTS_TOPIC, order.getId().toString(), payload);
+        //kafkaTemplate.send(STORE_REQUESTS_TOPIC, order.getId().toString(), payload);
+        saveToOutbox(order, "GOODS_RESERVATION_CANCEL_REQUESTED", payload);
     }
 
     public void publishScheduleReservationCancelRequested(Order order, UUID scheduleId) {
         Map<String, Object> payload = basePayload(order, "SCHEDULE_RESERVATION_CANCEL_REQUESTED");
         payload.put("scheduleId", scheduleId != null ? scheduleId.toString() : null);
         //payload.put("reason", reason);
-        kafkaTemplate.send(STORE_REQUESTS_TOPIC, order.getId().toString(), payload);
+        //kafkaTemplate.send(STORE_REQUESTS_TOPIC, order.getId().toString(), payload);
+        saveToOutbox(order, "SCHEDULE_RESERVATION_CANCEL_REQUESTED", payload);
     }
 
     public void publishStockDeductionRequested(Order order, List<com.popcorn.order.event.stock.StockDeductionRequestedEvent.DeductionItem> deductionItems) {
         Map<String, Object> payload = basePayload(order, "STOCK_DEDUCTION_REQUESTED");
         payload.put("deductionItems", deductionItems);
-        kafkaTemplate.send(STORE_REQUESTS_TOPIC, order.getId().toString(), payload);
+        //kafkaTemplate.send(STORE_REQUESTS_TOPIC, order.getId().toString(), payload);
+        saveToOutbox(order, "STOCK_DEDUCTION_REQUESTED", payload);
     }
 
     public void publishScheduleConfirmationRequested(Order order, List<ScheduleConfirmationItem> reservedSessions) {
         //Map<String, Object> payload = new HashMap<>();
         Map<String, Object> payload = basePayload(order, "SCHEDULE_CONFIRMATION_REQUESTED");
         payload.put("reservedSessions", reservedSessions);
-        kafkaTemplate.send(STORE_REQUESTS_TOPIC, order.getId().toString(), payload);
+        //kafkaTemplate.send(STORE_REQUESTS_TOPIC, order.getId().toString(), payload);
+        saveToOutbox(order, "SCHEDULE_CONFIRMATION_REQUESTED", payload);
     }
 
     public void publishStockReleaseRequested(Order order, List<Map<String, Object>> releaseItems) {
         Map<String, Object> payload = basePayload(order, "STOCK_RELEASE_REQUESTED");
         payload.put("releaseItems", releaseItems);
         //payload.put("reason", reason);
-        kafkaTemplate.send(STORE_REQUESTS_TOPIC, order.getId().toString(), payload);
+        //kafkaTemplate.send(STORE_REQUESTS_TOPIC, order.getId().toString(), payload);
+        saveToOutbox(order, "STOCK_RELEASE_REQUESTED", payload);
     }
 
     public void publishScheduleReleaseRequested(Order order, List<Map<String, Object>> releaseItems) {
         Map<String, Object> payload = basePayload(order, "SCHEDULE_RELEASE_REQUESTED");
         payload.put("releaseItems", releaseItems);
         //payload.put("reason", reason);
-        kafkaTemplate.send(STORE_REQUESTS_TOPIC, order.getId().toString(), payload);
+        //kafkaTemplate.send(STORE_REQUESTS_TOPIC, order.getId().toString(), payload);
+        saveToOutbox(order, "SCHEDULE_RELEASE_REQUESTED", payload);
     }
 
     private Map<String, Object> basePayload(Order order, String eventType) {
@@ -71,5 +81,18 @@ public class StoreRequestsProducer {
         payload.put("orderNo", order.getOrderNo());
         payload.put("popupId", order.getPopupId() != null ? order.getPopupId().toString() : null);
         return payload;
+    }
+
+    private void saveToOutbox(Order order, String eventType, Map<String, Object> payload) {
+        OutboxEvent outboxEvent = OutboxEvent.of(
+                STORE_REQUESTS_TOPIC,
+                AGGREGATE_TYPE_ORDER,
+                order.getId().toString(),
+                eventType,
+                payload,
+                Map.of("producer", "order-service")
+        );
+
+        outboxEventRepository.save(outboxEvent);
     }
 }

@@ -35,7 +35,6 @@ import lombok.extern.slf4j.Slf4j;
 public class OrderEventPublisher {
 
     private final ApplicationEventPublisher applicationEventPublisher;
-    private final RedisEventPublisher redisEventPublisher;
     private final OrderRepository orderRepository;
     private final PaymentRequestsProducer paymentRequestsProducer;
     private final StoreRequestsProducer storeRequestsProducer;
@@ -55,9 +54,6 @@ public class OrderEventPublisher {
 
             // 2. 내부 이벤트 발행 (동일 서비스 내 처리)
             applicationEventPublisher.publishEvent(event);
-
-            // 3. Redis 이벤트 발행 (Store 서비스 연동)
-            redisEventPublisher.publishOrderPaidEvent(event);
 
 
         } catch (Exception e) {
@@ -79,14 +75,6 @@ public class OrderEventPublisher {
 
             /* kafka 굿즈 예약 취소 요청 */
             storeRequestsProducer.publishGoodsReservationCancelRequested(order,goodsId,quantity);
-
-            redisEventPublisher.publishGoodsReservationCancelRequestedEvent(
-                    eventId,
-                    order.getId(),
-                    order.getPopupId(),
-                    goodsId,
-                    quantity
-            );
 
         } catch (Exception e) {
             log.error("굿즈 예약 취소 요청 이벤트 발행 실패 - orderId: {}", order.getId(), e);
@@ -111,16 +99,6 @@ public class OrderEventPublisher {
             /* kafka payment-created request 발행 */
             paymentRequestsProducer.publishPaymentCreateRequested(order,paymentMethod,paymentKey);
 
-            redisEventPublisher.publishPaymentCreateRequestedEvent(
-                    eventId,
-                    order.getId(),
-                    order.getOrderNo(),
-                    order.getTotalAmount(),
-                    paymentMethod,
-                    order.getCustomerId(),
-                    paymentKey
-            );
-
         } catch (Exception e) {
             log.error("결제 생성 요청 이벤트 발행 실패 - orderId: {}", order.getId(), e);
         }
@@ -138,15 +116,6 @@ public class OrderEventPublisher {
 
             /* kafka payment-cancel-requested 발행 */
             paymentRequestsProducer.publishPaymentCancelRequested(order, paymentId, reason);
-
-            redisEventPublisher.publishPaymentCancelRequestedEvent(
-                    eventId,
-                    order.getId(),
-                    order.getOrderNo(),
-                    paymentId,
-                    reason,
-                    order.getCustomerId()
-            );
 
         } catch (Exception e) {
             log.error("결제 취소 요청 이벤트 발행 실패 - orderId: {}", order.getId(), e);
@@ -261,15 +230,6 @@ public class OrderEventPublisher {
             /* kafka SCHEDULE_CONFIRMATION_REQUESTED 발행 */
             storeRequestsProducer.publishScheduleConfirmationRequested(order,confirmationItems);
 
-            // Redis Stream을 통해 Store 서비스로 스케줄 확정 요청 전송
-            redisEventPublisher.publishScheduleConfirmationRequestedEvent(
-                    eventId,
-                    orderId,
-                    orderNo,
-                    popupId,
-                    confirmationItems
-            );
-
             log.info("[ORDER] 스케줄 확정 요청 이벤트 발행 완료 - orderId: {}, eventId: {}",
                     orderId, eventId);
 
@@ -342,9 +302,6 @@ public class OrderEventPublisher {
             com.popcorn.order.event.stock.StockDeductionRequestedEvent event =
                     com.popcorn.order.event.stock.StockDeductionRequestedEvent.create(orderId, orderNo, popupId, deductionItems);
 
-            // Redis Stream 발행
-            redisEventPublisher.publishStockDeductionRequestedEvent(event);
-
             log.info("[ORDER] 재고 차감 요청 이벤트 발행 완료 - orderId: {}, eventId: {}",
                     orderId, event.getEventId());
 
@@ -373,9 +330,6 @@ public class OrderEventPublisher {
             com.popcorn.order.event.goods.GoodsReservationRequestedEvent event =
                     com.popcorn.order.event.goods.GoodsReservationRequestedEvent.create(orderId, orderNo, popupId, goodsId, quantity);
 
-            // Redis Stream 발행
-            redisEventPublisher.publishGoodsReservationRequestedEvent(event);
-
             log.info("[ORDER] 굿즈 예약 요청 이벤트 발행 완료 - orderId: {}, eventId: {}",
                     orderId, event.getEventId());
 
@@ -403,9 +357,6 @@ public class OrderEventPublisher {
             // ScheduleReservationRequestedEvent 생성 및 발행
             com.popcorn.order.event.schedule.ScheduleReservationRequestedEvent event =
                     com.popcorn.order.event.schedule.ScheduleReservationRequestedEvent.create(orderId, orderNo, popupId, reservedSessions);
-
-            // Redis Stream 발행
-            redisEventPublisher.publishScheduleReservationRequestedEvent(event);
 
             log.info("[ORDER] 스케줄 예약 요청 이벤트 발행 완료 - orderId: {}, eventId: {}",
                     orderId, event.getEventId());
