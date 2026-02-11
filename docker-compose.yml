@@ -212,7 +212,7 @@ services:
       - kafka-2
       - kafka-3
     ports:
-      - "8088:8083"
+      - "8089:8083"
     environment:
       BOOTSTRAP_SERVERS: kafka-1:9092,kafka-2:9092,kafka-3:9092
       GROUP_ID: popcorn-connect-group
@@ -294,6 +294,8 @@ services:
       REDIS_HOST: redis
       KAFKA_BOOTSTRAP_SERVERS: kafka-1:9092,kafka-2:9092,kafka-3:9092
       SPRING_PROFILES_ACTIVE: local
+    ports:
+      - "8083:8083"
     depends_on:
       db:
         condition: service_healthy
@@ -393,6 +395,46 @@ services:
         condition: service_healthy
       kafka-3:
         condition: service_healthy
+    restart: always
+
+  coupon:
+    build:
+      context: ./coupon
+    image: popcorn/coupon:local
+    container_name: popcorn-coupon
+    env_file:
+      - ./.env
+    environment:
+      DB_HOST: db
+      DB_PORT: 5432
+      REDIS_HOST: redis
+      SPRING_REDIS_HOST: redis
+      SPRING_DATA_REDIS_HOST: redis
+      KAFKA_BOOTSTRAP_SERVERS: kafka-1:9092,kafka-2:9092,kafka-3:9092
+      SPRING_PROFILES_ACTIVE: local
+      SPRING_KAFKA_BOOTSTRAP_SERVERS: kafka-1:9092,kafka-2:9092,kafka-3:9092
+      ORDER_SERVICE_BASE_URL: http://popcorn-gateway:8080
+      USER_SERVICE_BASE_URL: http://popcorn-gateway:8080
+      PAYMENT_SERVICE_BASE_URL: http://popcorn-gateway:8080
+      GATEWAY_URL: http://popcorn-gateway:8080
+      KAFKA_ENABLED: true
+    depends_on:
+      db:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+      kafka-1:
+        condition: service_healthy
+      kafka-2:
+        condition: service_healthy
+      kafka-3:
+        condition: service_healthy
+    healthcheck:
+      test: ["CMD-SHELL", "curl -f http://localhost:8088/actuator/health || exit 1"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 40s
     restart: always
 
 

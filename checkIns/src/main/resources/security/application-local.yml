@@ -40,7 +40,7 @@ spring:
       request-timeout-ms: 30000
       connection-timeout-ms: 10000
   datasource:
-    url: jdbc:postgresql://${DB_HOST:localhost}:${DB_PORT:5430}/${DB_NAME:popcorn_db}
+    url: jdbc:postgresql://${DB_HOST:localhost}:${DB_PORT:5432}/${DB_NAME:popcorn_db}
     username: ${QR_DB_USERNAME}
     password: ${QR_DB_PASSWORD}
     driver-class-name: org.postgresql.Driver

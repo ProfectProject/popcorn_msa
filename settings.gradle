@@ -26,10 +26,10 @@ include 'users'
 include 'order'
 include 'payment'
 include 'orderQuery'
+include 'coupon'
 
 // 각 모듈의 위치 지정
 project(':common-lib').projectDir = file('common-lib')
-//project(':backend').projectDir = file('backend')  // 일시적으로 제외
 project(':checkIns').projectDir = file('checkIns')
 project(':gateway').projectDir = file('gateway')
 project(':stores').projectDir = file('stores')
@@ -37,3 +37,4 @@ project(':users').projectDir = file('users')
 project(':order').projectDir = file('order')
 project(':payment').projectDir = file('payment')
 project(':orderQuery').projectDir = file('orderQuery')
+project(':coupon').projectDir = file('coupon')

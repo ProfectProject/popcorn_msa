@@ -5,15 +5,14 @@
 
     "database.hostname": "db",
     "database.port": "5432",
-    "database.user": "payment_app",
-    "database.password": "payment123",
+    "database.user": "debezium_master",
+    "database.password": "debezium123",
     "database.dbname": "popcorn_db",
 
     "plugin.name": "pgoutput",
 
     "slot.name": "payment_outbox_slot",
-    "publication.autocreate.mode": "disabled",
-    "publication.name": "payment_outbox_pub",
+    "publication.autocreate.mode": "filtered",
 
     "schema.include.list": "payment",
     "table.include.list": "payment.outbox_events",

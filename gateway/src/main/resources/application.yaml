@@ -63,6 +63,15 @@ spring:
                   factor: 2
                   basedOnPreviousValue: true
 
+        - id: coupon
+          uri: ${COUPON_SERVICE_URL}     # Coupon 서비스
+          predicates:
+            - Path=/api/v1/coupons/**       # coupons
+          filters:
+            - RewritePath=^/api/v1/coupons/(?<remaining>v3/api-docs.*), /${remaining}
+            - RewritePath=^/api/v1/coupons/(?<remaining>swagger-ui.*), /${remaining}
+            - RewritePath=^/api/v1/coupons/(?<remaining>webjars.*), /${remaining}
+
         - id: backend
           uri: ${BACKEND_SERVICE_URL}     # 모놀리식 backend
           predicates:
@@ -250,6 +259,8 @@ springdoc:
         url: ${GATEWAY_SERVICE_URL}/api/orders/v3/api-docs
       - name: payment-service
         url: ${GATEWAY_SERVICE_URL}/api/payments/v3/api-docs
+      - name: coupon-service
+        url: ${GATEWAY_SERVICE_URL}/api/v1/coupons/v3/api-docs
       - name: orderQuery
         url: ${GATEWAY_SERVICE_URL}/api/orderquery/v3/api-docs
 

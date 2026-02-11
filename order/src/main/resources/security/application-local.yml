@@ -44,7 +44,7 @@ spring:
 
   # Flyway 설정
   flyway:
-    url: jdbc:postgresql://${DB_HOST:localhost}:${DB_PORT:5430}/${DB_NAME:popcorn_db}
+    url: jdbc:postgresql://${DB_HOST:localhost}:${DB_PORT:5432}/${DB_NAME:popcorn_db}
     user: ${ORDER_FLYWAY_USERNAME:order_migrator}
     password: ${ORDER_MIGRATOR_PASSWORD:order321}
     enabled: true

@@ -59,6 +59,8 @@ public class JwtFilter implements GlobalFilter, Ordered{
             "/api/orders/swagger-ui",
             "/api/pay/v3",
             "/api/pay/swagger-ui",
+            "/api/coupons/v3",
+            "/api/coupons/swagger-ui",
             "/api/qr/v3",
             "/api/qr/swagger-ui",
             "/api/orderquery/v3",
