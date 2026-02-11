@@ -104,6 +104,89 @@ public class PopupSummaryUpsertService {
         recordPopupEvent(eventId, eventType, popupId);
     }
 
+    public void updateStatusFromPopup(UUID eventId,
+                                      EventType eventType,
+                                      UUID popupId,
+                                      UUID storeId,
+                                      Long ownerId,
+                                      String status) {
+        if (isAlreadyApplied(eventId, eventType)) {
+            log.debug("Popup status event already applied: eventId={}, eventType={}", eventId, eventType);
+            return;
+        }
+        OrderSummary summary = orderSummaryRepository.findByStoreIdAndPopupId(storeId, popupId)
+                .orElse(null);
+        if (summary == null) {
+            log.warn("Popup summary status update ignored: summary not found. storeId={}, popupId={}", storeId, popupId);
+            return;
+        }
+
+        if (status != null) {
+            summary.setPopupStatus(status);
+        }
+        if (ownerId != null) {
+            summary.setOwnerId(ownerId);
+        }
+        summary.setUpdatedBy(ownerId != null ? ownerId : summary.getUpdatedBy());
+        orderSummaryRepository.save(summary);
+        recordPopupEvent(eventId, eventType, popupId);
+    }
+
+    public void updateInfoFromPopup(UUID eventId,
+                                    EventType eventType,
+                                    UUID popupId,
+                                    UUID storeId,
+                                    Long ownerId,
+                                    String title,
+                                    String status,
+                                    String addressRoad,
+                                    String addressDetail,
+                                    LocalDateTime reservationOpenAt) {
+        if (isAlreadyApplied(eventId, eventType)) {
+            log.debug("Popup info event already applied: eventId={}, eventType={}", eventId, eventType);
+            return;
+        }
+        OrderSummary summary = orderSummaryRepository.findByStoreIdAndPopupId(storeId, popupId)
+                .orElse(null);
+        if (summary == null) {
+            log.warn("Popup summary info update ignored: summary not found. storeId={}, popupId={}", storeId, popupId);
+            return;
+        }
+
+        boolean changed = false;
+        if (title != null) {
+            summary.setPopupTitle(title);
+            changed = true;
+        }
+        if (status != null) {
+            summary.setPopupStatus(status);
+            changed = true;
+        }
+        if (addressRoad != null) {
+            summary.setAddressRoad(addressRoad);
+            changed = true;
+        }
+        if (addressDetail != null) {
+            summary.setAddressDetail(addressDetail);
+            changed = true;
+        }
+        if (reservationOpenAt != null) {
+            summary.setReservationOpenAt(reservationOpenAt);
+            changed = true;
+        }
+        if (ownerId != null) {
+            summary.setOwnerId(ownerId);
+            changed = true;
+        }
+        if (ownerId != null) {
+            summary.setUpdatedBy(ownerId);
+        }
+        if (changed) {
+            orderSummaryRepository.save(summary);
+        }
+        recordPopupEvent(eventId, eventType, popupId);
+    }
+
     public void deleteSummary(UUID storeId, UUID popupId) {
         orderSummaryRepository.findByStoreIdAndPopupId(storeId, popupId)
                 .ifPresent(orderSummaryRepository::delete);

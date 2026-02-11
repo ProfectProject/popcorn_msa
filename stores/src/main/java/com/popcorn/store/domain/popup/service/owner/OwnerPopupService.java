@@ -4,6 +4,7 @@ import java.time.LocalDateTime;
 import java.util.List;
 import java.util.UUID;
 
+import com.popcorn.store.domain.outbox.OutboxHeaders;
 import com.popcorn.store.domain.popup.entity.OutboxEvent;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
@@ -31,11 +32,11 @@ import com.popcorn.store.domain.popup.repository.owner.outbox.OutboxEventReposit
 import com.popcorn.store.domain.popup.repository.owner.view.OwnerPopupScheduleView;
 import com.popcorn.store.domain.store.exception.StoreException;
 import com.popcorn.store.event.standard.StandardPopupCreatedEvent;
+import com.popcorn.store.event.standard.StandardPopupInfoUpdatedEvent;
 import com.popcorn.store.event.standard.StandardPopupStatusUpdatedEvent;
 import com.popcorn.store.event.standard.StandardEventType;
 import com.popcorn.store.constants.EventConstants;
 
-import java.util.HashMap;
 import java.util.Map;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
@@ -177,11 +178,12 @@ public class OwnerPopupService {
 
         Popup updatedPopup = ownerPopupRepository.save(popup);
         applyScheduleChanges(updatedPopup.getId(), request, ownerId);
+        queuePopupInfoUpdatedOutboxEntry(updatedPopup, ownerId);
 
         // 팝업/스케줄 변경 결과가 상세 응답에 반영되도록 캐시 삭제
         popupDetailCacheManager.evictDetail(updatedPopup.getId());
 
-        log.info("[POPUP_UPDATED] popupId={}, storeId={}", updatedPopup.getId(), updatedPopup.getStoreId());
+        log.info("[POPUP_INFO_UPDATED] popupId={}, storeId={}", updatedPopup.getId(), updatedPopup.getStoreId());
         return mapToUpdatedDto(updatedPopup);
     }
 
@@ -511,7 +513,7 @@ public class OwnerPopupService {
     private void persistPopupCreatedOutboxEntry(Popup popup, StandardPopupCreatedEvent event) {
         try {
             Map<String, Object> payload = event.toOutboxMap();
-            Map<String, Object> headers = Map.of("producer", event.getProducer());
+            Map<String, Object> headers = OutboxHeaders.of(event.getProducer());
             OutboxEvent outbox = OutboxEvent.of(
                     event.getTopic(),
                     EventConstants.AggregateTypes.POPUP,
@@ -537,6 +539,7 @@ public class OwnerPopupService {
                     .ownerId(ownerId)
                     .fromStatus(fromStatus.name())
                     .toStatus(toStatus.name())
+                    .updatedAt(popup.getUpdatedAt())
                     .build();
 
             event.setDefaults();
@@ -553,7 +556,7 @@ public class OwnerPopupService {
     private void persistPopupStatusUpdatedOutboxEntry(Popup popup, StandardPopupStatusUpdatedEvent event) {
         try {
             Map<String, Object> payload = event.toOutboxMap();
-            Map<String, Object> headers = Map.of("producer", event.getProducer());
+            Map<String, Object> headers = OutboxHeaders.of(event.getProducer());
             OutboxEvent outbox = OutboxEvent.of(
                     event.getTopic(),
                     EventConstants.AggregateTypes.POPUP,
@@ -565,6 +568,51 @@ public class OwnerPopupService {
             outboxEventRepository.save(outbox);
         } catch (Exception e) {
             log.error("❌ [OUTBOX] 팝업 상태 변경 표준 이벤트 저장 실패 - popupId: {}, error: {}",
+                    popup.getId(), e.getMessage(), e);
+        }
+    }
+
+    private void queuePopupInfoUpdatedOutboxEntry(Popup popup, Long ownerId) {
+        try {
+            StandardPopupInfoUpdatedEvent event = StandardPopupInfoUpdatedEvent.builder()
+                    .eventType(StandardEventType.POPUP_INFO_UPDATED)
+                    .producer("store-service")
+                    .storeId(popup.getStoreId())
+                    .popupId(popup.getId())
+                    .ownerId(ownerId)
+                    .title(popup.getTitle())
+                    .reservationOpenAt(popup.getReservationOpenAt())
+                    .addressRoad(popup.getAddressRoad())
+                    .addressDetail(popup.getAddressDetail())
+                    .updatedAt(popup.getUpdatedAt())
+                    .build();
+
+            event.setDefaults();
+            persistPopupInfoUpdatedOutboxEntry(popup, event);
+
+            log.info("📦 [OUTBOX] 팝업 정보 변경 표준 이벤트 저장 완료 - popupId: {}, title={}",
+                    popup.getId(), popup.getTitle());
+        } catch (Exception e) {
+            log.error("❌ [OUTBOX] 팝업 정보 변경 표준 이벤트 저장 실패 - popupId: {}, error: {}",
+                    popup.getId(), e.getMessage(), e);
+        }
+    }
+
+    private void persistPopupInfoUpdatedOutboxEntry(Popup popup, StandardPopupInfoUpdatedEvent event) {
+        try {
+            Map<String, Object> payload = event.toOutboxMap();
+            Map<String, Object> headers = OutboxHeaders.of(event.getProducer());
+            OutboxEvent outbox = OutboxEvent.of(
+                    event.getTopic(),
+                    EventConstants.AggregateTypes.POPUP,
+                    popup.getId().toString(),
+                    event.getEventType(),
+                    payload,
+                    headers
+            );
+            outboxEventRepository.save(outbox);
+        } catch (Exception e) {
+            log.error("❌ [OUTBOX] 팝업 정보 변경 표준 이벤트 저장 실패 - popupId: {}, error: {}",
                     popup.getId(), e.getMessage(), e);
         }
     }

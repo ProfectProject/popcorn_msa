@@ -5,6 +5,6 @@ import org.springframework.kafka.annotation.EnableKafka;
 
 @Configuration
 @EnableKafka
-public class KafkaConfig {
+public class OrderQueryKafkaConfig {
     // Kafka listener infrastructure is configured via Spring Boot auto-configuration.
 }
