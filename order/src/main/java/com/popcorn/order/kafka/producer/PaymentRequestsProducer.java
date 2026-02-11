@@ -10,13 +10,16 @@ import java.util.UUID;
 
 import org.springframework.kafka.core.KafkaTemplate;
 import org.springframework.stereotype.Component;
-
+import com.popcorn.order.entity.OutboxEvent;
+import com.popcorn.order.repository.OutboxEventRepository;
 import lombok.RequiredArgsConstructor;
 
 @Component
 @RequiredArgsConstructor
 public class PaymentRequestsProducer {
         private static final String PAYMENT_REQUESTS_TOPIC = "payment-requests";
+        private static final String AGGREGATE_TYPE_ORDER = "ORDER";
+        private final OutboxEventRepository outboxEventRepository;
         private final KafkaTemplate<String, Object> kafkaTemplate;
         private final ObjectMapper objectMapper;
 
@@ -26,6 +29,7 @@ public class PaymentRequestsProducer {
         payload.put("eventType", "PAYMENT_CREATE_REQUESTED");
         payload.put("occurredAt", Instant.now().toString());
         payload.put("producer", "order-service");
+        // + paymentId :: 
         payload.put("orderId", order.getId().toString()); 
         payload.put("orderNo", order.getOrderNo());
         payload.put("amount", order.getTotalAmount());
@@ -36,8 +40,10 @@ public class PaymentRequestsProducer {
         payload.put("paymentMethod", paymentMethod);
         payload.put("paymentKey", paymentKey);
 
-        kafkaTemplate.send(PAYMENT_REQUESTS_TOPIC, order.getId().toString(), toJson(payload));
+        //kafkaTemplate.send(PAYMENT_REQUESTS_TOPIC, order.getId().toString(), payload);
+        saveToOutbox(order, "PAYMENT_CREATE_REQUESTED", payload);
     }
+    
     public void publishPaymentCancelRequested(Order order, String paymentId, String reason) {
         Map<String, Object> payload = new HashMap<>();
         payload.put("eventId", UUID.randomUUID().toString());
@@ -51,14 +57,20 @@ public class PaymentRequestsProducer {
         payload.put("cancelReason", reason);
         payload.put("requestedAt", Instant.now().toString()); // occurredAt과 같은가?
 
-        kafkaTemplate.send(PAYMENT_REQUESTS_TOPIC, order.getId().toString(), toJson(payload));
+        //kafkaTemplate.send(PAYMENT_REQUESTS_TOPIC, order.getId().toString(), payload);
+        saveToOutbox(order, "PAYMENT_CANCEL_REQUESTED", payload);
     }
 
-    private String toJson(Object payload) {
-        try {
-            return objectMapper.writeValueAsString(payload);
-        } catch (JsonProcessingException e) {
-            throw new RuntimeException("Kafka payload 직렬화 실패", e);
-        }
+    private void saveToOutbox(Order order, String eventType, Map<String, Object> payload) {
+        OutboxEvent outboxEvent = OutboxEvent.of(
+                PAYMENT_REQUESTS_TOPIC,
+                AGGREGATE_TYPE_ORDER,
+                order.getId().toString(),
+                eventType,
+                payload,
+                Map.of("producer", "order-service")
+        );
+        outboxEventRepository.save(outboxEvent);
     }
 }
+

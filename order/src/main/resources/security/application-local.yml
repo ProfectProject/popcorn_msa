@@ -81,7 +81,7 @@ passport:
   secret: ${PASSPORT_SECRET:passport-shared-secret}
   ttl-seconds: 60
 
-# 비동기 주문 처리 비활성화
+# 비동기 주문 처리 비활성화 (Redis Stream 사용)
 async:
   order:
     enabled: false      # 비동기 주문 처리 비활성화
