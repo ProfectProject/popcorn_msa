@@ -16,7 +16,6 @@ import com.popcorn.order.kafka.event.order_events.OrderPAIDEvent;
 import com.popcorn.order.kafka.event.order_events.OrderStatusUpdatedEvent;
 
 import lombok.RequiredArgsConstructor;
-import org.springframework.kafka.core.KafkaTemplate;
 import org.springframework.stereotype.Component;
 
 import java.time.Instant;
@@ -32,8 +31,6 @@ import javax.sound.sampled.Line;
 @Component
 @RequiredArgsConstructor
 public class OrderEventProducer {
-
-    private final KafkaTemplate<String, Object> kafkaTemplate;
 
     private static final String ORDER_EVENTS_TOPIC = "order-events";
     private static final String AGGREGATE_TYPE_ORDER = "ORDER";
@@ -73,9 +70,6 @@ public class OrderEventProducer {
                 .totalAmount(order.getTotalAmount())
                 .build();
 
-        // key 전략: orderId (같은 주문 이벤트는 같은 파티션으로)
-        //kafkaTemplate.send("order-events", order.getId().toString(), event);
-
         saveToOutbox(order.getId(), event.getEventType(), event, eventId, correlationId);
     }
 
@@ -104,8 +98,6 @@ public class OrderEventProducer {
                 .paidAt(order.getPaidAt())
                 .build();
 
-        // key 전략: orderId (같은 주문 이벤트는 같은 파티션으로)
-        //kafkaTemplate.send("order-events", order.getId().toString(), event);
         saveToOutbox(order.getId(), event.getEventType(), event, eventId, correlationId);
     }
 
@@ -137,8 +129,6 @@ public class OrderEventProducer {
                 .updatedAt(order.getUpdatedAt().atZone(ZoneOffset.UTC).toString())
                 .build();
 
-        // key 전략: orderId (같은 주문 이벤트는 같은 파티션으로)
-        //kafkaTemplate.send("order-events", order.getId().toString(), event);
         saveToOutbox(order.getId(), event.getEventType(), event, eventId, correlationId);
     }
 
@@ -166,8 +156,6 @@ public class OrderEventProducer {
                 //.completedAt(order.getConfirmedAt())
                 .build();
 
-        // key 전략: orderId (같은 주문 이벤트는 같은 파티션으로)
-        //kafkaTemplate.send("order-events", order.getId().toString(), event);
         saveToOutbox(order.getId(), event.getEventType(), event, eventId, correlationId);
     }
 
@@ -198,8 +186,7 @@ public class OrderEventProducer {
                 .cancelledAt(cancleAt)
                 .build();
 
-        // key 전략: orderId (같은 주문 이벤트는 같은 파티션으로)
-        kafkaTemplate.send("order-events", order.getId().toString(), event);
+        saveToOutbox(order.getId(), event.getEventType(), event, eventId, correlationId);
     }
 
     private void saveToOutbox(UUID orderId, String eventType, Object event, UUID eventId, UUID correlationId) {
