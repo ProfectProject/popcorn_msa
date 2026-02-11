@@ -122,3 +122,9 @@ popcorn:
       replicas: ${KAFKA_TOPIC_REPLICAS}
     partitions:
       storeEvents: ${STORE_EVENTS_PARTITIONS}
+
+management:
+  endpoints:
+    web:
+      exposure:
+        include: health,info,mappings

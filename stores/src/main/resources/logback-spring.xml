@@ -1,0 +1,39 @@
+<configuration>
+
+    <!-- 서비스 이름: store-service로 고정 -->
+    <property name="SERVICE_NAME" value="store-service"/>
+
+    <appender name="JSON_CONSOLE" class="ch.qos.logback.core.ConsoleAppender">
+        <encoder class="net.logstash.logback.encoder.LoggingEventCompositeJsonEncoder">
+            <providers>
+
+                <timestamp>
+                    <timeZone>UTC</timeZone>
+                </timestamp>
+
+                <pattern>
+                    <pattern>
+                        {
+                        "level": "%level",
+                        "service": "${SERVICE_NAME}",
+                        "traceId": "%X{traceId:-}",
+                        "httpMethod": "%X{httpMethod:-}",
+                        "path": "%X{path:-}",
+                        "httpStatus": "%X{httpStatus:-}",
+                        "elapsedMs": "%X{elapsedMs:-}",
+                        "thread": "%thread",
+                        "logger": "%logger{40}",
+                        "message": "%message"
+                        }
+                    </pattern>
+                </pattern>
+
+            </providers>
+        </encoder>
+    </appender>
+
+    <root level="INFO">
+        <appender-ref ref="JSON_CONSOLE"/>
+    </root>
+
+</configuration>

@@ -51,7 +51,7 @@ public class StoreOutboxEventPublisher {
                 .topic(topic)
                 .schemaVersion(4)
                 .eventData(eventData)
-                .headers(null)
+                .headers(OutboxHeaders.of("store-service"))
                 .occurredAt(LocalDateTime.now())
                 .createdAt(LocalDateTime.now())
                 .build();
