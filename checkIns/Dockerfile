@@ -3,6 +3,6 @@ WORKDIR /app
 
 COPY build/libs/*.jar app.jar
 
-EXPOSE 8082
+EXPOSE 8086
 ENV TZ=Asia/Seoul
 ENTRYPOINT ["java", "-jar", "app.jar"]

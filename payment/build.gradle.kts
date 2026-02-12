@@ -93,12 +93,22 @@ dependencies {
     implementation("org.springframework.boot:spring-boot-starter-data-redis")
     implementation("org.springframework.boot:spring-boot-starter-cache")
 
+    // === Kafka ===
+    implementation("org.springframework.kafka:spring-kafka")
+    testImplementation("org.springframework.kafka:spring-kafka-test")
+
     // === Environment Variables ===
     implementation("io.github.cdimascio:dotenv-java:3.0.0")
 
     // === API 문서화 ===
     implementation("org.springdoc:springdoc-openapi-starter-webmvc-ui:${property("springdocVersion")}")
     implementation("org.springdoc:springdoc-openapi-starter-webmvc-api:${property("springdocVersion")}")
+
+    // === 모니터링 및 메트릭 ===
+    implementation("org.springframework.boot:spring-boot-starter-actuator")
+    implementation("io.micrometer:micrometer-registry-prometheus")
+    implementation("io.micrometer:micrometer-tracing-bridge-brave")
+    implementation("io.zipkin.reporter2:zipkin-reporter-brave")
 
     // === 보안 취약점 해결 ===
     implementation("org.apache.commons:commons-compress:1.27.1") // CVE-2024-25710, CVE-2024-26308 수정

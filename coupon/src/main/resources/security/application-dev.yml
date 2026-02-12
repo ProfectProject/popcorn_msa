@@ -1,0 +1,132 @@
+# =================================================================
+# 🎫 Coupon Service Development Security Configuration
+# =================================================================
+
+server:
+  port: 8088
+  shutdown: immediate
+
+spring:
+  config:
+    activate:
+      on-profile: dev
+
+  # 데이터베이스 설정 (개발 환경용)
+  datasource:
+    url: jdbc:postgresql://${DB_HOST:localhost}:${DB_PORT:5432}/${DB_NAME:popcorn_db}?currentSchema=coupons
+    username: ${COUPON_DB_USERNAME:coupon_app}
+    password: ${COUPON_DB_PASSWORD:coupon123}
+    driver-class-name: org.postgresql.Driver
+    hikari:
+      maximum-pool-size: 20
+      minimum-idle: 5
+      connection-timeout: 5000
+      idle-timeout: 300000
+      max-lifetime: 1800000
+      leak-detection-threshold: 30000
+
+  # JPA 설정
+  jpa:
+    open-in-view: false
+    hibernate:
+      ddl-auto: validate
+    show-sql: true
+    properties:
+      hibernate:
+        dialect: org.hibernate.dialect.PostgreSQLDialect
+        format_sql: true
+        default_schema: coupons
+        jdbc:
+          batch_size: 20
+        order_inserts: true
+        order_updates: true
+        default_batch_fetch_size: 100
+        type:
+          preferred_enum_jdbc_type: NAMED_ENUM
+
+  # Flyway 설정
+  flyway:
+    url: jdbc:postgresql://${DB_HOST:localhost}:${DB_PORT:5432}/${DB_NAME:popcorn_db}
+    user: ${COUPON_FLYWAY_USERNAME:coupon_migrator}
+    password: ${COUPON_FLYWAY_PASSWORD:coupon_password}
+    enabled: true
+    baseline-on-migrate: true
+    validate-on-migrate: true
+    out-of-order: true
+    locations: classpath:db/migration
+    default-schema: coupons
+    schemas: coupons
+
+  # Redis 설정
+  data:
+    redis:
+      host: ${REDIS_HOST:localhost}
+      port: ${REDIS_PORT:6379}
+      password: ${REDIS_PASSWORD:}
+      timeout: 10000ms
+      command-timeout: 10000ms
+      lettuce:
+        pool:
+          max-active: 30
+          max-idle: 15
+          min-idle: 5
+          max-wait: 3000ms
+          time-between-eviction-runs: 60s
+        shutdown-timeout: 2000ms
+
+  # Kafka 설정
+  kafka:
+    bootstrap-servers: ${KAFKA_BOOTSTRAP_SERVERS:kafka-1:9092,kafka-2:9092,kafka-3:9092}
+    producer:
+      retries: 5
+      properties:
+        retry.backoff.ms: 1000
+    consumer:
+      group-id: coupon-service-group
+      properties:
+        session.timeout.ms: 30000
+        heartbeat.interval.ms: 3000
+
+# 인증 설정
+passport:
+  secret: ${PASSPORT_SECRET:passport-shared-secret}
+  ttl-seconds: 60
+
+jwt:
+  secret: ${JWT_SECRET:dGVzdC1qd3Qtc2VjcmV0LWtleS1mb3ItbG9jYWwtZGV2ZWxvcG1lbnQtb25seS1kb25vdC11c2UtaW4tcHJvZHVjdGlvbg==}
+  expiration: 3600000
+  refresh-expiration-ms: 1209600000
+
+springdoc:
+  api-docs:
+    enabled: true
+    path: /v3/api-docs
+  swagger-ui:
+    enabled: true
+    path: /swagger-ui.html
+
+# 커스텀 쿠폰 설정
+coupon:
+  cache:
+    ttl:
+      user-limit: 43200    # 12시간
+      stock: 1800          # 30분
+      processed-event: 259200  # 3일
+  redis:
+    key-prefix: "coupon:"
+    lock-timeout: 3000
+  batch:
+    expire-batch-size: 1000
+    expire-schedule: "0 */5 * * * *"
+  security:
+    jwt:
+      secret: ${JWT_SECRET:dGVzdC1qd3Qtc2VjcmV0LWtleS1mb3ItbG9jYWwtZGV2ZWxvcG1lbnQtb25seS1kb25vdC11c2UtaW4tcHJvZHVjdGlvbg==}
+      expiration: 3600000  # 1시간
+
+logging:
+  level:
+    com.popcorn.coupon: INFO
+    org.springframework.web: WARN
+    org.hibernate.SQL: WARN
+    org.springframework.security: WARN
+    org.springframework.kafka: WARN

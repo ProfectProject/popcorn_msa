@@ -35,6 +35,15 @@ import com.popcorn.order.entity.ItemType;
 public interface OrderRepository extends JpaRepository<Order, UUID> {
 
     /**
+     * OrderItem들과 함께 주문 조회 (Payment 서비스용)
+     *
+     * @param orderId 주문 ID
+     * @return 주문 정보와 OrderItem 목록
+     */
+    @Query("SELECT o FROM Order o LEFT JOIN FETCH o.orderItems WHERE o.id = :orderId")
+    Optional<Order> findByIdWithItems(@Param("orderId") UUID orderId);
+
+    /**
      * 주문 번호로 주문 조회
      *
      * @param orderNo 주문 번호

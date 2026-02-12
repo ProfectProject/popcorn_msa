@@ -11,9 +11,10 @@ import java.sql.SQLException
 import javax.sql.DataSource
 
 /**
- * Stores DB 직접 조회 Repository
- * 성능 최적화를 위한 DB 직접 접근
+ * ❌ DEPRECATED: Stores DB 직접 조회 Repository
+ * MSA 원칙에 따라 OrderServiceClient HTTP API 사용으로 대체됨
  */
+@Deprecated("외부 DB 직접 연결 제거됨. OrderServiceClient 사용으로 대체.")
 @Repository
 @ConditionalOnBean(name = ["storesJdbcTemplate"])
 class ExternalStoreRepository(
@@ -76,14 +77,31 @@ class ExternalStoreRepository(
      */
     fun findGoodsPrice(goodsId: UUID): Int? {
         return try {
-            // 간단한 접근: goodsId 기반 일관된 가격 생성
+            // 1) 스토어 DB에서 실제 가격 조회 (우선)
+            val sql = """
+                SELECT gv.goods_price
+                FROM store.goods_variants gv
+                WHERE gv.goods_id = ?
+                  AND gv.deleted_at IS NULL
+                  AND gv.is_active = true
+            """.trimIndent()
+
+            val dbPrice = storesJdbcTemplate.queryForObject(sql, Int::class.java, goodsId)
+            if (dbPrice != null) {
+                log.info("✅ [DB] 굿즈 가격 반환 - goodsId: {}, price: {}", goodsId, dbPrice)
+                return dbPrice
+            }
+
+            // 2) 폴백: goodsId 기반 일관된 가격 생성 (개발/테스트)
             val price = getDefaultGoodsPrice(goodsId)
-            log.info("✅ [SIMPLE] 굿즈 가격 반환 - goodsId: {}, price: {}", goodsId, price)
+            log.warn("⚠️ [FALLBACK] 굿즈 가격 폴백 - goodsId: {}, price: {}", goodsId, price)
             return price
 
         } catch (e: Exception) {
-            log.error("❌ [SIMPLE] 굿즈 가격 생성 실패 - goodsId: {}, error: {}", goodsId, e.message)
-            return 10000 // 최소 기본 가격
+            log.warn("⚠️ [DB] 굿즈 가격 조회 실패, 폴백 사용 - goodsId: {}, error: {}", goodsId, e.message)
+            val price = getDefaultGoodsPrice(goodsId)
+            log.warn("⚠️ [FALLBACK] 굿즈 가격 폴백 - goodsId: {}, price: {}", goodsId, price)
+            return price
         }
     }
 
@@ -103,19 +121,17 @@ class ExternalStoreRepository(
      */
     fun findGoodsVariantPrice(goodsId: UUID, variantId: UUID?): Int? {
         return try {
-            if (variantId == null) {
-                return findGoodsPrice(goodsId)
-            }
-
+            // 현재 스키마 기준: goods_variants PK가 goods_id
+            val targetId = variantId ?: goodsId
             val sql = """
-                SELECT
-                    COALESCE(gv.price, g.price) as final_price
-                FROM goods g
-                LEFT JOIN goods_variants gv ON gv.goods_id = g.id AND gv.id = ?
-                WHERE g.id = ? AND g.deleted_at IS NULL
+                SELECT gv.goods_price
+                FROM store.goods_variants gv
+                WHERE gv.goods_id = ?
+                  AND gv.deleted_at IS NULL
+                  AND gv.is_active = true
             """.trimIndent()
 
-            storesJdbcTemplate.queryForObject(sql, Int::class.java, variantId, goodsId)
+            storesJdbcTemplate.queryForObject(sql, Int::class.java, targetId)
 
         } catch (e: Exception) {
             null

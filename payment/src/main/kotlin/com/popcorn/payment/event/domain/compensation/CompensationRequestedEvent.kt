@@ -26,7 +26,7 @@ data class CompensationRequestedEvent(
     private val eventMetadata: Map<String, Any>? = null
 ) : BasePaymentEvent(
     paymentId = compensationId,
-    eventType = EventConstants.EventTypes.COMPENSATION_REQUESTED,
+    eventType = EventConstants.EventTypes.Compensation.COMPENSATION_REQUESTED,
     userId = eventUserId
 ) {
 
@@ -43,7 +43,7 @@ data class CompensationRequestedEvent(
             "amount" to amount,
             "compensationActions" to compensationActions,
             "priority" to priority,
-            "targetService" to "order-service"
+            EventConstants.MetadataKeys.TARGET_SERVICE to "order-service"
         )
         eventMetadata?.let { payload.putAll(it) }
         return payload

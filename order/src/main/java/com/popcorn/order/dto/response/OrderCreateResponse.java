@@ -147,13 +147,14 @@ public class OrderCreateResponse {
     }
 
     public static OrderCreateResponse fromOrderWithPayment(Order order,
+                                                           List<OrderItem> orderItems,
                                                            UUID paymentId,
                                                            String paymentStatus,
                                                            String paymentMethod,
                                                            String paymentUrl,
                                                            LocalDateTime expiresAt,
                                                            String message) {
-        List<OrderItemResponse> itemResponses = order.getOrderItems().stream()
+        List<OrderItemResponse> itemResponses = orderItems.stream()
                 .map(OrderCreateResponse::fromOrderItem)
                 .toList();
 

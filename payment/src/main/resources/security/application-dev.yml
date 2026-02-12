@@ -1,51 +1,63 @@
 server:
-  port: 8080
+  port: ${SERVER_PORT:8085}
   shutdown: immediate
+  tomcat:
+    uri-encoding: UTF-8
+
+# 프론트엔드 기본 URL 설정
+frontend:
+  base-url: ${FRONTEND_BASE_URL:http://localhost:3000}
 
 spring:
   config:
     activate:
       on-profile: dev
 
+  kafka:
+    bootstrap-servers: ${KAFKA_BOOTSTRAP_SERVERS:kafka-1:9092,kafka-2:9092,kafka-3:9092}
+
   # 데이터베이스 설정 (개발 환경)
   datasource:
-    url: jdbc:postgresql://${DB_HOST:localhost}:${DB_PORT:5430}/${DB_NAME:popcorn_db}
-    driver-class-name: org.postgresql.Driver
+    url: jdbc:postgresql://${DB_HOST:localhost}:${DB_PORT:5432}/${DB_NAME:popcorn_db}
     username: ${PAYMENT_DB_USERNAME:payment_app}
     password: ${PAYMENT_DB_PASSWORD:payment123}
+    driver-class-name: org.postgresql.Driver
     hikari:
       maximum-pool-size: 3
       minimum-idle: 1
-      idle-timeout: 300000
       connection-timeout: 10000
+      validation-timeout: 3000
+      idle-timeout: 300000
       max-lifetime: 600000
 
   # JPA 설정 (개발 환경)
   jpa:
+    open-in-view: false
+    database-platform: org.hibernate.dialect.PostgreSQLDialect
+    show-sql: true
+    generate-ddl: false
     hibernate:
       ddl-auto: validate
+      naming:
+        physical-strategy: org.hibernate.boot.model.naming.PhysicalNamingStrategyStandardImpl
+        implicit-strategy: org.hibernate.boot.model.naming.ImplicitNamingStrategyLegacyJpaImpl
     properties:
       hibernate:
+        type:
+          preferred_enum_jdbc_type: NAMED_ENUM
         format_sql: true
         show_sql: true
-        dialect: org.hibernate.dialect.PostgreSQLDialect
         default_schema: payment
-    show-sql: true
+        jdbc:
+          batch_size: 20
+        order_inserts: true
+        order_updates: true
 
-  # Flyway 설정 (개발 환경)
-  flyway:
-    enabled: true
-    locations: classpath:db/migration
-    baseline-on-migrate: true
-    validate-on-migrate: false
-    out-of-order: true
-    url: jdbc:postgresql://${DB_HOST:localhost}:${DB_PORT:5430}/${DB_NAME:popcorn_db}
-    user: ${PAYMENT_DB_MIGRATION_USERNAME:${PAYMENT_FLYWAY_USERNAME:${PAYMENT_DB_USERNAME:payment_app}}}
-    password: ${PAYMENT_DB_MIGRATION_PASSWORD:${PAYMENT_FLYWAY_PASSWORD:${PAYMENT_DB_PASSWORD:payment123}}}
-    schemas: payment
-    default-schema: payment
-    placeholders:
-      PAYMENT_MIGRATOR_PASSWORD: ${PAYMENT_MIGRATOR_PASSWORD:payment321}
+  cache:
+    type: simple
+    cache-names: hybridPrices,sessionPrices,goodsPrices
+    caffeine:
+      spec: maximumSize=1000,expireAfterWrite=5m
 
   # Redis 설정 (개발 환경)
   data:
@@ -53,13 +65,66 @@ spring:
       host: ${REDIS_HOST:localhost}
       port: ${REDIS_PORT:6379}
       password: ${REDIS_PASSWORD:}
-      database: 2  # Payment 서비스 전용 DB
       timeout: 3000ms
+      database: 0  # Order, Stores 서비스와 동일한 database 0 사용
       lettuce:
         pool:
           max-active: 15
           max-idle: 8
           min-idle: 2
+
+  # Flyway 설정 (개발 환경)
+  flyway:
+    enabled: true
+    user: ${PAYMENT_DB_MIGRATION_USERNAME:${PAYMENT_FLYWAY_USERNAME:${PAYMENT_DB_USERNAME}}}
+    password: ${PAYMENT_DB_MIGRATION_PASSWORD:${PAYMENT_FLYWAY_PASSWORD:${PAYMENT_DB_PASSWORD}}}
+    default-schema: payment
+    schemas: payment
+    locations: classpath:db/migration
+    baseline-on-migrate: true
+    validate-on-migrate: false
+    out-of-order: true
+
+# 인증 설정 - 게이트웨이와 동일한 키 사용
+passport:
+  secret: ${PASSPORT_SECRET:my-super-secret-key-for-popcorn-msa-development-only-do-not-use-in-production}
+  ttl-seconds: 60
+
+# Redis 이벤트 설정
+redis:
+  events:
+    enabled: true
+
+jwt:
+  secret: ${JWT_SECRET:dGVzdC1qd3Qtc2VjcmV0LWtleS1mb3ItbG9jYWwtZGV2ZWxvcG1lbnQtb25seS1kb25vdC11c2UtaW4tcHJvZHVjdGlvbg==}
+  expiration: 3600000
+  refresh-expiration-ms: 1209600000
+
+# Kafka 설정 (개발 환경)
+kafka:
+  enabled: true
+  bootstrap-servers: ${KAFKA_BOOTSTRAP_SERVERS:kafka-1:9092,kafka-2:9092,kafka-3:9092}
+  consumer:
+    group-id: payment-service-group
+    concurrency: 6
+    max-poll-records: 500
+    session-timeout-ms: 30000
+    auto-offset-reset: earliest
+    enable-auto-commit: false
+  producer:
+    acks: all
+    retries: 2147483647
+    compression-type: snappy
+    enable-idempotence: true
+
+springdoc:
+  api-docs:
+    enabled: true
+    path: /v3/api-docs
+  swagger-ui:
+    enabled: true
+    path: /swagger-ui.html
+  server-url: ${GATEWAY_SERVICE_URL:https://dev.goormpopcorn.shop}
 
 # 로깅 설정 (개발 환경용)
 logging:
@@ -69,25 +134,17 @@ logging:
     org.hibernate.SQL: DEBUG
     org.hibernate.type.descriptor.sql.BasicBinder: TRACE
 
-# 외부 서비스 URL 설정 (Order service에서 이전)
-external:
-  services:
-    users:
-      base-url: ${USERS_SERVICE_BASE_URL:http://users-service:8081}
-    stores:
-      base-url: ${STORES_SERVICE_BASE_URL:http://stores-service:8082}
+# HTTP 클라이언트 설정 - 게이트웨이를 통한 서비스 간 통신 (MSA 원칙 준수)
+gateway:
+  base-url: ${GATEWAY_URL:http://popcorn-gateway:8080}
 
-# 이벤트 기반 아키텍처 - HTTP 통신 제거
-# microservices 통신은 Redis Stream 이벤트로 대체
+order:
+  service:
+    base-url: ${ORDER_SERVICE_BASE_URL:http://popcorn-gateway:8080}
 
-springdoc:
-  server-url: ${GATEWAY_SERVICE_URL:https://dev.goormpopcorn.shop}
-
-# 헬스체크 (개발 환경)
-management:
-  health:
-    redis:
-      enabled: false
+user:
+  service:
+    base-url: ${USER_SERVICE_BASE_URL:http://popcorn-gateway:8080}
 
 # Payment 서비스 비즈니스 설정 (개발용)
 payment:
@@ -98,17 +155,46 @@ payment:
   notification:
     enabled: ${PAYMENT_NOTIFICATION_ENABLED:true}
     retry-count: ${PAYMENT_NOTIFICATION_RETRY:3}
-  # Toss Payments 설정 (개발용)
+  # 주문 조회 설정 - 타임아웃 최적화
+  order-query:
+    timeout-ms: ${PAYMENT_ORDER_QUERY_TIMEOUT:5000}  # 5초로 단축 (기존 15초)
+  # Toss Payments 설정
   toss:
-    base-url: ${TOSS_PAYMENTS_BASE_URL:https://api.tosspayments.com}
-    secret-key: ${TOSS_SECRET_KEY:}
-    client-key: ${TOSS_CLIENT_KEY:}
-    test-mode: ${TOSS_PAYMENTS_TEST_MODE:true}  # 개발에서는 테스트 모드
-passport:
-  secret: ${PASSPORT_SECRET:passport-shared-secret}
-  ttl-seconds: 60
+    base-url: ${TOSS_PAYMENTS_BASE_URL}
+    secret-key: ${TOSS_PAYMENTS_SECRET_KEY}
+    client-key: ${TOSS_PAYMENTS_CLIENT_KEY}
+    test-mode: ${TOSS_PAYMENTS_TEST_MODE:true}
 
-jwt:
-  secret: ${JWT_SECRET:dGVzdC1qd3Qtc2VjcmV0LWtleS1mb3ItbG9jYWwtZGV2ZWxvcG1lbnQtb25seS1kb25vdC11c2UtaW4tcHJvZHVjdGlvbg==}
-  expiration: 3600000
-  refresh-expiration-ms: 1209600000
+# 모니터링 및 메트릭 설정 (개발 환경)
+management:
+  endpoints:
+    web:
+      exposure:
+        include: health,info,metrics,prometheus
+  endpoint:
+    health:
+      show-details: always  # 개발 환경에서는 상세 정보 표시
+    metrics:
+      enabled: true
+    prometheus:
+      enabled: true
+  metrics:
+    export:
+      prometheus:
+        enabled: true
+        step: 5s  # 개발환경에서는 더 자주 수집
+    distribution:
+      percentiles-histogram:
+        payment.kafka.processing.duration: true
+        payment.transaction.duration: true
+        payment.toss.api.duration: true
+      percentiles:
+        payment.kafka.processing.duration: 0.5, 0.95, 0.99
+        payment.transaction.duration: 0.5, 0.95, 0.99
+        payment.toss.api.duration: 0.5, 0.95, 0.99
+  health:
+    redis:
+      enabled: false
+  tracing:
+    sampling:
+      probability: 1.0  # 개발환경에서는 100% 샘플링

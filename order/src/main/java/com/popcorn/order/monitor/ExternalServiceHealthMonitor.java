@@ -182,6 +182,7 @@ public class ExternalServiceHealthMonitor {
         private String circuitBreakerState;
         private String baseUrl;
         private String errorMessage;
+        @lombok.Builder.Default
         private long lastCheckedAt = System.currentTimeMillis();
     }
 }

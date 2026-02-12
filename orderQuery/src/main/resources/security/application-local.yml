@@ -7,10 +7,24 @@ spring:
   config:
     activate:
       on-profile: local
+  data:
+    redis:
+      host: ${REDIS_HOST:localhost}
+      port: ${REDIS_PORT:6379}
+      password: ${REDIS_PASSWORD:}
+      timeout: 10000ms
+      database: ${REDIS_DATABASE:0}
+      lettuce:
+        pool:
+          enabled: true
+          max-active: 20
+          max-wait: -1ms
+          max-idle: 5
+          min-idle: 0
   datasource:
-      url: jdbc:postgresql://${DB_HOST:localhost}:${DB_PORT:5430}/${DB_NAME:popcorn_db}
-      username: ${STORE_DB_USERNAME:order_query_app}
-      password: ${STORE_DB_PASSWORD:query123}
+      url: jdbc:postgresql://${DB_HOST:localhost}:${DB_PORT:5432}/${DB_NAME:popcorn_db}
+      username: ${ORDER_QUERY_DB_USERNAME:order_query_app}
+      password: ${ORDER_QUERY_DB_PASSWORD:quary123}
       driver-class-name: org.postgresql.Driver
   jpa:
     open-in-view: false
@@ -26,8 +40,8 @@ spring:
 
   flyway:
     enabled: true
-    user: ${STORE_FLYWAY_USERNAME:order_query_migrator}
-    password: ${STORE_FLYWAY_PASSWORD:query123}
+    user: ${ORDER_QUERY_FLYWAY_USERNAME:order_query_migrator}
+    password: ${ORDER_QUERY_FLYWAY_PASSWORD:quary321}
     default-schema: order_query
     schemas: order_query
     locations: classpath:db/migration/schema,classpath:db/migration/seed
@@ -58,6 +72,11 @@ popcorn:
 jwt:
   secret: ${JWT_SECRET:dGVzdC1qd3Qtc2VjcmV0LWtleS1mb3ItbG9jYWwtZGV2ZWxvcG1lbnQtb25seS1kb25vdC11c2UtaW4tcHJvZHVjdGlvbg==}
   expiration: 3600000
+
+management:
+  health:
+    redis:
+      enabled: false
 
 logging:
   level:

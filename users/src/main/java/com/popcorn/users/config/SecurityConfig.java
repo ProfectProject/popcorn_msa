@@ -61,9 +61,9 @@ public class SecurityConfig {
 
 		AuthenticationManager authManager = authenticationManager(authenticationConfiguration);
 
-		// ★ LoginFilter는 여기서 직접 생성 (Bean 등록 X)
-        LoginFilter loginFilter = new LoginFilter(authManager, jwtUtil,refreshTokenExpirationMs);
-        loginFilter.setFilterProcessesUrl("/api/v1/auth/login");
+		// ★ LoginFilter 비활성화 - AuthController 사용
+        // LoginFilter loginFilter = new LoginFilter(authManager, jwtUtil,refreshTokenExpirationMs);
+        // loginFilter.setFilterProcessesUrl("/api/users/v1/auth/login");
 
 		http.csrf(csrf -> csrf.disable())
 				.cors(cors -> cors.configurationSource(corsConfigurationSource()))
@@ -89,8 +89,8 @@ public class SecurityConfig {
 		// Gateway 인증 헤더 기반 필터
 		http.addFilterBefore(headerAuthenticationFilter, UsernamePasswordAuthenticationFilter.class);
 
-		// ★ 로그인 필터 추가
-		http.addFilterAt(loginFilter, UsernamePasswordAuthenticationFilter.class);
+		// ★ 로그인 필터 비활성화 - AuthController 사용
+		// http.addFilterAt(loginFilter, UsernamePasswordAuthenticationFilter.class);
 
 		return http.build();
 	}

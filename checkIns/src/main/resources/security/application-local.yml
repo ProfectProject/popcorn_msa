@@ -1,3 +1,25 @@
+# 🤖 Agent Configuration (CheckIns Service)
+agent:
+  health-check:
+    enabled: true
+    interval: 30s
+    auto-healing: true
+    critical-services: order-service,user-service,store-service,payment-service
+
+  api-test:
+    enabled: true
+    interval: 60s
+    auto-fix: true
+    concurrent-requests: 10
+    target-endpoints: /api/v1/qr/health,/api/v1/checkins/status,/actuator/health
+
+  log-analysis:
+    enabled: true
+    interval: 120s
+    auto-fix: true
+    error-threshold: 10
+    noise-threshold: 100
+
 server:
   port: ${SERVER_PORT:8086}
   shutdown: immediate
@@ -8,8 +30,17 @@ spring:
   config:
     activate:
       on-profile: local
+  kafka:
+    bootstrap-servers: ${KAFKA_BOOTSTRAP_SERVERS}
+    admin:
+      fail-fast: false
+      client-id: checkins-admin
+      retry-backoff-ms: 100
+      retry-timeout-ms: 60000
+      request-timeout-ms: 30000
+      connection-timeout-ms: 10000
   datasource:
-    url: jdbc:postgresql://${DB_HOST:localhost}:${DB_PORT:5430}/${DB_NAME:popcorn_db}
+    url: jdbc:postgresql://${DB_HOST:localhost}:${DB_PORT:5432}/${DB_NAME:popcorn_db}
     username: ${QR_DB_USERNAME}
     password: ${QR_DB_PASSWORD}
     driver-class-name: org.postgresql.Driver
@@ -37,7 +68,7 @@ spring:
           preferred_enum_jdbc_type: NAMED_ENUM
         format_sql: false
         show_sql: false
-        default_schema: checkIns
+        default_schema: checkins
         jdbc:
           batch_size: 20
         order_inserts: true
@@ -55,10 +86,10 @@ spring:
       host: ${REDIS_HOST:localhost}
       port: ${REDIS_PORT:6379}
       password: ${REDIS_PASSWORD:}
-      timeout: 2000ms
+      timeout: 10000ms
       database: 1  # CheckIns 서비스 전용 DB
-      connection-timeout: 2000ms
-      jedis:
+      connection-timeout: 5000ms
+      lettuce:
         pool:
           max-active: 20
           max-idle: 16
@@ -85,10 +116,39 @@ passport:
   secret: ${PASSPORT_SECRET:my-super-secret-key-for-popcorn-msa-development-only-do-not-use-in-production}
   ttl-seconds: 60
 
-# Redis 이벤트 설정
+# Redis 이벤트 설정 (점진적 전환 중 유지)
 redis:
   events:
     enabled: true
+
+# Kafka 이벤트 설정 (점진적 전환용)
+kafka:
+  enabled: true
+  bootstrap-servers: ${KAFKA_BOOTSTRAP_SERVERS:kafka-1:9092,kafka-2:9092,kafka-3:9092}
+  consumer:
+    group-id: ${CHECKINS_KAFKA_CONSUMER_GROUP_ID:checkin-service-group}
+    concurrency: 3
+    max-poll-records: 500
+    session-timeout-ms: 30000
+    auto-offset-reset: earliest
+    enable-auto-commit: false
+    heartbeat-interval-ms: 3000
+    fetch-min-size: 1
+    fetch-max-wait-ms: 500
+    connections-max-idle-ms: 540000
+    request-timeout-ms: 30000
+    retry-backoff-ms: 100
+  producer:
+    acks: all
+    retries: 2147483647
+    compression-type: snappy
+    enable-idempotence: true
+    connections-max-idle-ms: 540000
+    delivery-timeout-ms: 120000
+    linger-ms: 5
+    max-block-ms: 60000
+    request-timeout-ms: 30000
+    retry-backoff-ms: 100
 
 jwt:
   secret: ${JWT_SECRET:dGVzdC1qd3Qtc2VjcmV0LWtleS1mb3ItbG9jYWwtZGV2ZWxvcG1lbnQtb25seS1kb25vdC11c2UtaW4tcHJvZHVjdGlvbg==}
@@ -103,11 +163,48 @@ springdoc:
     enabled: true
     path: /swagger-ui.html
 
+# 외부 서비스 API 설정 (Gateway 통해 호출)
+app:
+  order-service:
+    base-url: ${GATEWAY_SERVICE_URL:http://popcorn-gateway:8080}
+    timeout-ms: ${ORDER_API_TIMEOUT_MS:5000}
+
+# 모니터링 및 메트릭 설정
+management:
+  endpoints:
+    web:
+      exposure:
+        include: health,info,metrics,prometheus
+  endpoint:
+    health:
+      show-details: always
+    metrics:
+      enabled: true
+    prometheus:
+      enabled: true
+  metrics:
+    export:
+      prometheus:
+        enabled: true
+        step: 10s
+    distribution:
+      percentiles-histogram:
+        checkins.kafka.processing.duration: true
+      percentiles:
+        checkins.kafka.processing.duration: 0.5, 0.95, 0.99
+  tracing:
+    enabled: false
+    sampling:
+      probability: 1.0
+  zipkin:
+    tracing:
+      enabled: false
 
 logging:
   level:
     root: WARN
     com.popcorn.checkIns: INFO
+    com.popcorn.common: INFO
     org.springframework.web: WARN
     org.springframework.boot.web: WARN
     org.hibernate.SQL: INFO

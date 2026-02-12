@@ -82,11 +82,6 @@ passport:
   secret: ${PASSPORT_SECRET}
   ttl-seconds: 60
 
-# Redis 이벤트 설정
-redis:
-  events:
-    enabled: true
-
 jwt:
   secret: ${JWT_SECRET}
   expiration: 3600000

@@ -4,11 +4,20 @@ import io.github.cdimascio.dotenv.Dotenv
 import org.springframework.boot.autoconfigure.SpringBootApplication
 import org.springframework.boot.context.properties.ConfigurationPropertiesScan
 import org.springframework.boot.runApplication
+import org.springframework.context.annotation.ComponentScan
+import org.springframework.context.annotation.ComponentScan.Filter
+import org.springframework.context.annotation.FilterType
 import org.springframework.scheduling.annotation.EnableAsync
+import org.springframework.scheduling.annotation.EnableScheduling
 import org.springframework.transaction.annotation.EnableTransactionManagement
 
-@SpringBootApplication(scanBasePackages = ["com.popcorn"])
-@EnableAsync
+@SpringBootApplication
+@ComponentScan(
+    basePackages = ["com.popcorn.payment", "com.popcorn.common"],
+    excludeFilters = [
+        Filter(type = FilterType.REGEX, pattern = ["com\\.popcorn\\.common\\.kafka\\.config\\..*"])
+    ]
+)
 @EnableTransactionManagement
 @ConfigurationPropertiesScan("com.popcorn.payment.config")
 class PaymentApplication

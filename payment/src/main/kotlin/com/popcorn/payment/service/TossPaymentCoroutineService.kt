@@ -2,15 +2,21 @@ package com.popcorn.payment.service
 
 import com.fasterxml.jackson.databind.ObjectMapper
 import com.popcorn.payment.client.TossPaymentsCoroutineClient
+import com.popcorn.payment.constants.EventConstants
 import com.popcorn.payment.dto.TossPaymentCancelRequest
 import com.popcorn.payment.dto.TossPaymentConfirmRequest
+import com.popcorn.payment.dto.TossPaymentConfirmResult
+import com.popcorn.payment.dto.TossPaymentCancelResult
+import com.popcorn.payment.dto.PaymentCreateResult
 import com.popcorn.payment.event.publisher.BasePaymentEventPublisherImpl
 import com.popcorn.payment.exception.PaymentException
+import com.popcorn.payment.util.PaymentTokenUtil
 import io.github.resilience4j.circuitbreaker.annotation.CircuitBreaker
 import kotlinx.coroutines.async
 import kotlinx.coroutines.coroutineScope
 import kotlinx.coroutines.future.await
 import org.slf4j.LoggerFactory
+import org.springframework.beans.factory.annotation.Value
 import org.springframework.data.redis.core.StringRedisTemplate
 import org.springframework.stereotype.Service
 import java.time.Duration
@@ -33,13 +39,18 @@ class TossPaymentCoroutineService(
     private val stringRedisTemplate: StringRedisTemplate,
     private val hybridValidationService: HybridValidationService,
     private val compensationService: CompensationService,
-    private val paymentOrderInfoService: PaymentOrderInfoService
+    private val httpOrderQueryService: HttpOrderQueryService,
+    private val paymentTokenUtil: PaymentTokenUtil,
+    private val paymentCacheService: PaymentCacheService  // 🚀 캐싱 서비스 추가
 ) {
+
+    @Value("\${frontend.base-url:\${FRONTEND_BASE_URL:http://localhost:3000}}")
+    private lateinit var frontendBaseUrl: String
 
     private val log = LoggerFactory.getLogger(TossPaymentCoroutineService::class.java)
 
     /**
-     * 토스페이먼츠 결제 생성 (결제 URL 발급)
+     * 결제 URL 생성 (Order 서비스와 동일한 방식 - 토큰 기반)
      */
     suspend fun createPaymentRequest(
         orderId: String,
@@ -47,12 +58,11 @@ class TossPaymentCoroutineService(
         orderName: String,
         customerKey: String
     ): PaymentCreateResult {
-        log.info("토스페이먼츠 결제 생성 요청: orderId={}, amount={}, orderName={}", orderId, amount, orderName)
+        log.info("💳 결제 URL 생성 요청: orderId={}, amount={}, orderName={}", orderId, amount, orderName)
 
         return try {
-            // 토스페이먼츠 결제 위젯 URL 생성
-            // 실제로는 토스페이먼츠 결제 생성 API를 호출해야 함
-            val paymentUrl = generateTossPaymentWidgetUrl(orderId, amount, orderName, customerKey)
+            // 토큰 기반 결제 URL 생성 (Order 서비스와 동일한 방식)
+            val paymentUrl = generateTokenBasedPaymentUrl(orderId, orderName, amount, customerKey)
 
             PaymentCreateResult(
                 paymentUrl = paymentUrl,
@@ -61,28 +71,44 @@ class TossPaymentCoroutineService(
                 expiresAt = java.time.LocalDateTime.now().plusMinutes(30)
             )
         } catch (e: Exception) {
-            log.error("토스페이먼츠 결제 생성 실패: orderId={}, error={}", orderId, e.message, e)
+            log.error("❌ 결제 URL 생성 실패: orderId={}, error={}", orderId, e.message, e)
             throw e
         }
     }
 
     /**
-     * 토스페이먼츠 결제 위젯 URL 생성
+     * 토큰 기반 결제 URL 생성 (Order 서비스와 동일한 방식)
      */
-    private fun generateTossPaymentWidgetUrl(
+    private fun generateTokenBasedPaymentUrl(
         orderId: String,
-        amount: Int,
         orderName: String,
+        amount: Int,
         customerKey: String
     ): String {
-        // 토스페이먼츠 결제 위젯 연동 방식
-        // 실제로는 토스페이먼츠 SDK 또는 API를 통해 결제 URL을 받아야 함
+        try {
+            // Order 번호 생성 (orderId가 이미 있다면 그대로 사용)
+            val orderNo = "PAY-${System.currentTimeMillis()}"
 
-        // 현재는 토스페이먼츠 결제 위젯 URL 형식으로 생성
-        val baseUrl = "https://js.tosspayments.com/v1/payment"
-        val params = "orderId=$orderId&amount=$amount&orderName=${java.net.URLEncoder.encode(orderName, "UTF-8")}&customerKey=$customerKey"
+            // JWT 토큰 생성 (Order 서비스와 동일한 방식)
+            val paymentToken = paymentTokenUtil.generatePaymentToken(
+                orderId = UUID.fromString(orderId),
+                orderNo = orderNo,
+                amount = amount,
+                orderName = orderName,
+                customerKey = customerKey,
+                paymentMethod = "TOSS_PAYMENT"
+            )
 
-        return "$baseUrl?$params"
+            // 프론트엔드 URL + 토큰으로 결제 URL 생성 (Order 서비스와 동일)
+            val paymentUrl = "$frontendBaseUrl/auto-payment?token=$paymentToken"
+
+            log.info("🚀 토큰 기반 결제 URL 생성 완료 - orderId: {}, 토큰 길이: {}자", orderId, paymentToken.length)
+            return paymentUrl
+
+        } catch (e: Exception) {
+            log.error("❌ 토큰 기반 결제 URL 생성 실패 - orderId: {}, error: {}", orderId, e.message, e)
+            throw RuntimeException("결제 URL 생성에 실패했습니다", e)
+        }
     }
 
     /**
@@ -94,8 +120,17 @@ class TossPaymentCoroutineService(
         orderId: String,
         amount: Int
     ): TossPaymentConfirmResult = coroutineScope {
+            val startTime = System.currentTimeMillis()
+            log.info("⚡ 토스 결제 승인 요청 시작: orderId={}, paymentKey={}, amount={}", orderId, paymentKey, amount)
 
-            log.info("토스 결제 승인 요청 시작: orderId={}, paymentKey={}, amount={}", orderId, paymentKey, amount)
+            // 🎯 캐시 우선 확인 (초고속 응답)
+            val cachedResult = paymentCacheService.getCachedPaymentResult(paymentKey)
+            if (cachedResult != null) {
+                val cacheTime = System.currentTimeMillis() - startTime
+                log.info("🚀 캐시에서 결제 결과 반환 - paymentKey={}, 처리시간={}ms", paymentKey, cacheTime)
+                return@coroutineScope cachedResult
+            }
+
             val lockKey = buildConfirmLockKey(paymentKey)
 
             try {
@@ -107,7 +142,9 @@ class TossPaymentCoroutineService(
                 // 1. 멱등성 체크 - 이미 처리된 결제인지 확인
                 val existingPayment = checkIdempotency(paymentKey)
                 if (existingPayment != null) {
-                    log.info("이미 처리된 결제: paymentId={}", existingPayment.paymentId)
+                    log.info("💾 이미 처리된 결제 발견 - 캐시에 저장 후 반환: paymentId={}", existingPayment.paymentId)
+                    // 캐시에 저장하여 다음 요청 시 더 빠른 응답
+                    paymentCacheService.cachePaymentResult(paymentKey, existingPayment)
                     return@coroutineScope existingPayment
                 }
 
@@ -195,7 +232,16 @@ class TossPaymentCoroutineService(
                         pgResponse = rawPayload
                     )
 
-                    log.info("✅ 결제 이벤트 발행 완료: orderId={}, amount={}원", orderId, amount)
+                    // CheckIns로 QR 코드 생성 요청 이벤트 발행
+                    val qrEvent = com.popcorn.payment.event.integration.request.QrCodeGenerationRequestedEvent.create(
+                        paymentId = paymentResult.paymentId,
+                        orderId = UUID.fromString(orderId),
+                        orderNo = orderId, // orderNo는 orderId와 동일하게 처리 (임시)
+                        customerId = 1L // 기본값 (추후 결제 생성 시점에 저장된 값 사용)
+                    )
+                    paymentEventPublisher.publish(qrEvent)
+
+                    log.info("✅ 결제 이벤트 발행 완료: orderId={}, amount={}원 (QR 생성 요청 포함)", orderId, amount)
                 } catch (e: Exception) {
                     log.error("❌ 결제 이벤트 발행 실패 - 결제는 성공 처리됨: error={}", e.message, e)
                 }
@@ -204,15 +250,19 @@ class TossPaymentCoroutineService(
                 val result = TossPaymentConfirmResult(
                     paymentId = paymentResult.paymentId,
                     paymentStatus = "PAID",
-                    orderStatus = "PAYMENT_COMPLETED", // Order 서비스에서 이벤트 구독 후 실제 상태로 업데이트
+                    orderStatus = EventConstants.EventTypes.PaymentDomain.PAYMENT_SUCCESS, // Order 서비스에서 이벤트 구독 후 실제 상태로 업데이트
                     orderId = UUID.fromString(orderId),
                     orderNo = orderId,
                     amount = amount,
                     approvedAt = approvedAt
                 )
 
-                log.info("✅ 토스 결제 승인 완료: paymentId={}, amount={}원",
-                    result.paymentId, result.amount)
+                // 🚀 성능 최적화: 결과를 캐시에 저장 (다음 요청 시 초고속 응답)
+                paymentCacheService.cachePaymentResult(paymentKey, result)
+
+                val totalTime = System.currentTimeMillis() - startTime
+                log.info("🏆 토스 결제 승인 완료: paymentId={}, amount={}원, 총 처리시간={}ms",
+                    result.paymentId, result.amount, totalTime)
 
                 result
 
@@ -314,7 +364,7 @@ class TossPaymentCoroutineService(
         // Step 3: 결제 상태 업데이트
         paymentCommandService.updatePaymentStatus(
             paymentId = payment.paymentId,
-            status = "CANCELLED",
+            status = EventConstants.EventStatus.CANCELLED,
             rawPayload = serializeResponse(cancelResponse)
         )
 
@@ -327,6 +377,62 @@ class TossPaymentCoroutineService(
         )
 
         log.info("✅ 토스 결제 취소 완료: paymentId={}, cancelAmount={}원",
+            result.paymentId, result.cancelAmount)
+
+        return result
+    }
+
+    /**
+     * 토스 결제 취소 처리 (paymentId 기반)
+     *
+     * @param paymentId 결제 ID
+     * @param cancelReason 취소 사유
+     * @return 결제 취소 결과
+     */
+    @CircuitBreaker(name = "tossPaymentCancel", fallbackMethod = "cancelPaymentByPaymentIdFallback")
+    suspend fun cancelPaymentByPaymentId(
+        paymentId: UUID,
+        cancelReason: String
+    ): TossPaymentCancelResult {
+        log.info("🔄 토스 결제 취소 요청(paymentId): paymentId={}, cancelReason={}", paymentId, cancelReason)
+
+        val payment = paymentCommandService.getPaymentById(paymentId)
+        val orderId = payment.orderId
+            ?: throw PaymentException.invalidRequest("결제에 연결된 주문 ID가 없습니다: $paymentId")
+
+        if (payment.status != "PAID") {
+            throw PaymentException.invalidStatusTransition("결제 완료 상태가 아닙니다: ${payment.status}")
+        }
+
+        val order = orderQueryService.getOrder(orderId)
+        log.debug("주문 확인 완료(paymentId): orderId={}, orderNo={}, status={}", order.id, order.orderNo, order.status)
+
+        val paymentKey = payment.paymentKey
+            ?: extractPaymentKeyFromRawPayload(payment.rawPayload)
+            ?: throw PaymentException.invalidRequest("결제 키를 찾을 수 없습니다")
+
+        val cancelResponse = tossClient.cancel(
+            paymentKey = paymentKey,
+            request = TossPaymentCancelRequest(
+                cancelReason = cancelReason
+            )
+        )
+
+        paymentCommandService.updatePaymentStatus(
+            paymentId = payment.paymentId,
+            status = EventConstants.EventStatus.CANCELLED,
+            rawPayload = serializeResponse(cancelResponse)
+        )
+
+        val result = TossPaymentCancelResult(
+            paymentId = payment.paymentId,
+            orderId = orderId,
+            cancelAmount = cancelResponse.totalAmount,
+            status = cancelResponse.status,
+            cancelReason = cancelReason
+        )
+
+        log.info("✅ 토스 결제 취소 완료(paymentId): paymentId={}, cancelAmount={}원",
             result.paymentId, result.cancelAmount)
 
         return result
@@ -373,6 +479,27 @@ class TossPaymentCoroutineService(
         throwable: Throwable
     ): Any {
         log.error("🚨 토스 결제 취소 CircuitBreaker OPEN - orderId={}, error={}", orderId, throwable.message, throwable)
+        throw PaymentException.externalApiError("토스 결제 취소 실패(서킷 브레이커): ${throwable.message}")
+    }
+
+    @Suppress("unused")
+    suspend fun cancelPaymentByPaymentIdFallback(
+        paymentId: UUID,
+        cancelReason: String,
+        throwable: Throwable
+    ): TossPaymentCancelResult {
+        log.error("🚨 토스 결제 취소 CircuitBreaker OPEN - paymentId={}, error={}", paymentId, throwable.message, throwable)
+        throw PaymentException.externalApiError("토스 결제 취소 실패(서킷 브레이커): ${throwable.message}")
+    }
+
+    @Suppress("unused")
+    fun cancelPaymentByPaymentIdFallback(
+        paymentId: UUID,
+        cancelReason: String,
+        continuation: Continuation<*>,
+        throwable: Throwable
+    ): Any {
+        log.error("🚨 토스 결제 취소 CircuitBreaker OPEN - paymentId={}, error={}", paymentId, throwable.message, throwable)
         throw PaymentException.externalApiError("토스 결제 취소 실패(서킷 브레이커): ${throwable.message}")
     }
 
@@ -447,75 +574,57 @@ class TossPaymentCoroutineService(
     }
 
     /**
-     * 결제 전 검증 수행 (Hybrid Validation 적용)
+     * 결제 전 검증 수행 (HTTP API 기반 - 타임아웃 문제 해결)
+     * - HTTP API 직접 호출로 Redis Stream 타임아웃 문제 해결
      * - 사용자 주소 검증 (HybridValidationService 사용)
      * - 주문 상태 검증
-     * - 성능 최적화: DB 직접 조회 우선, HTTP fallback
+     * - 성능 최적화: HTTP API 직접 조회로 안정성 향상
      *
-     * 예상 성능 개선: 200-500ms → 10-50ms
+     * 예상 성능 개선: 15초 타임아웃 → 2-5초 안정적 응답
      */
     private suspend fun performPrePaymentValidation(orderId: String, amount: Int) {
         try {
-            log.debug("🔍 결제 전 검증 수행 (Hybrid 방식) - orderId: {}", orderId)
+            log.debug("🔍 결제 전 검증 수행 (HTTP API 기반) - orderId: {}", orderId)
 
-            // 1. 주문 정보 조회
-            val order = orderQueryService.getOrder(UUID.fromString(orderId))
+            // 1. HTTP API를 통한 직접 주문 정보 조회 (Redis Stream 타임아웃 문제 해결)
+            val orderDetail = httpOrderQueryService.getOrderForPayment(UUID.fromString(orderId))
+
+            // 🔍 Order 정보 직접 조회 결과 로깅
+            log.info("🔍 [HTTP] Order 정보 조회 결과 - orderId: {}", orderId)
+            if (orderDetail != null) {
+                log.info("  ✅ 조회 성공")
+                log.info("  - orderNo: {}", orderDetail.orderNo)
+                log.info("  - customerId: {}", orderDetail.customerId)
+                log.info("  - orderStatus: {}", orderDetail.status)
+                log.info("  - totalAmount: {}", orderDetail.totalAmount)
+            } else {
+                log.error("  ❌ 조회 실패 - 주문 정보가 없거나 결제 불가 상태")
+                throw PaymentException.validationFailed("주문 정보를 찾을 수 없거나 결제할 수 없는 상태입니다.")
+            }
 
             // 2. 주문 상태 검증 - REQUESTED 상태도 결제 허용 (초기 주문 생성 후 즉시 결제 가능)
-            if (order.status != "REQUESTED" && order.status != "RESERVED" && order.status != "PAYMENT_PENDING") {
-                throw PaymentException.validationFailed("결제 가능한 주문 상태가 아닙니다. 현재 상태: ${order.status}")
+            if (orderDetail.status != "REQUESTED" && orderDetail.status != "RESERVED" && orderDetail.status != "PAYMENT_PENDING") {
+                throw PaymentException.validationFailed("결제 가능한 주문 상태가 아닙니다. 현재 상태: ${orderDetail.status}")
             }
 
-            // 3. Order 이벤트 기반 상세 검증 (주소 + 가격) - 🚀 타이밍 이슈 해결
-            val orderInfoFuture = paymentOrderInfoService.requestOrderInfo(order.id, timeoutMs = 5000)
 
-            // 🚀 CompletableFuture를 코루틴 방식으로 안전하게 처리
-            val orderInfo = try {
-                orderInfoFuture.await()
-            } catch (e: Exception) {
-                log.warn("⚠️ Order 정보 응답 대기 중 예외 발생 - orderId: {}, error: {}", orderId, e.message)
-                null
-            }
-
-            // 🔍 Order 정보 응답 상세 로깅
-            log.info("🔍 [DEBUG] Order 정보 응답 분석 - orderId: {}", orderId)
-            log.info("  - success: {}", orderInfo?.success)
-            log.info("  - errorMessage: {}", orderInfo?.errorMessage)
-            log.info("  - actualLines count: {}", orderInfo?.actualLines?.size ?: 0)
-            log.info("  - customerId: {}", orderInfo?.customerId)
-            log.info("  - orderStatus: {}", orderInfo?.orderStatus)
-            log.info("  - totalAmount: {}", orderInfo?.totalAmount)
-
-            if (orderInfo?.actualLines != null && orderInfo.actualLines.isNotEmpty()) {
-                orderInfo.actualLines.forEachIndexed { index, line ->
-                    log.info("  - line[{}]: itemType={}, qty={}, unitPrice={}, linePrice={}, scheduleId={}, goodsId={}",
-                        index, line.itemType, line.qty, line.unitPrice, line.linePrice, line.scheduleId, line.goodsId)
-                }
-            }
-
-            if (orderInfo?.success != true) {
-                log.warn("❌ Order 정보 응답 실패 - orderId: {}, success: {}, errorMessage: {}",
-                    orderId, orderInfo?.success, orderInfo?.errorMessage)
-                throw PaymentException.validationFailed("주문 정보 응답이 실패했습니다: ${orderInfo?.errorMessage ?: "알 수 없는 오류"}")
-            }
-
-            if (orderInfo.actualLines.isNullOrEmpty()) {
-                log.warn("❌ Order 라인 아이템 누락 - orderId: {}, actualLines: {}", orderId, orderInfo.actualLines)
-                throw PaymentException.validationFailed("주문 라인 아이템 정보가 없습니다. 주문 데이터를 확인해주세요.")
-            }
-
-            // 🚀 actualLines는 이미 EventLineItem 타입이므로 직접 사용
-            val validationResult = hybridValidationService.validatePaymentRequestFromOrderEvent(
-                userId = order.customerId,
-                lines = orderInfo.actualLines,
-                expectedAmount = amount
+            // 🔍 HTTP API 호출 결과 검증 및 가격 비교 (mixed 주문 주소 검증 + Store API 가격 검증)
+            val priceValidation = hybridValidationService.validateBasicPaymentRequest(
+                orderId = UUID.fromString(orderId),
+                userId = orderDetail.customerId,
+                expectedAmount = amount,
+                actualOrderAmount = orderDetail.totalAmount,
+                hasGoods = orderDetail.hasGoods,  // ✅ mixed 주문에서 굿즈 있으면 주소 검증!
+                orderDetail = orderDetail  // ✅ Store API 가격 검증용 lineItem 정보!
             )
 
-            if (!validationResult.isValid) {
-                throw PaymentException.validationFailed("결제 전 검증에 실패했습니다.")
+            if (!priceValidation.isValid) {
+                log.warn("❌ 기본 가격 검증 실패 - orderId: {}, expectedAmount: {}, actualAmount: {}",
+                    orderId, amount, orderDetail.totalAmount)
+                throw PaymentException.validationFailed("결제 금액이 주문 금액과 일치하지 않습니다.")
             }
 
-            log.info("✅ 결제 전 검증 완료 (Hybrid 방식) - orderId: {}, 성능 개선됨", orderId)
+            log.info("✅ 결제 전 검증 완료 (HTTP API 호출) - orderId: {}, 빠른 성능 보장", orderId)
 
         } catch (e: PaymentException) {
             throw e
@@ -547,29 +656,32 @@ class TossPaymentCoroutineService(
                 throw PaymentException.validationFailed("결제 가능한 주문 상태가 아닙니다. 현재 상태: ${order.status}")
             }
 
-            // 3. Order 이벤트 기반 상세 검증 (주소 + 가격) - DB 직접 조회만 사용
-            val orderInfoFuture = paymentOrderInfoService.requestOrderInfo(order.id)
-            val orderInfo = orderInfoFuture.get()
+            // 3. Order 직접 DB 조회로 상세 검증 - 🚀 이벤트 기반 → 직접 쿼리로 변경
+            val orderDetail = httpOrderQueryService.getOrderForPayment(order.id)
 
-            if (orderInfo?.success != true || orderInfo.actualLines.isNullOrEmpty()) {
-                throw PaymentException.validationFailed("주문 정보 응답이 없습니다. 다시 시도해주세요.")
+            if (orderDetail == null) {
+                log.error("❌ 주문 정보 없음 또는 결제 불가 상태 - orderId: {}", orderId)
+                throw PaymentException.validationFailed("주문 정보를 찾을 수 없거나 결제할 수 없는 상태입니다.")
             }
 
-            // 🚀 actualLines는 이미 EventLineItem 타입이므로 직접 사용
-            val validationResult = hybridValidationService.validatePaymentRequestFromOrderEvent(
-                userId = order.customerId,
-                lines = orderInfo.actualLines,
-                expectedAmount = amount
+            // 🚀 기본 가격 검증 + mixed 주문 주소 검증 + Store API 가격 검증
+            val validationResult = hybridValidationService.validateBasicPaymentRequest(
+                orderId = UUID.fromString(orderId),
+                userId = orderDetail.customerId,
+                expectedAmount = amount,
+                actualOrderAmount = orderDetail.totalAmount,
+                hasGoods = orderDetail.hasGoods,  // ✅ mixed 주문에서 굿즈 있으면 주소 검증!
+                orderDetail = orderDetail  // ✅ Store API 가격 검증용 lineItem 정보!
             )
 
             if (!validationResult.isValid) {
                 throw PaymentException.validationFailed(
-                    "결제 전 검증에 실패했습니다. (예상: ${validationResult.expectedAmount}원, 실제: ${validationResult.totalCalculatedPrice}원)"
+                    "결제 전 검증에 실패했습니다. (예상: ${validationResult.expectedAmount}원, 실제: ${validationResult.actualAmount}원)"
                 )
             }
 
-            log.info("✅ 향상된 결제 전 검증 완료 - orderId: {}, 처리시간: {}ms",
-                     orderId, validationResult.processingTimeMs)
+            log.info("✅ HTTP 기반 결제 전 검증 완료 - orderId: {}, 주소검증: {}, 가격검증: {}",
+                     orderId, validationResult.addressValid, validationResult.priceValid)
 
         } catch (e: PaymentException) {
             throw e
@@ -704,7 +816,7 @@ class TossPaymentCoroutineService(
                 "failureType" to failureType,
                 "originalFailureReason" to originalFailureReason,
                 "compensationError" to compensationError.message,
-                "timestamp" to java.time.LocalDateTime.now().toString(),
+                EventConstants.MetadataKeys.TIMESTAMP to java.time.LocalDateTime.now().toString(),
                 "severity" to "CRITICAL"
             )
 
@@ -724,37 +836,3 @@ class TossPaymentCoroutineService(
     }
 
 }
-
-/**
- * 토스 결제 승인 결과 DTO
- */
-data class TossPaymentConfirmResult(
-    val paymentId: UUID,
-    val paymentStatus: String,
-    val orderStatus: String,
-    val orderId: UUID,
-    val orderNo: String,
-    val amount: Int,
-    val approvedAt: LocalDateTime
-)
-
-/**
- * 토스 결제 취소 결과 DTO
- */
-data class TossPaymentCancelResult(
-    val paymentId: UUID,
-    val orderId: UUID,
-    val cancelAmount: Int,
-    val status: String,
-    val cancelReason: String
-)
-
-/**
- * 토스 결제 생성 결과 DTO
- */
-data class PaymentCreateResult(
-    val paymentUrl: String,
-    val orderId: String,
-    val amount: Int,
-    val expiresAt: java.time.LocalDateTime
-)

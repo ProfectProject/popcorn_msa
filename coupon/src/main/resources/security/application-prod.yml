@@ -1,0 +1,153 @@
+# =================================================================
+# 🎫 Coupon Service Production Security Configuration
+# =================================================================
+
+server:
+  port: 8088
+  shutdown: graceful
+
+spring:
+  config:
+    activate:
+      on-profile: prod
+
+  # 데이터베이스 설정 (Production 환경용)
+  datasource:
+    url: jdbc:postgresql://${DB_HOST}:${DB_PORT}/${DB_NAME}?currentSchema=coupons
+    username: ${COUPON_DB_USERNAME}
+    password: ${COUPON_DB_PASSWORD}
+    driver-class-name: org.postgresql.Driver
+    hikari:
+      maximum-pool-size: 50
+      minimum-idle: 10
+      connection-timeout: 30000
+      idle-timeout: 600000
+      max-lifetime: 1800000
+      leak-detection-threshold: 60000
+
+  # JPA 설정 (Production 최적화)
+  jpa:
+    open-in-view: false
+    hibernate:
+      ddl-auto: none
+    show-sql: false
+    properties:
+      hibernate:
+        dialect: org.hibernate.dialect.PostgreSQLDialect
+        format_sql: false
+        default_schema: coupons
+        jdbc:
+          batch_size: 50
+          order_inserts: true
+          order_updates: true
+        default_batch_fetch_size: 200
+        type:
+          preferred_enum_jdbc_type: NAMED_ENUM
+
+  # Flyway 설정 (Production)
+  flyway:
+    url: jdbc:postgresql://${DB_HOST}:${DB_PORT}/${DB_NAME}
+    user: ${COUPON_FLYWAY_USERNAME}
+    password: ${COUPON_FLYWAY_PASSWORD}
+    enabled: true
+    baseline-on-migrate: false
+    validate-on-migrate: true
+    out-of-order: false
+    locations: classpath:db/migration
+    default-schema: coupons
+    schemas: coupons
+
+  # Redis 설정 (Production)
+  data:
+    redis:
+      host: ${REDIS_HOST}
+      port: ${REDIS_PORT}
+      password: ${REDIS_PASSWORD}
+      ssl: true
+      timeout: 2000ms
+      command-timeout: 2000ms
+      lettuce:
+        pool:
+          max-active: 50
+          max-idle: 20
+          min-idle: 10
+          max-wait: 3000ms
+          time-between-eviction-runs: 60s
+        shutdown-timeout: 2000ms
+
+  # Kafka 설정 (Production)
+  kafka:
+    bootstrap-servers: ${KAFKA_BOOTSTRAP_SERVERS}
+    producer:
+      retries: 10
+      batch-size: 32768
+      linger-ms: 5
+      buffer-memory: 67108864
+      properties:
+        retry.backoff.ms: 2000
+        compression.type: snappy
+    consumer:
+      group-id: coupon-service-group
+      fetch-min-size: 32768
+      fetch-max-wait: 500ms
+      properties:
+        session.timeout.ms: 45000
+        heartbeat.interval.ms: 3000
+        max.poll.records: 100
+
+# 인증 설정 (Production)
+passport:
+  secret: ${PASSPORT_SECRET}
+  ttl-seconds: 30
+
+jwt:
+  secret: ${JWT_SECRET}
+  expiration: 1800000  # 30분 (보안 강화)
+  refresh-expiration-ms: 86400000  # 24시간
+
+springdoc:
+  api-docs:
+    enabled: false
+    path: /v3/api-docs
+  swagger-ui:
+    enabled: false
+    path: /swagger-ui.html
+
+# 커스텀 쿠폰 설정 (Production)
+coupon:
+  cache:
+    ttl:
+      user-limit: 3600     # 1시간
+      stock: 600           # 10분
+      processed-event: 86400   # 1일
+  redis:
+    key-prefix: "coupon:"
+    lock-timeout: 2000   # 2초 (빠른 실패)
+  batch:
+    expire-batch-size: 500
+    expire-schedule: "0 */10 * * * *"  # 10분마다
+  security:
+    jwt:
+      secret: ${JWT_SECRET}
+      expiration: 1800000  # 30분 (보안 강화)
+
+logging:
+  level:
+    com.popcorn.coupon: WARN
+    org.springframework.security: ERROR
+    org.springframework.kafka: ERROR
+    org.hibernate.SQL: ERROR
+    org.hibernate.type.descriptor.sql: ERROR
+  pattern:
+    console: "%d{yyyy-MM-dd HH:mm:ss.SSS} [%thread] %-5level %logger{36} - %msg%n"
+
+management:
+  endpoints:
+    web:
+      exposure:
+        include: health,metrics,prometheus
+  endpoint:
+    health:
+      show-details: when-authorized
+  server:
+    port: 9088

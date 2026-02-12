@@ -21,13 +21,15 @@ public class OrderCOMPLETEDEvent {
     @JsonFormat(shape = JsonFormat.Shape.STRING)
     private Instant timestamp;
 
-    private String eventType;      // "ORDER_CANCELLED"
+    private String eventType;      // "ORDER_COMPLETED"
     private String eventVersion;   // "1.0"
     private String producer;       // "order-service"
 
     private UUID orderId;
     private UUID popupId;
+    private UUID storeId;
     private boolean hasReservation;
     private boolean hasGoods;
     private Integer totalAmount;
+    private LocalDateTime completedAt;
 }

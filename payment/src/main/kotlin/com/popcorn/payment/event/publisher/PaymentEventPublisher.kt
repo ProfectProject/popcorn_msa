@@ -2,7 +2,8 @@ package com.popcorn.payment.event.publisher
 
 import com.popcorn.payment.event.base.BasePaymentEvent
 import com.popcorn.payment.event.base.BasePaymentEventPublisher
-import com.popcorn.payment.event.listener.PaymentRedisEventPublisher
+import com.popcorn.payment.event.kafka.PaymentKafkaEventPublisher
+import com.popcorn.payment.outbox.OutboxWriter
 import com.popcorn.payment.event.domain.payment.*
 import com.popcorn.payment.event.domain.legacy.PaymentCompletedEvent
 import com.popcorn.payment.event.integration.request.*
@@ -11,29 +12,64 @@ import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.launch
 import org.slf4j.LoggerFactory
+import org.springframework.beans.factory.annotation.Autowired
 import org.springframework.context.ApplicationEventPublisher
 import org.springframework.stereotype.Component
 
 /**
  * 결제 이벤트 발행 서비스 구현체
+ * - 점진적 전환을 위한 이중 발행 지원 (Redis + Kafka)
  */
 @Component
 class BasePaymentEventPublisherImpl(
     private val applicationEventPublisher: ApplicationEventPublisher,
-    private val paymentRedisEventPublisher: PaymentRedisEventPublisher
+    private val outboxWriter: OutboxWriter
 ) : BasePaymentEventPublisher {
 
     private val log = LoggerFactory.getLogger(BasePaymentEventPublisherImpl::class.java)
     private val eventScope = CoroutineScope(Dispatchers.Default)
 
+    // Kafka Publisher는 Optional로 주입 (kafka.enabled=true 시에만 활성화)
+    @Autowired(required = false)
+    private val paymentKafkaEventPublisher: PaymentKafkaEventPublisher? = null
+
     /**
      * 단일 이벤트 발행
+     * - 이중 발행: Redis Stream + Kafka (점진적 전환)
      */
     override suspend fun publish(event: BasePaymentEvent) {
+        var kafkaSuccess = false
+
         try {
-            log.debug("📨 이벤트 발행: {}", event::class.simpleName)
+            log.debug("📨 이벤트 발행 시작: {}", event::class.simpleName)
+
+            // 0. Outbox 기록 (트랜잭션 내부)
+            outboxWriter.record(event)
+
+            // 1. 로컬 이벤트 발행
             applicationEventPublisher.publishEvent(event)
-            paymentRedisEventPublisher.publish(event)
+
+            // 2. Kafka 발행 (활성화된 경우에만)
+            paymentKafkaEventPublisher?.let { kafkaPublisher ->
+                try {
+                    kafkaPublisher.publishAsync(event)
+                    kafkaSuccess = true
+                    log.debug("✅ Kafka 이벤트 발행 성공: {}", event::class.simpleName)
+                } catch (e: Exception) {
+                    log.warn("⚠️ Kafka 이벤트 발행 실패: {} - error: {}", event::class.simpleName, e.message)
+                }
+            }
+
+            // 성공률 로깅
+            val totalChannels = if (paymentKafkaEventPublisher != null) 1 else 0
+            val successChannels = if (kafkaSuccess) 1 else 0
+
+            if (successChannels < totalChannels) {
+                log.warn("⚠️ 이벤트 발행 부분 실패: {} - 성공: {}/{} (Kafka: {})",
+                    event::class.simpleName, successChannels, totalChannels,
+                    if (paymentKafkaEventPublisher != null) kafkaSuccess else "N/A")
+            }
+
         } catch (e: Exception) {
             PaymentExceptionHandler.handleEventPublishException(
                 logger = log,
@@ -74,7 +110,10 @@ class BasePaymentEventPublisherImpl(
         orderNo: String,
         amount: Int,
         paymentMethod: String,
-        customerId: Long?
+        customerId: Long?,
+        status: String? = null,
+        createdAt: java.time.LocalDateTime? = null,
+        popupId: String? = null
     ) {
         val event = PaymentCreatedEvent(
             _paymentId = paymentId,
@@ -82,7 +121,10 @@ class BasePaymentEventPublisherImpl(
             orderNo = orderNo,
             amount = amount,
             paymentMethod = paymentMethod,
-            customerId = customerId
+            status = status,
+            createdAt = createdAt,
+            customerId = customerId,
+            popupId = popupId
         )
         publish(event)
     }
@@ -98,7 +140,9 @@ class BasePaymentEventPublisherImpl(
         paymentMethod: String,
         paymentKey: String?,
         approvedAt: java.time.LocalDateTime,
-        customerId: Long?
+        customerId: Long?,
+        popupId: String? = null,
+        storeId: String? = null
     ) {
         val event = PaymentApprovedEvent(
             _paymentId = paymentId,
@@ -108,7 +152,9 @@ class BasePaymentEventPublisherImpl(
             paymentMethod = paymentMethod,
             paymentKey = paymentKey,
             approvedAt = approvedAt,
-            customerId = customerId
+            customerId = customerId,
+            popupId = popupId,
+            storeId = storeId
         )
         publish(event)
     }
@@ -123,7 +169,10 @@ class BasePaymentEventPublisherImpl(
         amount: Int,
         paymentMethod: String,
         failureReason: String,
-        customerId: Long?
+        customerId: Long?,
+        popupId: String? = null,
+        storeId: String? = null,
+        failedAt: java.time.LocalDateTime = java.time.LocalDateTime.now()
     ) {
         val event = PaymentFailedEvent(
             _paymentId = paymentId,
@@ -132,7 +181,10 @@ class BasePaymentEventPublisherImpl(
             amount = amount,
             paymentMethod = paymentMethod,
             failureReason = failureReason,
-            customerId = customerId
+            customerId = customerId,
+            popupId = popupId,
+            storeId = storeId,
+            failedAt = failedAt
         )
         publish(event)
     }
@@ -146,7 +198,10 @@ class BasePaymentEventPublisherImpl(
         orderNo: String,
         cancelAmount: Int,
         cancelReason: String,
-        customerId: Long?
+        customerId: Long?,
+        popupId: String? = null,
+        storeId: String? = null,
+        cancelledAt: java.time.LocalDateTime = java.time.LocalDateTime.now()
     ) {
         val event = PaymentCancelledEvent(
             _paymentId = paymentId,
@@ -154,7 +209,10 @@ class BasePaymentEventPublisherImpl(
             orderNo = orderNo,
             cancelAmount = cancelAmount,
             cancelReason = cancelReason,
-            customerId = customerId
+            customerId = customerId,
+            popupId = popupId,
+            storeId = storeId,
+            cancelledAt = cancelledAt
         )
         publish(event)
     }
@@ -210,6 +268,6 @@ class BasePaymentEventPublisherImpl(
         )
 
         log.info("🚀 QR 코드 생성 요청 이벤트 발행: paymentId={}, orderId={}, orderNo={}", paymentId, orderId, orderNo)
-        applicationEventPublisher.publishEvent(event)
+        publish(event)
     }
 }

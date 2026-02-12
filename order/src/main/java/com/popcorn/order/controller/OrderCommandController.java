@@ -209,6 +209,7 @@ public class OrderCommandController {
         log.info("🌐 [REQ-{}] 클라이언트 정보 - IP: {}, User-Agent: {}", requestId, clientIp, userAgent);
         log.info("🔐 [REQ-{}] 인증 정보 - 인증됨: {}, 사용자: {}",
                 requestId, authentication != null, authentication != null ? authentication.getName() : "익명");
+        log.info("📝 [REQ-{}] 받은 요청 데이터: {}", requestId, request);
 
         // JWT에서 사용자 ID 추출 (보안상 요청 본문이 아닌 토큰에서 추출)
         Long userId = principal != null ? principal.userId() : extractUserIdFromAuthentication(authentication);
@@ -218,7 +219,7 @@ public class OrderCommandController {
                 requestId, request.getPopupId(), request.getOrderType(), request.getItems().size());
 
         // 요청 본문 상세 로깅 (민감 정보 제외)
-        log.debug("📝 [REQ-{}] 요청 본문: {}", requestId, request);
+        log.info("📝 [REQ-{}] 요청 본문: {}", requestId, request);
 
         long startTime = System.currentTimeMillis();
 

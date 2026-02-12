@@ -10,15 +10,15 @@ import java.util.*
  *
  * [이벤트 발행 시점]
  * - Payment 서비스에서 결제 승인이 완료된 후
- * - Order 서비스가 QR 코드를 생성해야 할 때
+ * - CheckIns 서비스가 QR 코드를 생성해야 할 때
  *
  * [이벤트 수신자]
- * - Order 서비스: QR 코드 생성 및 CheckIns 서비스 호출
+ * - CheckIns 서비스: QR 코드 생성 및 저장
  *
  * [목적]
  * - 이벤트 기반 아키텍처로 서비스 간 결합도 감소
- * - Payment 서비스에서 Order/CheckIns 서비스 직접 호출 제거
- * - 서비스별 책임 분리 (Payment는 결제만, Order는 주문 및 QR 관리)
+ * - Payment 서비스에서 CheckIns 직접 호출 제거
+ * - 서비스별 책임 분리 (Payment는 결제, CheckIns는 QR 발급)
  */
 data class QrCodeGenerationRequestedEvent(
     /** 주문 ID */
@@ -43,7 +43,7 @@ data class QrCodeGenerationRequestedEvent(
     val relatedPaymentId: UUID
 ) : BasePaymentEvent(
     paymentId = relatedPaymentId,
-    eventType = EventConstants.EventTypes.QR_GENERATION_REQUESTED,
+    eventType = EventConstants.EventTypes.Integration.QR_GENERATION_REQUESTED,
     userId = customerId
 ) {
 
@@ -54,7 +54,7 @@ data class QrCodeGenerationRequestedEvent(
         "customerId" to (customerId?.toString() ?: ""),
         "requestedAt" to requestedAt.toString(),
         "occurredAt" to occurredAt.toString(),
-        "eventId" to eventId
+        EventConstants.MetadataKeys.EVENT_ID to eventId
     )
 
     companion object {

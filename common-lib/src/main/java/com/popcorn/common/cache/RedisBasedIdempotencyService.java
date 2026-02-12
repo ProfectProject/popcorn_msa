@@ -98,9 +98,15 @@ public class RedisBasedIdempotencyService implements IdempotencyService {
 				log.debug("✅ Redis 캐시에서 응답 반환 - 키: {}", idempotencyKey);
 				metrics.recordCacheHit();
 
-				IdempotencyRecord cachedRecord = deserializeRecord(cachedRecordJson);
-				T cachedResult = deserializeResponse(cachedRecord.responseData(), responseType);
-				return IdempotencyResult.cachedExecution(cachedResult, cachedRecord.completedAt());
+				try {
+					IdempotencyRecord cachedRecord = deserializeRecord(cachedRecordJson);
+					T cachedResult = deserializeResponse(cachedRecord.responseData(), responseType);
+					return IdempotencyResult.cachedExecution(cachedResult, cachedRecord.completedAt());
+				} catch (IdempotencyException e) {
+					log.warn("⚠️ 손상된 멱등 응답 캐시 삭제 후 재실행 - key={}, error={}",
+						idempotencyKey, e.getMessage());
+					redisTemplate.delete(responseKey);
+				}
 			}
 		} catch (DataAccessException e) {
 			log.warn("Redis 연결 실패로 캐시 우회: key={}, error={}", idempotencyKey, e.getMessage());
@@ -249,19 +255,10 @@ public class RedisBasedIdempotencyService implements IdempotencyService {
 		try {
 			return objectMapper.writeValueAsString(response);
 		} catch (JsonProcessingException e) {
-			log.warn("📝 응답 직렬화 실패, 대체 처리 시도 - 응답 타입: {}, 오류: {}",
+			log.warn("📝 응답 직렬화 실패, 캐시 저장 생략 - 응답 타입: {}, 오류: {}",
 				response != null ? response.getClass().getSimpleName() : "null", e.getMessage());
-
-			// 대체 처리: toString 기반 간단 직렬화 시도
-			try {
-				String fallback = response != null ? response.toString() : "null";
-				log.debug("✅ 대체 직렬화 성공 - 길이: {}", fallback.length());
-				return fallback;
-			} catch (Exception fallbackError) {
-				log.error("❌ 대체 직렬화도 실패 - 오류: {}", fallbackError.getMessage());
-				metrics.recordSerializationError();
-				throw new IdempotencyException("응답 직렬화 실패 (대체 처리 포함)", e);
-			}
+			metrics.recordSerializationError();
+			throw new IdempotencyException("응답 직렬화 실패", e);
 		}
 	}
 

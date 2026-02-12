@@ -25,22 +25,26 @@ public final class EventConstants {
         public static final String QR_CHECKIN_REQUESTED = "QR_CHECKIN_REQUESTED";
         public static final String QR_CHECKIN_COMPLETED = "QR_CHECKIN_COMPLETED";
 
+        // ================ External Domain Events ================
+        public static final String PAYMENT_APPROVED = "PAYMENT_APPROVED";
+
         private EventTypes() {}
     }
 
     /**
-     * Redis Stream 이름들
+     * Kafka Topic 이름들
      */
-    public static final class Streams {
+    public static final class Topics {
         public static final String CHECKIN_EVENTS = "checkin-events";
         public static final String CHECKIN_REQUESTS = "checkin-requests";
         public static final String STANDARD_CHECKINS_EVENTS = "standard-checkins-events";
+        public static final String QR_EVENTS = "qr-events";
 
-        // External streams that CheckIns service subscribes to
+        // External topics that CheckIns service subscribes to
         public static final String PAYMENT_EVENTS = "payment-events";
         public static final String ORDER_EVENTS = "order-events";
 
-        private Streams() {}
+        private Topics() {}
     }
 
     /**
@@ -59,8 +63,9 @@ public final class EventConstants {
         public static final String CHECKIN_EVENTS_CONSUMER = "checkin-events-consumer-1";
         public static final String CHECKIN_REQUESTS_CONSUMER = "checkin-requests-consumer-1";
         public static final String STANDARD_CONSUMER = "standard-consumer-1";
+        public static final String QR_EVENTS_CONSUMER = "qr-events-consumer-1";
 
-        // External stream consumers
+        // External topic consumers
         public static final String PAYMENT_EVENTS_CONSUMER = "payment-events-consumer-1";
         public static final String ORDER_EVENTS_CONSUMER = "order-events-consumer-1";
 
@@ -105,6 +110,11 @@ public final class EventConstants {
         public static final String USER_ID = "userId";
         public static final String SOURCE_SERVICE = "sourceService";
         public static final String TARGET_SERVICE = "targetService";
+        public static final String ORDER_ID = "orderId";
+        public static final String PAYMENT_ID = "paymentId";
+        public static final String QR_ID = "qrId";
+        public static final String QR_CODE = "qrCode";
+        public static final String CHECKIN_ID = "checkinId";
 
         private MetadataKeys() {}
     }

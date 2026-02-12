@@ -7,6 +7,7 @@ import org.springframework.web.bind.annotation.RestController;
 
 import com.popcorn.order.service.cache.PaymentCacheService;
 import com.popcorn.order.service.monitor.PaymentPerformanceMonitor;
+import io.swagger.v3.oas.annotations.Hidden;
 
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
@@ -16,6 +17,7 @@ import lombok.extern.slf4j.Slf4j;
  *
  * 🎯 결제 시스템 성능 추적 및 최적화 정보 제공
  */
+@Hidden
 @RestController
 @RequestMapping("/api/internal/payment-performance")
 @RequiredArgsConstructor

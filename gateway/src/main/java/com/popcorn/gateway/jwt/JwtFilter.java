@@ -39,6 +39,7 @@ public class JwtFilter implements GlobalFilter, Ordered{
             "/api/pay/v1/payments/refresh",
             "/api/pay/v1/payments/confirm-async",
             "/api/pay/v1/payments/orders",
+            "/api/pay/v1/payments/health",
             "/api/stores/v1/popups",
 
             // Swagger/OpenAPI 관련 경로 (전체) - 포괄적 설정
@@ -58,6 +59,8 @@ public class JwtFilter implements GlobalFilter, Ordered{
             "/api/orders/swagger-ui",
             "/api/pay/v3",
             "/api/pay/swagger-ui",
+            "/api/coupons/v3",
+            "/api/coupons/swagger-ui",
             "/api/qr/v3",
             "/api/qr/swagger-ui",
             "/api/orderquery/v3",

@@ -20,6 +20,7 @@ spring:
       hibernate:
         type:
           preferred_enum_jdbc_type: NAMED_ENUM
+        default_schema: store
 
   cache:
     type: simple
@@ -32,13 +33,13 @@ spring:
       password: ${REDIS_PASSWORD}
       timeout: 2000ms  # Redis Stream 안정성 위해 기본 타임아웃 복구
       database: 0  # Payment, Order 서비스와 동일한 database 0 사용
-      connection-timeout: 2000ms  # 연결 지연에 대비해 타임아웃 완화
+      connection-timeout: 1000ms  # 최적화: 2초 → 1초
       jedis:
         pool:
-          max-active: 50  # 30 → 50 (극한 성능 최적화) 🚀
-          max-idle: 30   # 20 → 30 (더 많은 유휴 연결 유지) 🚀
-          min-idle: 15    # 10 → 15 (빠른 연결 확보) 🚀
-          max-wait: 500ms # 1000ms → 500ms (대기시간 대폭 단축) ⚡
+          max-active: 10  # 최적화: 50 → 10
+          max-idle: 8    # 최적화: 30 → 8
+          min-idle: 3    # 최적화: 15 → 3
+          max-wait: 1000ms # 최적화: 500ms → 1000ms
           time-between-eviction-runs: 60000ms # 유휴 연결 정리 주기
           min-evictable-idle-time: 300000ms # 최소 유휴 시간
           test-on-borrow: false # 대출 시 유효성 검사 비활성화 (성능 향상)

@@ -1,6 +1,7 @@
 package com.popcorn.payment.event.base
 
 import com.popcorn.common.event.BaseEvent
+import com.popcorn.payment.constants.EventConstants
 import java.util.*
 
 /**
@@ -48,9 +49,19 @@ abstract class BasePaymentEvent(
     ): Map<String, Any> {
         val baseMetadata = mutableMapOf<String, Any>(
             "domain" to "payment",
-            "aggregateType" to "Payment"
+            EventConstants.MetadataKeys.AGGREGATE_TYPE to EventConstants.AggregateTypes.PAYMENT
         )
         additionalData?.let { baseMetadata.putAll(it) }
         return baseMetadata
     }
+
+    protected fun basePayload(): MutableMap<String, Any> = mutableMapOf(
+        "eventId" to eventId.toString(),
+        "eventType" to eventType,
+        "producer" to "payment-service",
+        "occurredAt" to timestamp.toString(),
+        "schemaVersion" to eventVersion,
+        "traceId" to correlationId.toString(),
+        "correlationId" to correlationId.toString()
+    )
 }

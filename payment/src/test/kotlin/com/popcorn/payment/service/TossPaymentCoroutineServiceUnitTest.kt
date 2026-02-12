@@ -3,6 +3,7 @@ package com.popcorn.payment.service
 import com.fasterxml.jackson.databind.ObjectMapper
 import com.popcorn.payment.client.TossPaymentsCoroutineClient
 import com.popcorn.payment.config.CoroutineTransactionManager
+import com.popcorn.payment.constants.EventConstants
 import com.popcorn.payment.dto.TossPaymentCancelRequest
 import com.popcorn.payment.dto.TossPaymentCancelResponse
 import com.popcorn.payment.dto.TossPaymentConfirmRequest
@@ -250,7 +251,7 @@ class TossPaymentCoroutineServiceUnitTest {
         // Then
         assertEquals(newPaymentId, result.paymentId)
         assertEquals("PAID", result.paymentStatus)
-        assertEquals("PAYMENT_COMPLETED", result.orderStatus)
+        assertEquals(EventConstants.EventTypes.PAYMENT_SUCCESS, result.orderStatus)
         assertEquals(orderIdUuid, result.orderId)
         assertEquals(amount, result.amount)
         assertNotNull(result.approvedAt)

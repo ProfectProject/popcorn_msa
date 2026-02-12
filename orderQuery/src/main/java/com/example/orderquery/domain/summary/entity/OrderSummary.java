@@ -8,7 +8,7 @@ import jakarta.persistence.*;
 import lombok.*;
 
 @Entity
-@Table(name = "popup_order_summary",
+@Table(name = "popup_order_summary", schema = "order_query",
         indexes = {
                 @Index(name = "idx_popup_summary_store", columnList = "store_id, popup_id")
         })

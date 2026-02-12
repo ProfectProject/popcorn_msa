@@ -136,4 +136,10 @@ public class AuthController {
         @Valid @RequestBody RefreshTokenRequest request) {
         return authService.refreshAccessToken(request);
     }
+
+    // 임시 테스트 API - 비밀번호 해시 생성
+    @PostMapping("/test/hash")
+    public String generateHash(@RequestParam String password) {
+        return authService.generatePasswordHash(password);
+    }
 }

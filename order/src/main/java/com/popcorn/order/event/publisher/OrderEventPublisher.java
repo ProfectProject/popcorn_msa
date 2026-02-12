@@ -8,6 +8,7 @@ import com.popcorn.order.kafka.producer.PaymentRequestsProducer;
 import com.popcorn.order.kafka.producer.StoreRequestsProducer;
 import com.popcorn.order.event.order.OrderCancelledEvent;
 import com.popcorn.order.event.order.OrderCompletedEvent;
+import com.popcorn.order.repository.OrderItemRepository;
 import com.popcorn.order.repository.OrderRepository;
 
 import java.util.List;
@@ -36,6 +37,7 @@ public class OrderEventPublisher {
 
     private final ApplicationEventPublisher applicationEventPublisher;
     private final OrderRepository orderRepository;
+    private final OrderItemRepository orderItemRepository;
     private final PaymentRequestsProducer paymentRequestsProducer;
     private final StoreRequestsProducer storeRequestsProducer;
 
@@ -55,7 +57,6 @@ public class OrderEventPublisher {
             // 2. 내부 이벤트 발행 (동일 서비스 내 처리)
             applicationEventPublisher.publishEvent(event);
 
-
         } catch (Exception e) {
             log.error("주문 결제 완료 이벤트 발행 실패 - orderId: {}", order.getId(), e);
             // 이벤트 발행 실패는 주문 프로세스를 중단시키지 않음 (최종 일관성)
@@ -66,7 +67,12 @@ public class OrderEventPublisher {
     /**
      * 굿즈 예약 취소 요청 이벤트 발행
      */
-    public void publishGoodsReservationCancelRequestedEvent(Order order, java.util.UUID goodsId, Integer quantity) {
+    public void publishGoodsReservationCancelRequestedEvent(
+            Order order,
+            java.util.UUID goodsId,
+            Integer quantity,
+            String reason
+    ) {
         try {
             String eventId = java.util.UUID.randomUUID().toString();
 
@@ -74,7 +80,7 @@ public class OrderEventPublisher {
                     order.getId(), goodsId);
 
             /* kafka 굿즈 예약 취소 요청 */
-            storeRequestsProducer.publishGoodsReservationCancelRequested(order,goodsId,quantity);
+            storeRequestsProducer.publishGoodsReservationCancelRequested(order, goodsId, quantity, reason);
 
         } catch (Exception e) {
             log.error("굿즈 예약 취소 요청 이벤트 발행 실패 - orderId: {}", order.getId(), e);
@@ -182,6 +188,8 @@ public class OrderEventPublisher {
      */
     public void publishOrderCompletedEvent(Order order) {
         try {
+            Integer itemCount = orderItemRepository.getTotalQuantityByOrderId(order.getId());
+            int safeItemCount = itemCount != null ? itemCount : 0;
             OrderCompletedEvent event = OrderCompletedEvent.builder()
                     .eventId(java.util.UUID.randomUUID().toString())
                     .orderId(order.getId())
@@ -190,7 +198,7 @@ public class OrderEventPublisher {
                     .popupId(order.getPopupId())
                     .orderDate(order.getCreatedAt())
                     .finalAmount(order.getTotalAmount())
-                    .itemCount(order.getTotalQuantity())
+                    .itemCount(safeItemCount)
                     .completedAt(java.time.LocalDateTime.now())
                     .eventTime(java.time.LocalDateTime.now())
                     .build();
@@ -302,6 +310,9 @@ public class OrderEventPublisher {
             com.popcorn.order.event.stock.StockDeductionRequestedEvent event =
                     com.popcorn.order.event.stock.StockDeductionRequestedEvent.create(orderId, orderNo, popupId, deductionItems);
 
+            // Redis Stream 제거: 내부 이벤트만 발행
+            applicationEventPublisher.publishEvent(event);
+
             log.info("[ORDER] 재고 차감 요청 이벤트 발행 완료 - orderId: {}, eventId: {}",
                     orderId, event.getEventId());
 
@@ -330,6 +341,9 @@ public class OrderEventPublisher {
             com.popcorn.order.event.goods.GoodsReservationRequestedEvent event =
                     com.popcorn.order.event.goods.GoodsReservationRequestedEvent.create(orderId, orderNo, popupId, goodsId, quantity);
 
+            // Redis Stream 제거: 내부 이벤트만 발행
+            applicationEventPublisher.publishEvent(event);
+
             log.info("[ORDER] 굿즈 예약 요청 이벤트 발행 완료 - orderId: {}, eventId: {}",
                     orderId, event.getEventId());
 
@@ -357,6 +371,9 @@ public class OrderEventPublisher {
             // ScheduleReservationRequestedEvent 생성 및 발행
             com.popcorn.order.event.schedule.ScheduleReservationRequestedEvent event =
                     com.popcorn.order.event.schedule.ScheduleReservationRequestedEvent.create(orderId, orderNo, popupId, reservedSessions);
+
+            // Redis Stream 제거: 내부 이벤트만 발행
+            applicationEventPublisher.publishEvent(event);
 
             log.info("[ORDER] 스케줄 예약 요청 이벤트 발행 완료 - orderId: {}, eventId: {}",
                     orderId, event.getEventId());

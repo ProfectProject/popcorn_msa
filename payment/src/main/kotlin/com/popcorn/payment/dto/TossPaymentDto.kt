@@ -190,3 +190,37 @@ data class FailureDetail(
     val code: String,
     val message: String
 )
+
+/**
+ * 토스 결제 승인 결과 DTO (내부 서비스용)
+ */
+data class TossPaymentConfirmResult(
+    val paymentId: java.util.UUID,
+    val paymentStatus: String,
+    val orderStatus: String,
+    val orderId: java.util.UUID,
+    val orderNo: String,
+    val amount: Int,
+    val approvedAt: java.time.LocalDateTime
+)
+
+/**
+ * 토스 결제 취소 결과 DTO (내부 서비스용)
+ */
+data class TossPaymentCancelResult(
+    val paymentId: java.util.UUID,
+    val orderId: java.util.UUID,
+    val cancelAmount: Int,
+    val status: String,
+    val cancelReason: String
+)
+
+/**
+ * 토스 결제 생성 결과 DTO (내부 서비스용)
+ */
+data class PaymentCreateResult(
+    val paymentUrl: String,
+    val orderId: String,
+    val amount: Int,
+    val expiresAt: java.time.LocalDateTime
+)

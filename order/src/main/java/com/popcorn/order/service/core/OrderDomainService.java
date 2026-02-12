@@ -65,6 +65,7 @@ public class OrderDomainService {
         transitions.put(OrderStatus.REQUESTED, EnumSet.of(
                 OrderStatus.ACCEPTED,        // 수락됨
                 OrderStatus.PAYMENT_PENDING, // 결제 대기
+                OrderStatus.PAID,            // 결제 완료 (결제 이벤트 직접 수신 시)
                 OrderStatus.RESERVED,        // 예약 확정
                 OrderStatus.REJECTED,        // 거절됨
                 OrderStatus.CANCELLED        // 취소됨
@@ -80,6 +81,7 @@ public class OrderDomainService {
         transitions.put(OrderStatus.RESERVED, EnumSet.of(
                 OrderStatus.PAYMENT_PENDING, // 결제 대기
                 OrderStatus.PAID,            // 결제 완료
+                OrderStatus.COMPLETED,       // 완료 (재고 차감 성공 시)
                 OrderStatus.CANCELLED        // 취소
         ));
 
@@ -96,10 +98,14 @@ public class OrderDomainService {
                 OrderStatus.CANCELLED        // 취소 (5분 이내만 허용)
         ));
 
+        // 완료 상태에서는 제한적 전이만 허용 (이벤트 순서 문제 해결)
+        transitions.put(OrderStatus.COMPLETED, EnumSet.of(
+                OrderStatus.PAID            // 결제 이벤트가 늦게 도착할 수 있음 (멱등 처리)
+        ));
+
         // 더 이상 변경 불가능한 상태들
         transitions.put(OrderStatus.REJECTED, EnumSet.noneOf(OrderStatus.class));
         transitions.put(OrderStatus.CANCELLED, EnumSet.noneOf(OrderStatus.class));
-        transitions.put(OrderStatus.COMPLETED, EnumSet.noneOf(OrderStatus.class));
 
         return transitions;
     }

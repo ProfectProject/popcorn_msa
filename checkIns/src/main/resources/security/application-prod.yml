@@ -7,6 +7,9 @@ spring:
     activate:
       on-profile: prod
 
+  kafka:
+    bootstrap-servers: ${KAFKA_BOOTSTRAP_SERVERS}
+
   # 데이터베이스 설정 (프로덕션 환경)
   datasource:
     url: jdbc:postgresql://${DB_HOST}:${DB_PORT}/${DB_NAME}
@@ -56,7 +59,8 @@ spring:
       port: ${REDIS_PORT}
       password: ${REDIS_PASSWORD}
       database: 1  # CheckIns 서비스 전용 DB
-      timeout: 5000ms
+      timeout: 10000ms
+      connection-timeout: 5000ms
       # 프로덕션 레디스 풀 설정
       lettuce:
         pool:
@@ -71,6 +75,7 @@ logging:
   level:
     root: WARN
     com.popcorn.checkIns: INFO
+    com.popcorn.common: INFO
     org.springframework.web: WARN
     org.springframework.security: WARN
     org.hibernate.SQL: WARN
@@ -110,16 +115,68 @@ management:
   endpoint:
     health:
       show-details: never  # 프로덕션에서는 상세 정보 숨김
+    metrics:
+      enabled: true
+    prometheus:
+      enabled: true
   metrics:
     export:
       prometheus:
         enabled: true
+        step: 10s
+    distribution:
+      percentiles-histogram:
+        checkins.kafka.processing.duration: true
+        checkins.qr.generation.duration: true
+        checkins.redis.operation.duration: true
+      percentiles:
+        checkins.kafka.processing.duration: 0.5, 0.95, 0.99
+        checkins.qr.generation.duration: 0.5, 0.95, 0.99
+        checkins.redis.operation.duration: 0.5, 0.95, 0.99
+  tracing:
+    sampling:
+      probability: 0.1  # 프로덕션에서는 10% 샘플링
 
 passport:
-  secret: ${PASSPORT_SECRET:passport-shared-secret}
+  secret: ${PASSPORT_SECRET}
   ttl-seconds: 60
 
+# Redis 이벤트 설정 (점진적 전환 중 유지)
+redis:
+  events:
+    enabled: true
+
 jwt:
-  secret: ${JWT_SECRET:dGVzdC1qd3Qtc2VjcmV0LWtleS1mb3ItbG9jYWwtZGV2ZWxvcG1lbnQtb25seS1kb25vdC11c2UtaW4tcHJvZHVjdGlvbg==}
+  secret: ${JWT_SECRET}
   expiration: 3600000
   refresh-expiration-ms: 1209600000
+
+# Kafka 이벤트 설정 (프로덕션 환경)
+kafka:
+  enabled: true
+  bootstrap-servers: ${KAFKA_BOOTSTRAP_SERVERS}
+  consumer:
+    group-id: checkin-service-group
+    concurrency: 3
+    max-poll-records: 500
+    session-timeout-ms: 30000
+    heartbeat-interval-ms: 10000
+    auto-offset-reset: earliest
+    enable-auto-commit: false
+  producer:
+    acks: all
+    retries: 2147483647
+    enable-idempotence: true
+    max-in-flight-requests-per-connection: 5
+    compression-type: snappy
+    batch-size: 16384
+    linger-ms: 5
+    request-timeout-ms: 30000
+    delivery-timeout-ms: 120000
+# Kafka 이벤트 설정
+kafka:
+  enabled: true
+  bootstrap-servers: ${KAFKA_BOOTSTRAP_SERVERS:localhost:9092}
+  consumer:
+    group-id: ${CHECKINS_KAFKA_CONSUMER_GROUP_ID:checkin-service-group}
+    concurrency: 3

@@ -73,8 +73,13 @@ class PaymentEventListener(
                 log.info("💳 결제 승인 이벤트 처리: paymentId={}, orderId={}, amount={}원",
                     event.paymentId, event.orderId, event.amount)
 
-                // QR 코드 생성 이벤트 발행 (Order 서비스가 처리)
-                publishQrCodeGenerationEvent(event.paymentId, event.orderId, event.orderNo, event.customerId)
+                // QR 코드 생성 이벤트 발행 (예약 결제만, CheckIns 직결)
+                if (event.hasReservation == true) {
+                    publishQrCodeGenerationEvent(event.paymentId, event.orderId, event.orderNo, event.customerId)
+                } else {
+                    log.info("🚫 QR 생성 스킵: orderId={} hasReservation={} hasGoods={}",
+                        event.orderId, event.hasReservation, event.hasGoods)
+                }
 
                 // 재고 차감 확정 처리
                 confirmInventoryDeduction(event.paymentId, event.orderId)
@@ -230,7 +235,7 @@ class PaymentEventListener(
 
     /**
      * QR 코드 생성 이벤트 발행 (이벤트 기반 아키텍처)
-     * Order 서비스가 이 이벤트를 구독하여 QR 발급을 처리합니다.
+     * CheckIns 서비스가 이 이벤트를 구독하여 QR 발급을 처리합니다.
      */
     private suspend fun publishQrCodeGenerationEvent(paymentId: java.util.UUID, orderId: java.util.UUID, orderNo: String, customerId: Long?) {
         try {
@@ -254,7 +259,7 @@ class PaymentEventListener(
 
 
     // ========================================
-    // 이벤트 기반 아키텍처 - QR 관련 로직은 Order 서비스에서 처리
+    // 이벤트 기반 아키텍처 - QR 관련 로직은 CheckIns 서비스에서 처리
     // ========================================
 
     private suspend fun confirmInventoryDeduction(paymentId: java.util.UUID, orderId: java.util.UUID) {

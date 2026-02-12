@@ -3,6 +3,7 @@ package com.popcorn.users.auth.service;
 import org.springframework.security.authentication.AuthenticationManager;
 import org.springframework.security.authentication.UsernamePasswordAuthenticationToken;
 import org.springframework.security.core.Authentication;
+import org.springframework.security.crypto.password.PasswordEncoder;
 import org.springframework.stereotype.Service;
 import org.springframework.beans.factory.annotation.Value;
 
@@ -22,6 +23,7 @@ public class AuthService {
     private final AuthenticationManager authenticationManager;
     private final JwtUtil jwtUtil;
     private final RefreshTokenService refreshTokenService;
+    private final PasswordEncoder passwordEncoder;
 
     @Value("${jwt.expiration:3600000}")
     private long accessTokenExpirationMs;
@@ -78,5 +80,10 @@ public class AuthService {
         String accessToken = jwtUtil.createJwt(userId, email, role, accessTokenExpirationMs);
         return new RefreshTokenResponse(accessToken, "Bearer", accessTokenExpirationMs);
 
+    }
+
+    // 임시 테스트용 메서드 - 비밀번호 해시 생성
+    public String generatePasswordHash(String password) {
+        return passwordEncoder.encode(password);
     }
 }

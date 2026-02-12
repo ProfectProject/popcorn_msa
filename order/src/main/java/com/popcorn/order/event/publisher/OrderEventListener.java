@@ -270,7 +270,8 @@ public class OrderEventListener {
                 orderEventPublisher.publishGoodsReservationCancelRequestedEvent(
                         order,
                         item.getGoodsId(),
-                        item.getQty()
+                        item.getQty(),
+                        "ORDER_ROLLBACK"
                 );
 
                 log.info("굿즈 재고 예약 취소 성공 - 주문번호: {}, 굿즈변형ID: {}",
@@ -505,7 +506,8 @@ public class OrderEventListener {
                     orderEventPublisher.publishGoodsReservationCancelRequestedEvent(
                             order,
                             item.getGoodsId(),
-                            item.getQty()
+                            item.getQty(),
+                            reason
                     );
                 }
             }
@@ -856,7 +858,6 @@ public class OrderEventListener {
 
             // 주문 항목들 조회
             List<OrderItem> orderItems = orderItemRepository.findByOrderId(order.getId());
-            order.setOrderItems(orderItems);
 
             // 굿즈 항목만 필터링
             List<OrderItem> goodsItems = orderItems.stream()

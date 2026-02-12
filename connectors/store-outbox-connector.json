@@ -3,10 +3,10 @@
   "config": {
     "connector.class": "io.debezium.connector.postgresql.PostgresConnector",
 
-    "database.hostname": "host.docker.internal",
-    "database.port": "5430",
-    "database.user": "store_app",
-    "database.password": "store123",
+    "database.hostname": "db",
+    "database.port": "5432",
+    "database.user": "debezium_master",
+    "database.password": "debezium123",
     "database.dbname": "popcorn_db",
 
     "plugin.name": "pgoutput",
@@ -25,7 +25,7 @@
     "transforms.outbox.table.field.event.id": "event_id",
     "transforms.outbox.table.field.event.key": "partition_key",
     "transforms.outbox.table.field.event.type": "event_type",
-    "transforms.outbox.table.field.payload": "event_data",
+    "transforms.outbox.table.field.event.payload": "event_data",
 
     "transforms.outbox.route.by.field": "topic",
     "transforms.outbox.route.topic.replacement": "${routedByValue}",

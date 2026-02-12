@@ -2,6 +2,8 @@ package com.popcorn.order.kafka.producer;
 
 import com.popcorn.order.entity.Order;
 import com.popcorn.order.service.core.OrderCommandService.ScheduleConfirmationItem;
+import com.fasterxml.jackson.core.JsonProcessingException;
+import com.fasterxml.jackson.databind.ObjectMapper;
 
 import java.time.Instant;
 import java.util.HashMap;
@@ -22,8 +24,9 @@ public class StoreRequestsProducer {
     private static final String AGGREGATE_TYPE_ORDER = "ORDER";
     private final OutboxEventRepository outboxEventRepository;
     private final KafkaTemplate<String, Object> kafkaTemplate;
+    private final ObjectMapper objectMapper;
 
-    public void publishGoodsReservationCancelRequested(Order order, UUID goodsId, int quantity) {
+    public void publishGoodsReservationCancelRequested(Order order, UUID goodsId, int quantity, String reason) {
         Map<String, Object> payload = basePayload(order, "GOODS_RESERVATION_CANCEL_REQUESTED");
         payload.put("goodsId", goodsId != null ? goodsId.toString() : null);
         payload.put("qty", quantity);
@@ -32,7 +35,7 @@ public class StoreRequestsProducer {
         saveToOutbox(order, "GOODS_RESERVATION_CANCEL_REQUESTED", payload);
     }
 
-    public void publishScheduleReservationCancelRequested(Order order, UUID scheduleId) {
+    public void publishScheduleReservationCancelRequested(Order order, UUID scheduleId, String reason) {
         Map<String, Object> payload = basePayload(order, "SCHEDULE_RESERVATION_CANCEL_REQUESTED");
         payload.put("scheduleId", scheduleId != null ? scheduleId.toString() : null);
         //payload.put("reason", reason);
@@ -55,7 +58,7 @@ public class StoreRequestsProducer {
         saveToOutbox(order, "SCHEDULE_CONFIRMATION_REQUESTED", payload);
     }
 
-    public void publishStockReleaseRequested(Order order, List<Map<String, Object>> releaseItems) {
+    public void publishStockReleaseRequested(Order order, List<Map<String, Object>> releaseItems, String reason) {
         Map<String, Object> payload = basePayload(order, "STOCK_RELEASE_REQUESTED");
         payload.put("releaseItems", releaseItems);
         //payload.put("reason", reason);
@@ -63,7 +66,7 @@ public class StoreRequestsProducer {
         saveToOutbox(order, "STOCK_RELEASE_REQUESTED", payload);
     }
 
-    public void publishScheduleReleaseRequested(Order order, List<Map<String, Object>> releaseItems) {
+    public void publishScheduleReleaseRequested(Order order, List<Map<String, Object>> releaseItems, String reason) {
         Map<String, Object> payload = basePayload(order, "SCHEDULE_RELEASE_REQUESTED");
         payload.put("releaseItems", releaseItems);
         //payload.put("reason", reason);

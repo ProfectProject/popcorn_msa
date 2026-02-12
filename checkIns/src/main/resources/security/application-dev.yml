@@ -7,6 +7,9 @@ spring:
     activate:
       on-profile: dev
 
+  kafka:
+    bootstrap-servers: ${KAFKA_BOOTSTRAP_SERVERS}
+
   # 데이터베이스 설정 (개발 환경)
   datasource:
     url: jdbc:postgresql://${DB_HOST:localhost}:${DB_PORT:5430}/${DB_NAME:popcorn_db}
@@ -52,7 +55,8 @@ spring:
       port: ${REDIS_PORT:6379}
       password: ${REDIS_PASSWORD:}
       database: 1  # CheckIns 서비스 전용 DB
-      timeout: 3000ms
+      timeout: 10000ms
+      connection-timeout: 5000ms
       lettuce:
         pool:
           max-active: 15
@@ -63,6 +67,7 @@ spring:
 logging:
   level:
     com.popcorn.checkIns: DEBUG
+    com.popcorn.common: INFO
     org.springframework.web: INFO
     org.hibernate.SQL: DEBUG
     org.hibernate.type.descriptor.sql.BasicBinder: TRACE
@@ -71,11 +76,37 @@ logging:
 springdoc:
   server-url: ${GATEWAY_SERVICE_URL:https://dev.goormpopcorn.shop}
 
-# 헬스체크 (개발 환경)
+# 모니터링 및 메트릭 설정 (개발 환경)
 management:
+  endpoints:
+    web:
+      exposure:
+        include: health,info,metrics,prometheus
+  endpoint:
+    health:
+      show-details: always  # 개발 환경에서는 상세 정보 표시
+    metrics:
+      enabled: true
+    prometheus:
+      enabled: true
+  metrics:
+    export:
+      prometheus:
+        enabled: true
+        step: 5s  # 개발환경에서는 더 자주 수집
+    distribution:
+      percentiles-histogram:
+        checkins.kafka.processing.duration: true
+        checkins.qr.generation.duration: true
+      percentiles:
+        checkins.kafka.processing.duration: 0.5, 0.95, 0.99
+        checkins.qr.generation.duration: 0.5, 0.95, 0.99
   health:
     redis:
       enabled: false
+  tracing:
+    sampling:
+      probability: 1.0  # 개발환경에서는 100% 샘플링
 
 # CheckIns 서비스 비즈니스 설정 (개발용)
 checkIns:
@@ -91,7 +122,35 @@ passport:
   secret: ${PASSPORT_SECRET:passport-shared-secret}
   ttl-seconds: 60
 
+# Redis 이벤트 설정 (점진적 전환 중 유지)
+redis:
+  events:
+    enabled: true
+
 jwt:
   secret: ${JWT_SECRET:dGVzdC1qd3Qtc2VjcmV0LWtleS1mb3ItbG9jYWwtZGV2ZWxvcG1lbnQtb25seS1kb25vdC11c2UtaW4tcHJvZHVjdGlvbg==}
   expiration: 3600000
   refresh-expiration-ms: 1209600000
+
+# Kafka 이벤트 설정 (개발 환경 - 점진적 전환용)
+kafka:
+  enabled: true
+  bootstrap-servers: ${KAFKA_BOOTSTRAP_SERVERS:kafka-1:9092,kafka-2:9092,kafka-3:9092}
+  consumer:
+    group-id: checkin-service-group
+    concurrency: 3
+    max-poll-records: 500
+    session-timeout-ms: 30000
+    auto-offset-reset: earliest
+    enable-auto-commit: false
+  producer:
+    acks: all
+    retries: 2147483647
+    compression-type: snappy
+    enable-idempotence: true
+kafka:
+  enabled: true
+  bootstrap-servers: ${KAFKA_BOOTSTRAP_SERVERS:localhost:9092}
+  consumer:
+    group-id: ${CHECKINS_KAFKA_CONSUMER_GROUP_ID:checkin-service-group}
+    concurrency: 3

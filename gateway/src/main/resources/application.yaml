@@ -63,6 +63,15 @@ spring:
                   factor: 2
                   basedOnPreviousValue: true
 
+        - id: coupon
+          uri: ${COUPON_SERVICE_URL}     # Coupon 서비스
+          predicates:
+            - Path=/api/v1/coupons/**       # coupons
+          filters:
+            - RewritePath=^/api/v1/coupons/(?<remaining>v3/api-docs.*), /${remaining}
+            - RewritePath=^/api/v1/coupons/(?<remaining>swagger-ui.*), /${remaining}
+            - RewritePath=^/api/v1/coupons/(?<remaining>webjars.*), /${remaining}
+
         - id: backend
           uri: ${BACKEND_SERVICE_URL}     # 모놀리식 backend
           predicates:
@@ -76,12 +85,25 @@ spring:
             - RewritePath=^/api/users/(?<remaining>v3/api-docs.*), /${remaining}
             - RewritePath=^/api/users/(?<remaining>swagger-ui.*), /${remaining}
             - RewritePath=^/api/users/(?<remaining>webjars.*), /${remaining}
-            # 1) CircuitBreaker (Resilience4j 인스턴스명 연결)
-            - name: CircuitBreaker
+            # Retry (Gateway 필터로만 적용) --> 서버 5xx / 502/504 만 재시도
+            - name: Retry
               args:
-                name: cbUserService
-                fallbackUri: forward:/fallback/user-service
-            # 2) Retry (Gateway 필터로만 적용) --> 서버 5xx / 502/504 만 재시도
+                retries: 2
+                methods: GET
+                statuses: BAD_GATEWAY,GATEWAY_TIMEOUT,INTERNAL_SERVER_ERROR,SERVICE_UNAVAILABLE
+                backoff:
+                  firstBackoff: 80ms
+                  maxBackoff: 200ms
+                  factor: 2
+                  basedOnPreviousValue: true
+
+        # Payment 서비스에서 User API 호출용 라우팅
+        - id: user-api
+          uri: ${USER_SERVICE_URL}     # User 서비스
+          predicates:
+            - Path=/api/user/**          # user (단수형)
+          filters:
+            # Retry (Gateway 필터로만 적용) --> 서버 5xx / 502/504 만 재시도
             - name: Retry
               args:
                 retries: 2
@@ -101,12 +123,7 @@ spring:
             - RewritePath=^/api/stores/(?<remaining>v3/api-docs.*), /${remaining}
             - RewritePath=^/api/stores/(?<remaining>swagger-ui.*), /${remaining}
             - RewritePath=^/api/stores/(?<remaining>webjars.*), /${remaining}
-            # 1) CircuitBreaker (Resilience4j 인스턴스명 연결)
-            - name: CircuitBreaker
-              args:
-                name: cbStoreService
-                fallbackUri: forward:/fallback/store-service
-            # 2) Retry (Gateway 필터로만 적용) --> 서버 5xx / 502/504 만 재시도
+            # Retry (Gateway 필터로만 적용) --> 서버 5xx / 502/504 만 재시도
             - name: Retry
               args:
                 retries: 2
@@ -126,6 +143,29 @@ spring:
             - RewritePath=^/api/orders/(?<remaining>v3/api-docs.*), /${remaining}
             - RewritePath=^/api/orders/(?<remaining>swagger-ui.*), /${remaining}
             - RewritePath=^/api/orders/(?<remaining>webjars.*), /${remaining}
+            # 1) CircuitBreaker (Resilience4j 인스턴스명 연결)
+            - name: CircuitBreaker
+              args:
+                name: cbOrderService
+                fallbackUri: forward:/fallback/order-service
+            # 2) Retry (Gateway 필터로만 적용) --> 서버 5xx / 502/504 만 재시도
+            - name: Retry
+              args:
+                retries: 2
+                methods: GET
+                statuses: BAD_GATEWAY,GATEWAY_TIMEOUT,INTERNAL_SERVER_ERROR,SERVICE_UNAVAILABLE
+                backoff:
+                  firstBackoff: 80ms
+                  maxBackoff: 200ms
+                  factor: 2
+                  basedOnPreviousValue: true
+
+        # Payment 서비스에서 Order API 호출용 라우팅
+        - id: order-api
+          uri: ${ORDER_SERVICE_URL}    # Order 서비스
+          predicates:
+            - Path=/api/order/**         # order (단수형)
+          filters:
             # 1) CircuitBreaker (Resilience4j 인스턴스명 연결)
             - name: CircuitBreaker
               args:
@@ -219,6 +259,8 @@ springdoc:
         url: ${GATEWAY_SERVICE_URL}/api/orders/v3/api-docs
       - name: payment-service
         url: ${GATEWAY_SERVICE_URL}/api/payments/v3/api-docs
+      - name: coupon-service
+        url: ${GATEWAY_SERVICE_URL}/api/v1/coupons/v3/api-docs
       - name: orderQuery
         url: ${GATEWAY_SERVICE_URL}/api/orderquery/v3/api-docs
 
@@ -230,7 +272,7 @@ resilience4j:
         sliding-window-size: 100
         minimum-number-of-calls: 30
         failure-rate-threshold: 20
-        slow-call-duration-threshold: 300ms
+        slow-call-duration-threshold: 2000ms  # 300ms → 2000ms로 증가
         slow-call-rate-threshold: 40
         wait-duration-in-open-state: 5s
         permitted-number-of-calls-in-half-open-state: 10
@@ -242,7 +284,7 @@ resilience4j:
         sliding-window-size: 100
         minimum-number-of-calls: 30
         failure-rate-threshold: 20
-        slow-call-duration-threshold: 300ms
+        slow-call-duration-threshold: 3000ms  # 300ms → 3000ms (3초로 증가)
         slow-call-rate-threshold: 40
         wait-duration-in-open-state: 5s
         permitted-number-of-calls-in-half-open-state: 10
@@ -299,10 +341,10 @@ resilience4j:
   timelimiter:
     instances:
       cbUserService:
-        timeout-duration: 700ms
+        timeout-duration: 5000ms  # 2000ms → 5000ms로 증가
         cancel-running-future: true
       cbStoreService:
-        timeout-duration: 700ms
+        timeout-duration: 8000ms
       cbOrderService:
         timeout-duration: 8000ms  # 주문 처리는 시간이 오래 걸릴 수 있음 (3000ms → 8000ms 증가)
       cbPaymentService:

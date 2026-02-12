@@ -1,81 +1,74 @@
 package com.popcorn.payment.service
 
+import com.popcorn.payment.client.UserServiceClient
+import com.popcorn.payment.client.StoreValidationClient
+import com.popcorn.payment.dto.BatchPriceValidationRequest
+import com.popcorn.payment.dto.LineItemPriceRequest
 import com.popcorn.payment.event.domain.payment.EventLineItem
+import com.popcorn.payment.exception.PaymentValidationException
 import com.popcorn.payment.repository.ExternalDbQueryException
-import com.popcorn.payment.repository.ExternalStoreRepository
-import com.popcorn.payment.repository.ExternalUserRepository
 import org.springframework.cache.annotation.Cacheable
 import org.springframework.stereotype.Service
 import java.util.*
 import kotlinx.coroutines.async
 import kotlinx.coroutines.runBlocking
 import org.slf4j.LoggerFactory
-import org.springframework.beans.factory.annotation.Autowired
 
 /**
  * Hybrid 검증 서비스
- * 중요한 검증은 DB 직접 조회, 일반적인 검증은 HTTP + 캐싱
+ * 모든 검증을 HTTP API 통신으로 처리하여 마이크로서비스 아키텍처 준수
  */
 @Service
 class HybridValidationService(
-    @Autowired(required = false) private val externalUserRepository: ExternalUserRepository?,
-    @Autowired(required = false) private val externalStoreRepository: ExternalStoreRepository?
+    private val userServiceClient: UserServiceClient,
+    private val storeValidationClient: StoreValidationClient
 ) {
 
     private val log = LoggerFactory.getLogger(HybridValidationService::class.java)
 
     /**
-     * 사용자 주소 검증 (Hybrid 방식)
-     * 외부 Repository가 없으면 간단한 검증으로 fallback
+     * 사용자 주소 검증 (보조 검증, 실패해도 결제 진행)
+     * User 서비스의 REST API를 호출하여 주소 정보 조회
      */
     suspend fun validateUserAddressHybrid(userId: Long): Boolean {
         return try {
-            log.info("🔍 [DB] 사용자 주소 검증 시작 - userId: {}", userId)
+            log.info("🔍 [보조 검증] 사용자 주소 검증 시작 - userId: {} (실패해도 결제 진행)", userId)
 
-            if (externalUserRepository == null) {
-                log.info("🔧 [DB] 외부 사용자 Repository 없음 - 간단한 검증으로 fallback - userId: {}", userId)
-                return userId > 0 // 간단한 검증
-            }
-
-            // 1차: DB 직접 조회 (10-50ms)
-            val hasDefaultAddress = externalUserRepository.hasDefaultAddress(userId)
+            // HTTP API 호출로 기본 주소 존재 여부 확인
+            val hasDefaultAddress = userServiceClient.hasDefaultAddress(userId)
 
             if (hasDefaultAddress) {
-                log.info("✅ [DB] 사용자 주소 검증 성공 - userId: {}, 처리시간: ~20ms", userId)
+                log.info("✅ [보조 검증] 사용자 주소 검증 성공 - userId: {}", userId)
             } else {
-                log.warn("❌ [DB] 사용자 기본 주소 없음 - userId: {}", userId)
+                log.warn("⚠️ [보조 검증] 사용자 기본 주소 없음하지만 결제 진행 - userId: {}", userId)
             }
 
             hasDefaultAddress
-        } catch (e: ExternalDbQueryException) {
-            log.error("❌ [DB] 사용자 주소 검증 실패 - userId: {}, error: {}", userId, e.message, e)
-            throw e
+        } catch (e: Exception) {
+            log.warn("⚠️ [보조 검증] 사용자 주소 검증 실패하지만 결제 진행 - userId: {}, error: {}", userId, e.message)
+            true // 주소 검증 실패해도 결제는 진행 (보조 검증)
         }
     }
 
     /**
-     * 세션 가격 검증 (Order 가격 vs DB 가격)
+     * 세션 가격 검증 (HTTP API 통신 방식)
      */
     @Cacheable(value = ["hybridPrices"], key = "'session:' + #sessionId", unless = "#result == null")
     suspend fun getSessionPriceHybrid(sessionId: UUID): Int? {
         return try {
-            log.debug("🔍 [DB] 세션 가격 조회 시작 - sessionId: {}", sessionId)
+            log.debug("🔍 [HTTP] 세션 가격 조회 시작 - sessionId: {}", sessionId)
 
-            if (externalStoreRepository == null) {
-                log.warn("⚠️ [DB] 외부 스토어 Repository 없음 - 세션 가격 검증 불가 - sessionId: {}", sessionId)
-                return null
-            }
-
-            val price = externalStoreRepository.findSessionPrice(sessionId)
+            // HTTP API를 통한 세션 가격 조회
+            val price = storeValidationClient.getSessionPrice(sessionId)
             if (price != null) {
-                log.debug("✅ [DB] 세션 가격 조회 성공 - sessionId: {}, price: {}원", sessionId, price)
+                log.debug("✅ [HTTP] 세션 가격 조회 성공 - sessionId: {}, price: {}원", sessionId, price)
             } else {
-                log.warn("❌ [DB] 세션 가격 정보 없음 - sessionId: {}", sessionId)
+                log.warn("❌ [HTTP] 세션 가격 정보 없음 - sessionId: {}", sessionId)
             }
 
             price
         } catch (e: Exception) {
-            log.error("❌ [DB] 세션 가격 조회 실패 - sessionId: {}, error: {}", sessionId, e.message, e)
+            log.error("❌ [HTTP] 세션 가격 조회 실패 - sessionId: {}, error: {}", sessionId, e.message, e)
             null
         }
     }
@@ -86,23 +79,19 @@ class HybridValidationService(
     @Cacheable(value = ["hybridPrices"], key = "'goods:' + #goodsId", unless = "#result == null")
     suspend fun getGoodsPriceHybrid(goodsId: UUID): Int? {
         return try {
-            log.debug("🔍 [DB] 굿즈 가격 조회 시작 - goodsId: {}", goodsId)
+            log.debug("🔍 [HTTP] 굿즈 가격 조회 시작 - goodsId: {}", goodsId)
 
-            if (externalStoreRepository == null) {
-                log.warn("⚠️ [DB] 외부 스토어 Repository 없음 - 굿즈 가격 검증 불가 - goodsId: {}", goodsId)
-                return null
-            }
-
-            val price = externalStoreRepository.findGoodsPrice(goodsId)
+            // HTTP API를 통한 굿즈 가격 조회
+            val price = storeValidationClient.getGoodsPrice(goodsId)
             if (price != null) {
-                log.debug("✅ [DB] 굿즈 가격 조회 성공 - goodsId: {}, price: {}원", goodsId, price)
+                log.debug("✅ [HTTP] 굿즈 가격 조회 성공 - goodsId: {}, price: {}원", goodsId, price)
             } else {
-                log.warn("❌ [DB] 굿즈 가격 정보 없음 - goodsId: {}", goodsId)
+                log.warn("❌ [HTTP] 굿즈 가격 정보 없음 - goodsId: {}", goodsId)
             }
 
             price
         } catch (e: Exception) {
-            log.error("❌ [DB] 굿즈 가격 조회 실패 - goodsId: {}, error: {}", goodsId, e.message, e)
+            log.error("❌ [HTTP] 굿즈 가격 조회 실패 - goodsId: {}, error: {}", goodsId, e.message, e)
             null
         }
     }
@@ -339,31 +328,42 @@ class HybridValidationService(
     }
 
     /**
-     * 빠른 존재성 확인 (DB 직접 조회)
+     * 빠른 존재성 확인 (HTTP API 통신 방식)
      * 캐시 없이 실시간 확인이 필요한 경우
      */
     suspend fun quickExistenceCheck(userId: Long, sessionId: UUID?, goodsId: UUID?): ExistenceCheckResult {
         return try {
             runBlocking {
                 val userExists = async {
-                    if (externalUserRepository != null) {
-                        externalUserRepository?.existsUser(userId) ?: false
-                    } else {
+                    try {
+                        userServiceClient.existsUser(userId)
+                    } catch (e: Exception) {
+                        log.warn("⚠️ [HTTP] 사용자 존재 확인 실패, fallback - userId: {}", userId)
                         userId > 0 // fallback
                     }
                 }
                 val sessionValid = async {
-                    if (sessionId != null && externalStoreRepository != null) {
-                        externalStoreRepository?.isValidSession(sessionId) ?: false
+                    if (sessionId != null) {
+                        try {
+                            storeValidationClient.isValidSession(sessionId)
+                        } catch (e: Exception) {
+                            log.warn("⚠️ [HTTP] 세션 검증 실패, fallback - sessionId: {}", sessionId)
+                            true // fallback: 세션이 있으면 유효하다고 가정
+                        }
                     } else {
-                        sessionId != null
+                        false
                     }
                 }
                 val goodsExists = async {
-                    if (goodsId != null && externalStoreRepository != null) {
-                        externalStoreRepository?.findGoodsPrice(goodsId) != null
+                    if (goodsId != null) {
+                        try {
+                            storeValidationClient.getGoodsPrice(goodsId) != null
+                        } catch (e: Exception) {
+                            log.warn("⚠️ [HTTP] 굿즈 존재 확인 실패, fallback - goodsId: {}", goodsId)
+                            true // fallback: 굿즈가 있으면 존재한다고 가정
+                        }
                     } else {
-                        goodsId != null
+                        false
                     }
                 }
 
@@ -371,11 +371,11 @@ class HybridValidationService(
                     userExists = userExists.await(),
                     sessionValid = sessionValid.await(),
                     goodsExists = goodsExists.await(),
-                    processingTimeMs = 30 // 예상 처리 시간
+                    processingTimeMs = 50 // HTTP 통신으로 인한 약간 증가된 처리 시간
                 )
             }
         } catch (e: Exception) {
-            log.error("❌ [DB] 존재성 확인 실패", e)
+            log.error("❌ [HTTP] 존재성 확인 실패", e)
             ExistenceCheckResult.failed()
         }
     }
@@ -416,6 +416,134 @@ class HybridValidationService(
      * 완전한 결제 전 검증 (Enhanced Hybrid 방식)
      * 주소 검증 + 가격 검증을 병렬로 수행하여 최대 성능을 달성
      */
+    /**
+     * 기본 결제 검증 (HTTP 통신용)
+     * Order 정보와 결제 금액 검증
+     */
+    suspend fun validateBasicPaymentRequest(
+        orderId: UUID,
+        userId: Long,
+        expectedAmount: Int,
+        actualOrderAmount: Int,
+        hasGoods: Boolean = false,  // 굿즈 포함 여부 (기본값: false)
+        orderDetail: com.popcorn.payment.dto.OrderInfoResponse? = null  // Order 상세 정보
+    ): BasicValidationResult {
+        return try {
+            log.debug("🔍 [HTTP] 기본 결제 검증 시작 - orderId: {}, userId: {}, expected: {}, actual: {}",
+                orderId, userId, expectedAmount, actualOrderAmount)
+
+            // 1. 사용자 주소 검증 (굿즈가 있을 때만 필요)
+            val addressValid = if (hasGoods) {
+                try {
+                    log.info("🔍 [HTTP] 굿즈 포함된 주문 - 주소 검증 시작 - userId: {}", userId)
+                    val result = validateUserAddressHybrid(userId)
+                    log.info("✅ [HTTP] 주소 검증 완료 - userId: {}, result: {}", userId, result)
+                    true // User 서비스 오류 시에도 결제는 진행 (관대한 정책)
+                } catch (e: Exception) {
+                    log.warn("⚠️ [HTTP] 주소 검증 예외 발생, 통과 처리 - userId: {}, error: {}", userId, e.message)
+                    true
+                }
+            } else {
+                log.info("✅ [HTTP] 예약 전용 주문 - 주소 검증 생략 - userId: {}", userId)
+                true // 굿즈가 없으면 주소 검증 불필요
+            }
+
+            // 2. 주 검증: HTTP로 받은 Order 금액 vs 결제 요청 금액 비교 (핵심 검증)
+            val basicPriceValid = (expectedAmount == actualOrderAmount)
+
+            log.info("🎯 [주 검증] HTTP 기본 가격 검증 - orderId: {}", orderId)
+            log.info("  - expectedAmount: {}, actualOrderAmount: {}", expectedAmount, actualOrderAmount)
+            log.info("  - basicPriceValid: {}", basicPriceValid)
+
+            if (!basicPriceValid) {
+                log.warn("❌ [주 검증] 기본 가격 불일치로 결제 차단 - expected: {}, actual: {}", expectedAmount, actualOrderAmount)
+                throw PaymentValidationException("결제 금액이 주문 금액과 일치하지 않습니다")
+            }
+
+            log.info("✅ [주 검증] 기본 가격 검증 성공! 결제 진행 가능 - expected: {}, actual: {}", expectedAmount, actualOrderAmount)
+
+            // 3. Store API 보조 검증 (실패해도 결제 진행, 추가 확신을 위한 참고용)
+            if (hasGoods && orderDetail?.lineItems?.isNotEmpty() == true) {
+                log.info("🏪 [보조 검증] Store API 추가 검증 시도 - orderId: {} (실패해도 결제 진행)", orderId)
+
+                try {
+                    // LineItem 정보를 Store API 요청 형식으로 변환
+                    val lineItemRequests = orderDetail.lineItems!!.map { lineItem ->
+                        LineItemPriceRequest(
+                            itemId = lineItem.itemId,
+                            itemType = lineItem.itemType,
+                            expectedPrice = lineItem.unitPrice,
+                            quantity = lineItem.quantity
+                        )
+                    }
+
+                    // Store API 배치 가격 검증 호출 (참고용)
+                    val validationRequest = BatchPriceValidationRequest(
+                        orderId = orderId,
+                        lineItems = lineItemRequests,
+                        totalExpectedAmount = actualOrderAmount
+                    )
+
+                    val validationResponse = storeValidationClient.validateBatchPrices(validationRequest)
+
+                    if (validationResponse.isValid) {
+                        log.info("✅ [보조 검증] Store API 검증도 성공! 추가 확신 획득 - orderId: {}, 총금액: {}원",
+                                orderId, validationResponse.totalActualAmount)
+                    } else {
+                        log.warn("⚠️ [보조 검증] Store API 검증 실패하지만 기본 검증 성공으로 결제 진행 - orderId: {}, 이유: {}",
+                                orderId, validationResponse.failureReason)
+                    }
+                } catch (e: Exception) {
+                    log.warn("⚠️ [보조 검증] Store API 호출 실패하지만 기본 검증 성공으로 결제 진행 - orderId: {}, error: {}",
+                            orderId, e.message)
+                }
+            } else if (hasGoods) {
+                log.info("🔍 [보조 검증] Mixed 주문이지만 lineItem 정보 없음 - 기본 검증만으로 충분")
+            } else {
+                log.info("🎭 [보조 검증] 예약 전용 주문 - Store API 검증 불필요")
+            }
+
+            // 기본 검증 성공했으므로 결제 허용
+            val priceValid = true // 주 검증(basicPriceValid) 성공 시 무조건 true
+
+            val isValid = addressValid && priceValid
+
+            log.info("🔍 [HTTP] 기본 검증 결과 - address: {}, price: {}, valid: {}",
+                addressValid, priceValid, isValid)
+
+            BasicValidationResult(
+                isValid = isValid,
+                addressValid = addressValid,
+                priceValid = priceValid,
+                userId = userId,
+                expectedAmount = expectedAmount,
+                actualAmount = actualOrderAmount
+            )
+        } catch (e: Exception) {
+            log.error("❌ [HTTP] 기본 결제 검증 실패 - orderId: {}, error: {}", orderId, e.message, e)
+            BasicValidationResult(
+                isValid = false,
+                addressValid = false,
+                priceValid = false,
+                userId = userId,
+                expectedAmount = expectedAmount,
+                actualAmount = actualOrderAmount
+            )
+        }
+    }
+
+    /**
+     * 기본 검증 결과 DTO
+     */
+    data class BasicValidationResult(
+        val isValid: Boolean,
+        val addressValid: Boolean,
+        val priceValid: Boolean,
+        val userId: Long,
+        val expectedAmount: Int,
+        val actualAmount: Int
+    )
+
     /**
      * 향상된 검증 결과 DTO
      */

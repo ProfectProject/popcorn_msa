@@ -1,8 +1,9 @@
-DO $$ BEGIN
-    IF NOT EXISTS (SELECT 1 FROM pg_roles WHERE rolname = 'store_migrator') THEN
-        CREATE ROLE store_migrator LOGIN PASSWORD '${STORE_MIGRATOR_PASSWORD}';
-    END IF;
-END $$;
+-- DO $$ BEGIN
+--     IF NOT EXISTS (SELECT 1 FROM pg_roles WHERE rolname = 'store_migrator') THEN
+--         CREATE ROLE store_migrator LOGIN PASSWORD 'password_here';
+--         CREATE ROLE store_migrator LOGIN PASSWORD 'password_here';
+--     END IF;
+-- END $$;
 
 CREATE SCHEMA IF NOT EXISTS store AUTHORIZATION store_migrator;
 GRANT ALL PRIVILEGES ON SCHEMA store TO store_migrator;

@@ -1,6 +1,6 @@
 -- 5) order_query (read model)
-RESET ROLE;
-SET ROLE order_query_migrator;
+-- RESET ROLE;
+-- SET ROLE order_query_migrator;
 
 -- =========================
 -- 5-1) popup_order_summary
@@ -133,4 +133,4 @@ CREATE INDEX IF NOT EXISTS idx_summary_applied_log_popup_time
 CREATE INDEX IF NOT EXISTS idx_summary_applied_log_order_time
     ON order_query.summary_applied_log(order_id, applied_at DESC);
 
-RESET ROLE;
+-- RESET ROLE;

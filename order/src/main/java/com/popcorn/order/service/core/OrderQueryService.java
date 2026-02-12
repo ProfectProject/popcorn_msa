@@ -65,7 +65,8 @@ public class OrderQueryService {
         return PerformanceLogger.logTimeWithReturn("주문 상세 조회", () -> {
             log.debug("주문 상세 조회 - ID: {}", orderId);
 
-            Optional<Order> orderOpt = orderRepository.findById(orderId);
+            // OrderItem들도 함께 로드하는 FETCH JOIN 쿼리 사용
+            Optional<Order> orderOpt = orderRepository.findByIdWithItems(orderId);
             if (orderOpt.isEmpty()) {
                 log.warn("주문을 찾을 수 없음 - ID: {}", orderId);
                 return Optional.<OrderDetailResponse>empty();

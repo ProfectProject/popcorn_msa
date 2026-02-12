@@ -8,7 +8,10 @@ public record QrCodeRow(
 		UUID orderId,
 		String qrCode,
 		LocalDateTime expiresAt,
-		LocalDateTime createdAt) {
+		LocalDateTime createdAt,
+		UUID storeId,
+		UUID popupId,
+		UUID orderGoodsId) {
 
 	public boolean isExpired(LocalDateTime now) {
 		if (expiresAt == null) {

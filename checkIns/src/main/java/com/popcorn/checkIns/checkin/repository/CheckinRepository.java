@@ -21,7 +21,7 @@ public class CheckinRepository {
 		UUID checkinId = UUID.randomUUID();
 		jdbcTemplate.update(
 				"""
-				INSERT INTO qr.qr_checkins (checkin_id, order_id, order_qr_code_id, created_at, created_by)
+				INSERT INTO checkins.qr_checkins (checkin_id, order_id, order_qr_code_id, created_at, created_by)
 				VALUES (?, ?, ?, ?, ?)
 				""",
 				checkinId,
@@ -37,8 +37,8 @@ public class CheckinRepository {
 		List<CheckinRow> rows = jdbcTemplate.query(
 				"""
 				SELECT c.checkin_id, c.order_id, c.order_qr_code_id, c.created_at, c.created_by, q.qr_code
-				FROM qr.qr_checkins c
-				JOIN qr.qr_order_qr_codes q ON q.qr_id = c.order_qr_code_id
+				FROM checkins.qr_checkins c
+				JOIN checkins.qr_order_qr_codes q ON q.qr_id = c.order_qr_code_id
 				WHERE c.order_qr_code_id = ?
 				ORDER BY c.created_at DESC
 				LIMIT 1
@@ -60,8 +60,8 @@ public class CheckinRepository {
 		return jdbcTemplate.query(
 				"""
 				SELECT c.checkin_id, c.order_id, c.order_qr_code_id, c.created_at, c.created_by, q.qr_code
-				FROM qr.qr_checkins c
-				JOIN qr.qr_order_qr_codes q ON q.qr_id = c.order_qr_code_id
+				FROM checkins.qr_checkins c
+				JOIN checkins.qr_order_qr_codes q ON q.qr_id = c.order_qr_code_id
 				ORDER BY c.created_at DESC, c.checkin_id DESC
 				LIMIT ?
 				""",
@@ -81,8 +81,8 @@ public class CheckinRepository {
 		List<CheckinRow> rows = jdbcTemplate.query(
 				"""
 				SELECT c.checkin_id, c.order_id, c.order_qr_code_id, c.created_at, c.created_by, q.qr_code
-				FROM qr.qr_checkins c
-				JOIN qr.qr_order_qr_codes q ON q.qr_id = c.order_qr_code_id
+				FROM checkins.qr_checkins c
+				JOIN checkins.qr_order_qr_codes q ON q.qr_id = c.order_qr_code_id
 				WHERE c.checkin_id = ?
 				""",
 				(rs, rowNum) -> new CheckinRow(

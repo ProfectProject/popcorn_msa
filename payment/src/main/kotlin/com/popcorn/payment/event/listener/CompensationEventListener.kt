@@ -1,5 +1,6 @@
 package com.popcorn.payment.event.listener
 
+import com.popcorn.payment.constants.EventConstants
 import com.popcorn.payment.event.domain.compensation.CompensationCompletedEvent
 import com.popcorn.payment.event.domain.compensation.CompensationFailedEvent
 import com.popcorn.payment.service.PaymentCommandCoroutineService
@@ -76,7 +77,7 @@ class CompensationEventListener(
             }
 
             // 보상 실패 기록
-            recordCompensationResult(event.compensationId, "FAILED", event.partiallyCompletedActions, event.failureReason)
+            recordCompensationResult(event.compensationId, EventConstants.EventStatus.FAILED, event.partiallyCompletedActions, event.failureReason)
 
             log.error("🚨 보상 실패 이벤트 처리 완료 - 심각도: {} - compensationId: {}",
                      event.getSeverityLevel(), event.compensationId)
@@ -101,7 +102,7 @@ class CompensationEventListener(
         }
 
         // 성공 메트릭 기록
-        recordCompensationMetrics(event.compensationType, "SUCCESS")
+        recordCompensationMetrics(event.compensationType, EventConstants.EventStatus.SUCCESS)
     }
 
     /**

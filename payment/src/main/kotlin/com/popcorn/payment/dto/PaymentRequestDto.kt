@@ -1,6 +1,7 @@
 package com.popcorn.payment.dto
 
 import com.fasterxml.jackson.annotation.JsonIgnoreProperties
+import io.swagger.v3.oas.annotations.media.Schema
 import jakarta.validation.constraints.*
 import java.util.*
 
@@ -23,6 +24,10 @@ data class PaymentConfirmRequest(
  * 결제 취소 요청 DTO
  */
 data class PaymentCancelRequest(
+    @field:NotNull(message = "결제 ID는 필수입니다")
+    @field:Schema(description = "취소할 결제 ID (path 변수와 동일해야 함)", example = "3fa85f64-5717-4562-b3fc-2c963f66afa6")
+    val paymentId: UUID,
+
     @field:NotBlank(message = "취소 사유는 필수입니다")
     @field:Size(min = 1, max = 200, message = "취소 사유는 1-200자 내로 입력해주세요")
     val cancelReason: String,

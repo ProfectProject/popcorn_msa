@@ -8,7 +8,7 @@ server:
 spring:
   kafka:
     enabled: true
-    bootstrap-servers: localhost:29092
+    bootstrap-servers: ${KAFKA_BOOTSTRAP_SERVERS:kafka-1:9092,kafka-2:9092,kafka-3:9092}
     consumer:
       group-id: order-service-group
   config:
@@ -17,14 +17,14 @@ spring:
 
   # 데이터베이스 설정 (로컬 환경용, 성능 최적화)
   datasource:
-    url: jdbc:postgresql://${DB_HOST:localhost}:${DB_PORT:5430}/${DB_NAME:popcorn_db}
+    url: jdbc:postgresql://${DB_HOST:localhost}:${DB_PORT:5432}/${DB_NAME:popcorn_db}
     username: ${ORDER_DB_USERNAME:order_app}
     password: ${ORDER_DB_PASSWORD:order123}
     driver-class-name: org.postgresql.Driver
     hikari:
-      maximum-pool-size: 30          # 로컬은 30으로 설정
-      minimum-idle: 5                # 최소 유휴
-      connection-timeout: 3000       # 3초 연결 타임아웃
+      maximum-pool-size: 10          # 최적화: 30 → 10
+      minimum-idle: 3                # 최적화: 5 → 3
+      connection-timeout: 5000       # 최적화: 3초 → 5초
       idle-timeout: 300000           # 5분 유휴 타임아웃
       max-lifetime: 1800000          # 30분 최대 생명주기
 
@@ -44,7 +44,7 @@ spring:
 
   # Flyway 설정
   flyway:
-    url: jdbc:postgresql://${DB_HOST:localhost}:${DB_PORT:5430}/${DB_NAME:popcorn_db}
+    url: jdbc:postgresql://${DB_HOST:localhost}:${DB_PORT:5432}/${DB_NAME:popcorn_db}
     user: ${ORDER_FLYWAY_USERNAME:order_migrator}
     password: ${ORDER_MIGRATOR_PASSWORD:order321}
     enabled: true
@@ -63,10 +63,10 @@ spring:
       host: ${REDIS_HOST:localhost}
       port: ${REDIS_PORT:6379}
       password: ${REDIS_PASSWORD:}
-      timeout: 10000ms  # 2초 → 10초 (타임아웃 대폭 증가)
-      command-timeout: 10000ms  # 명령 실행 타임아웃
+      timeout: 1000ms  # 최적화: 10초 → 1초 (타임아웃 감소)
+      command-timeout: 1000ms  # 최적화: 명령 실행 타임아웃 감소
       database: 0  # Payment, Stores 서비스와 동일한 database 0 사용
-      connection-timeout: 10000ms  # 연결 타임아웃도 증가
+      connection-timeout: 1000ms  # 최적화: 연결 타임아웃 감소
       lettuce:
         pool:
           max-active: 30  # 100 → 30 (메모리 사용량 70% 감소)
@@ -183,8 +183,8 @@ logging:
 external:
   services:
     users:
-      base-url: ${USERS_SERVICE_BASE_URL:http://localhost:8082}
+      base-url: ${USERS_SERVICE_BASE_URL:http://popcorn-gateway:8080}
     store:
-      base-url: ${STORE_SERVICE_BASE_URL:http://localhost:8083}
+      base-url: ${STORE_SERVICE_BASE_URL:http://popcorn-gateway:8080}
   http:
     enabled: true  # HTTP 기반 외부 서비스 호출 활성화 (개발환경)

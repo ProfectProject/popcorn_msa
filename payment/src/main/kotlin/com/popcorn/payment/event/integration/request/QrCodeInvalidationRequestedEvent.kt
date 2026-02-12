@@ -13,7 +13,7 @@ import java.util.*
  * - QR 코드를 무효화해야 하는 상황 발생 시
  *
  * [이벤트 수신자]
- * - Order 서비스: QR 코드 상태 무효화 처리
+ * - CheckIns 서비스: QR 코드 상태 무효화 처리
  * - CheckIns 서비스: 해당 QR 코드로 입장 불가 처리
  *
  * [목적]
@@ -40,7 +40,7 @@ data class QrCodeInvalidationRequestedEvent(
     val relatedPaymentId: UUID
 ) : BasePaymentEvent(
     paymentId = relatedPaymentId,
-    eventType = EventConstants.EventTypes.QR_INVALIDATION_REQUESTED
+    eventType = EventConstants.EventTypes.Integration.QR_INVALIDATION_REQUESTED
 ) {
 
     override fun getEventPayload(): Map<String, Any> = mapOf(
@@ -49,7 +49,7 @@ data class QrCodeInvalidationRequestedEvent(
         "reason" to reason,
         "requestedAt" to requestedAt.toString(),
         "occurredAt" to occurredAt.toString(),
-        "eventId" to eventId
+        EventConstants.MetadataKeys.EVENT_ID to eventId
     )
 
     companion object {

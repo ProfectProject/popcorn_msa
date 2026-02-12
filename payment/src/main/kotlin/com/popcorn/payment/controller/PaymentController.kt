@@ -1,6 +1,7 @@
 package com.popcorn.payment.controller
 
 import com.popcorn.payment.dto.*
+import com.popcorn.payment.constants.EventConstants
 import com.popcorn.payment.exception.PaymentException
 import com.popcorn.payment.service.TossPaymentCoroutineService
 import com.popcorn.payment.service.PaymentCommandCoroutineService
@@ -11,6 +12,9 @@ import io.swagger.v3.oas.annotations.Parameter
 import io.swagger.v3.oas.annotations.responses.ApiResponse as SwaggerApiResponse
 import io.swagger.v3.oas.annotations.responses.ApiResponses
 import io.swagger.v3.oas.annotations.tags.Tag
+import io.swagger.v3.oas.annotations.media.Content
+import io.swagger.v3.oas.annotations.media.Schema
+import io.swagger.v3.oas.annotations.media.ExampleObject
 import jakarta.validation.Valid
 import kotlinx.coroutines.async
 import kotlinx.coroutines.coroutineScope
@@ -135,20 +139,57 @@ class PaymentController(
     /**
      * 결제 취소
      */
+    @Operation(
+        summary = "결제 취소",
+        description = "결제를 취소합니다"
+    )
+    @ApiResponses(
+        SwaggerApiResponse(responseCode = "200", description = "결제 취소 성공"),
+        SwaggerApiResponse(responseCode = "400", description = "잘못된 요청 데이터"),
+        SwaggerApiResponse(responseCode = "404", description = "결제 정보 없음"),
+        SwaggerApiResponse(responseCode = "500", description = "서버 내부 오류")
+    )
     @PostMapping("/{paymentId}/cancel")
     suspend fun cancelPayment(
+        @Parameter(
+            name = "paymentId",
+            description = "결제 ID",
+            required = true,
+            example = "550e8400-e29b-41d4-a716-446655440000"
+        )
         @PathVariable paymentId: UUID,
+
+        @io.swagger.v3.oas.annotations.parameters.RequestBody(
+            description = "취소 요청 정보",
+            required = true,
+            content = [Content(
+                mediaType = "application/json",
+                schema = Schema(implementation = PaymentCancelRequest::class),
+                examples = [ExampleObject(
+                    name = "취소 요청 예시",
+                    value = """
+                    {
+                        "paymentId": "550e8400-e29b-41d4-a716-446655440000",
+                        "cancelReason": "고객 요청",
+                        "cancelAmount": 10000
+                    }
+                    """
+                )]
+            )]
+        )
         @Valid @RequestBody request: PaymentCancelRequest
     ): ResponseEntity<ApiResponse<PaymentCancelResponse>> {
 
         log.info("🔄 결제 취소 요청: paymentId={}, reason={}", paymentId, request.cancelReason)
 
         try {
-            // 결제 정보로부터 주문 ID 조회
-            val paymentDetail = paymentCommandService.getLatestPaymentByOrderId(paymentId) // 임시로 paymentId 사용
+            if (request.paymentId != paymentId) {
+                return ResponseEntity.status(HttpStatus.BAD_REQUEST)
+                    .body(ApiResponse.error("path paymentId와 body paymentId가 일치하지 않습니다."))
+            }
 
-            val result = tossPaymentService.cancelPayment(
-                orderId = paymentDetail.orderId ?: paymentId, // 임시 처리
+            val result = tossPaymentService.cancelPaymentByPaymentId(
+                paymentId = paymentId,
                 cancelReason = request.cancelReason
             )
 
@@ -341,8 +382,7 @@ class PaymentController(
         log.debug("🔍 결제 조회 요청: paymentId={}", paymentId)
 
         try {
-            // 임시로 구현 (실제로는 별도 조회 서비스 필요)
-            val result = paymentCommandService.getLatestPaymentByOrderId(paymentId)
+            val result = paymentCommandService.getPaymentById(paymentId)
 
             val response = PaymentDetailResponse(
                 paymentId = result.paymentId,
@@ -443,7 +483,7 @@ class PaymentController(
     suspend fun healthCheck(): ResponseEntity<Map<String, Any>> {
         val healthInfo = mapOf(
             "status" to "UP",
-            "timestamp" to java.time.LocalDateTime.now(),
+            EventConstants.MetadataKeys.TIMESTAMP to java.time.LocalDateTime.now(),
             "service" to "payment-service"
         )
         return ResponseEntity.ok(healthInfo)

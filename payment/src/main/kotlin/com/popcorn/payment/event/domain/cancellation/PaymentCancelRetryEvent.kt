@@ -50,7 +50,7 @@ data class PaymentCancelRetryEvent(
     val relatedPaymentId: UUID
 ) : BasePaymentEvent(
     paymentId = relatedPaymentId,
-    eventType = EventConstants.EventTypes.PAYMENT_CANCEL_RETRY
+    eventType = EventConstants.EventTypes.PaymentRetry.PAYMENT_CANCEL_RETRY
 ) {
 
     override fun getEventPayload(): Map<String, Any> = mapOf(
@@ -62,7 +62,7 @@ data class PaymentCancelRetryEvent(
         "delaySeconds" to delaySeconds,
         "nextRetryAt" to nextRetryAt.toString(),
         "occurredAt" to occurredAt.toString(),
-        "eventId" to eventId
+        EventConstants.MetadataKeys.EVENT_ID to eventId
     )
 
     companion object {
