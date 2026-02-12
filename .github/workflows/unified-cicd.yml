@@ -303,29 +303,36 @@ jobs:
         with:
           images: ${{ steps.ecr.outputs.registry }}/${{ steps.vars.outputs.ecr_repo }}
           tags: |
-            # 1. Production (prod)
+            # 1. Production (main)
             type=raw,value=${{ steps.build_meta.outputs.sha8 }},enable=${{ github.ref_name == 'main' }}
             type=raw,value=latest,enable=${{ github.ref_name == 'main' }}
+            type=semver,pattern={{version}}
             
             # 2. Development (develop)
-            type=raw,value=dev-${{ steps.build_meta.outputs.sha8 }},enable=${{ github.ref_name == 'develop' }}
-            type=raw,value=dev-latest,enable=${{ github.ref_name == 'develop' }}
-            
-            # 3. 기타 브랜치 (ci-tag 등 테스트용)
-            type=raw,value=${{ github.ref_name }},enable=${{ github.ref_name != 'main' && github.ref_name != 'develop' }}
-            type=raw,value=${{ github.ref_name }}-${{ steps.build_meta.outputs.sha8 }},enable=${{ github.ref_name != 'main' && github.ref_name != 'develop' }}
-            
-            # 4. Semantic Versioning (v1.0.0 태그 등)
-            type=semver,pattern={{version}}
+            type=raw,value=dev-${{ steps.build_meta.outputs.sha8 }},enable=${{ github.ref_name == 'develop' || github.ref_name == 'ci-tag' }}
+            type=raw,value=dev-latest,enable=${{ github.ref_name == 'develop' || github.ref_name == 'ci-tag'}}  
           flavor: |
             latest=false
 
-      - name: Debug Tag Outputs
+      # 3️⃣ 브랜치별 출력값 확인 (요청하신 echo 문)
+      - name: 📢 Echo Generated Tags
         run: |
           echo "=========================================="
-          echo "Branch: ${{ github.ref_name }}"
-          echo "Service: ${{ matrix.service }}"
-          echo "Full Tags Output:"
+          echo "현재 브랜치: ${{ github.ref_name }}"
+          echo "적용될 서비스: ${{ matrix.service }}"
+          echo "------------------------------------------"
+          if [[ "${{ github.ref_name }}" == "main" ]]; then
+            echo "🎯 [MAIN] 생성될 태그:"
+            echo "   - ${{ steps.slug.outputs.sha8 }}"
+            echo "   - latest"
+            echo "   - v* (Git Tag 푸시 시)"
+          else
+            echo "🛠️ [DEVELOP] 생성될 태그:"
+            echo "   - dev-${{ steps.slug.outputs.sha8 }}"
+            echo "   - dev-latest"
+          fi
+          echo "------------------------------------------"
+          echo "전체 ECR 주소 포함 태그:"
           echo "${{ steps.meta.outputs.tags }}"
           echo "=========================================="
 
