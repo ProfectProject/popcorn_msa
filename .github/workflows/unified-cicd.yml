@@ -320,6 +320,15 @@ jobs:
           flavor: |
             latest=false
 
+      - name: Debug Tag Outputs
+        run: |
+          echo "=========================================="
+          echo "Branch: ${{ github.ref_name }}"
+          echo "Service: ${{ matrix.service }}"
+          echo "Full Tags Output:"
+          echo "${{ steps.meta.outputs.tags }}"
+          echo "=========================================="
+
       - name: Build and push Docker image
         uses: docker/build-push-action@v6
         with:
