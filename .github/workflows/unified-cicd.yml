@@ -279,6 +279,31 @@ jobs:
       - name: Set up Docker Buildx
         uses: docker/setup-buildx-action@v3
 
+ # 1️⃣ 안전한 8자리 SHA 생성 (Step Output 활용)
+      - name: Generate short SHA
+        id: slug
+        run: echo "sha8=$(echo ${GITHUB_SHA} | cut -c1-8)" >> $GITHUB_OUTPUT
+
+      # 2️⃣ Docker 메타데이터 추출
+      - name: Docker metadata
+        id: meta
+        uses: docker/metadata-action@v5
+        with:
+          images: ${{ steps.ecr.outputs.registry }}/${{ steps.vars.outputs.ecr_repo }}
+          tags: |
+            # [Production] main 브랜치 push 시 생성
+            type=raw,value=${{ steps.slug.outputs.sha8 }},enable=${{ github.ref == 'refs/heads/main' }}
+            type=raw,value=latest,enable=${{ github.ref == 'refs/heads/main' }}
+            
+            # [Development] develop 브랜치 push 시 생성
+            type=raw,value=dev-${{ steps.slug.outputs.sha8 }},enable=${{ github.ref == 'refs/heads/develop' }}
+            type=raw,value=dev-latest,enable=${{ github.ref == 'refs/heads/develop' }}
+            
+            # [SemVer] Git Tag(v1.0.0 등)가 push되었을 때 자동 감지하여 생성
+            type=semver,pattern={{version}}
+          flavor: |
+            latest=false
+
       - name: Build and push Docker image
         uses: docker/build-push-action@v6
         with:
@@ -288,41 +313,8 @@ jobs:
           platforms: linux/amd64
           provenance: false
           sbom: false
-
-      - name: Make tags (production/develop only)
-        id: tags
-        shell: bash
-        run: |
-          set -euo pipefail
-
-          IMAGE="${{ steps.ecr.outputs.registry }}/${{ steps.vars.outputs.ecr_repo }}"
-          SHA8="${GITHUB_SHA::8}"
-          BRANCH="${GITHUB_REF_NAME}"
-
-          TAGS=""
-
-          if [[ "$BRANCH" == "prod" ]]; then
-            TAGS+="${IMAGE}:${SHA8}"$'\n'
-
-            # vX.Y.Z tag가 현재 커밋에 찍혀 있으면 v태그 + latest 추가
-            SEMVER="$(git tag --points-at HEAD | grep -E '^v[0-9]+\.[0-9]+\.[0-9]+$' | head -n 1 || true)"
-            if [[ -n "$SEMVER" ]]; then
-              TAGS+="${IMAGE}:${SEMVER}"$'\n'
-              TAGS+="${IMAGE}:latest"$'\n'
-            fi
-
-          elif [[ "$BRANCH" == "develop" ]]; then
-            TAGS+="${IMAGE}:dev-${SHA8}"$'\n'
-            TAGS+="${IMAGE}:dev-latest"$'\n'
-          fi
-
-          {
-            echo "value<<EOF"
-            echo -n "$TAGS"
-            echo
-            echo "EOF"
-          } >> "$GITHUB_OUTPUT"
-
+          tags: ${{ steps.meta.outputs.tags }}
+ 
 
           cache-from: type=gha
           cache-to: type=gha,mode=max
