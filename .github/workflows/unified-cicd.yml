@@ -2,7 +2,7 @@ name: Unified CI/CD Pipeline
 
 on:
   push:
-    branches: [main, develop]
+    branches: [main, develop, ci-tag]
   pull_request:
     branches: ['**']
 
