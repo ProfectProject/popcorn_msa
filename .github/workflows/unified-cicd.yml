@@ -289,10 +289,40 @@ jobs:
           provenance: false
           sbom: false
 
-          # dev-latest 태그 적용
-          tags: |
-            ${{ steps.ecr.outputs.registry }}/${{ steps.vars.outputs.ecr_repo }}:dev-latest
-            ${{ steps.ecr.outputs.registry }}/${{ steps.vars.outputs.ecr_repo }}:test-${{ github.run_number }}
+      - name: Make tags (production/develop only)
+        id: tags
+        shell: bash
+        run: |
+          set -euo pipefail
+
+          IMAGE="${{ steps.ecr.outputs.registry }}/${{ steps.vars.outputs.ecr_repo }}"
+          SHA8="${GITHUB_SHA::8}"
+          BRANCH="${GITHUB_REF_NAME}"
+
+          TAGS=""
+
+          if [[ "$BRANCH" == "prod" ]]; then
+            TAGS+="${IMAGE}:${SHA8}"$'\n'
+
+            # vX.Y.Z tag가 현재 커밋에 찍혀 있으면 v태그 + latest 추가
+            SEMVER="$(git tag --points-at HEAD | grep -E '^v[0-9]+\.[0-9]+\.[0-9]+$' | head -n 1 || true)"
+            if [[ -n "$SEMVER" ]]; then
+              TAGS+="${IMAGE}:${SEMVER}"$'\n'
+              TAGS+="${IMAGE}:latest"$'\n'
+            fi
+
+          elif [[ "$BRANCH" == "develop" ]]; then
+            TAGS+="${IMAGE}:dev-${SHA8}"$'\n'
+            TAGS+="${IMAGE}:dev-latest"$'\n'
+          fi
+
+          {
+            echo "value<<EOF"
+            echo -n "$TAGS"
+            echo
+            echo "EOF"
+          } >> "$GITHUB_OUTPUT"
+
 
           cache-from: type=gha
           cache-to: type=gha,mode=max
