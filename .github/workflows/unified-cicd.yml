@@ -296,46 +296,36 @@ jobs:
             echo "display_tag=${{ github.ref_name }}" >> $GITHUB_OUTPUT
           fi
 
-      # 2️⃣ Docker 메타데이터 추출 (모든 브랜치 대응)
       - name: Docker metadata
         id: meta
         uses: docker/metadata-action@v5
         with:
           images: ${{ steps.ecr.outputs.registry }}/${{ steps.vars.outputs.ecr_repo }}
           tags: |
-            # 1. Production (main)
-            type=raw,value=${{ steps.build_meta.outputs.sha8 }},enable=${{ github.ref_name == 'main'|| github.ref_name == 'ci-tag' }}
-            type=raw,value=latest,enable=${{ github.ref_name == 'main'|| github.ref_name == 'ci-tag' }}
-            type=semver,pattern={{version}}
+            # Production 전략 (main 전용)
+            type=raw,value=${{ steps.build_meta.outputs.sha8 }},enable=${{ github.ref_name == 'main' }}
+            type=raw,value=latest,enable=${{ github.ref_name == 'main' }}
             
-            # 2. Development (develop)
+            # Development 전략 (develop 및 ci-tag 전용)
             type=raw,value=dev-${{ steps.build_meta.outputs.sha8 }},enable=${{ github.ref_name == 'develop' || github.ref_name == 'ci-tag' }}
-            type=raw,value=dev-latest,enable=${{ github.ref_name == 'develop' || github.ref_name == 'ci-tag'}}  
+            type=raw,value=dev-latest,enable=${{ github.ref_name == 'develop' || github.ref_name == 'ci-tag' }}
+            
+            # 공통: Semantic Versioning
+            type=semver,pattern={{version}}
           flavor: |
             latest=false
 
-      # 3️⃣ 브랜치별 출력값 확인 (요청하신 echo 문)
-      - name: 📢 Echo Generated Tags
+      - name: 📢 Echo Generated Tags & Preview
         run: |
           echo "=========================================="
           echo "현재 브랜치: ${{ github.ref_name }}"
-          echo "적용될 서비스: ${{ matrix.service }}"
-          echo "------------------------------------------"
-          if [[ "${{ github.ref_name }}" == "main" ]]; then
-            echo "🎯 [MAIN] 생성될 태그:"
-            echo "   - ${{ steps.slug.outputs.sha8 }}"
-            echo "   - latest"
-            echo "   - v* (Git Tag 푸시 시)"
-          else
-            echo "🛠️ [DEVELOP] 생성될 태그:"
-            echo "   - dev-${{ steps.slug.outputs.sha8 }}"
-            echo "   - dev-latest"
-          fi
-          echo "------------------------------------------"
-          echo "전체 ECR 주소 포함 태그:"
+          echo "🎯 [Current] 이번 빌드에서 생성된 태그:"
           echo "${{ steps.meta.outputs.tags }}"
+          echo "------------------------------------------"
+          echo "🔍 [Main Preview] 만약 'main' 브랜치라면:"
+          echo "   - ${{ steps.ecr.outputs.registry }}/${{ steps.vars.outputs.ecr_repo }}:${{ steps.build_meta.outputs.sha8 }}"
+          echo "   - ${{ steps.ecr.outputs.registry }}/${{ steps.vars.outputs.ecr_repo }}:latest"
           echo "=========================================="
-
       - name: Build and push Docker image
         uses: docker/build-push-action@v6
         with:
