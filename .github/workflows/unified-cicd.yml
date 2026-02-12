@@ -2,11 +2,7 @@ name: Unified CI/CD Pipeline
 
 on:
   push:
-<<<<<<< HEAD
     branches: [main, develop, ci-tag]
-=======
-    branches: [ci-tag, main, develop]
->>>>>>> 77e2b1ba (코드 수정)
   pull_request:
     branches: ['**']
 
