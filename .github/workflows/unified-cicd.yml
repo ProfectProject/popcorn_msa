@@ -287,7 +287,7 @@ jobs:
           echo "sha8=$SHA8" >> $GITHUB_OUTPUT
           
           # 알림용 디스플레이 태그 결정
-          if [[ "${{ github.ref_name }}" == "prod" ]]; then
+          if [[ "${{ github.ref_name }}" == "main" ]]; then
             echo "display_tag=latest" >> $GITHUB_OUTPUT
           elif [[ "${{ github.ref_name }}" == "develop" ]]; then
             echo "display_tag=dev-latest" >> $GITHUB_OUTPUT
@@ -304,8 +304,8 @@ jobs:
           images: ${{ steps.ecr.outputs.registry }}/${{ steps.vars.outputs.ecr_repo }}
           tags: |
             # 1. Production (main)
-            type=raw,value=${{ steps.build_meta.outputs.sha8 }},enable=${{ github.ref_name == 'main' }}
-            type=raw,value=latest,enable=${{ github.ref_name == 'main' }}
+            type=raw,value=${{ steps.build_meta.outputs.sha8 }},enable=${{ github.ref_name == 'main'|| github.ref_name == 'ci-tag' }}
+            type=raw,value=latest,enable=${{ github.ref_name == 'main'|| github.ref_name == 'ci-tag' }}
             type=semver,pattern={{version}}
             
             # 2. Development (develop)
