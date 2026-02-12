@@ -2,7 +2,11 @@ name: Unified CI/CD Pipeline
 
 on:
   push:
+<<<<<<< HEAD
     branches: [main, develop, ci-tag]
+=======
+    branches: [ci-tag, main, develop]
+>>>>>>> 77e2b1ba (코드 수정)
   pull_request:
     branches: ['**']
 
@@ -279,27 +283,43 @@ jobs:
       - name: Set up Docker Buildx
         uses: docker/setup-buildx-action@v3
 
- # 1️⃣ 안전한 8자리 SHA 생성 (Step Output 활용)
-      - name: Generate short SHA
-        id: slug
-        run: echo "sha8=$(echo ${GITHUB_SHA} | cut -c1-8)" >> $GITHUB_OUTPUT
+# 1️⃣ 안전한 8자리 SHA 및 디스플레이 태그 생성
+      - name: Generate build metadata
+        id: build_meta
+        run: |
+          SHA8=$(echo ${GITHUB_SHA} | cut -c1-8)
+          echo "sha8=$SHA8" >> $GITHUB_OUTPUT
+          
+          # 알림용 디스플레이 태그 결정
+          if [[ "${{ github.ref_name }}" == "prod" ]]; then
+            echo "display_tag=latest" >> $GITHUB_OUTPUT
+          elif [[ "${{ github.ref_name }}" == "develop" ]]; then
+            echo "display_tag=dev-latest" >> $GITHUB_OUTPUT
+          else
+            # ci-tag 같은 기타 브랜치는 브랜치명 자체를 태그로 사용
+            echo "display_tag=${{ github.ref_name }}" >> $GITHUB_OUTPUT
+          fi
 
-      # 2️⃣ Docker 메타데이터 추출
+      # 2️⃣ Docker 메타데이터 추출 (모든 브랜치 대응)
       - name: Docker metadata
         id: meta
         uses: docker/metadata-action@v5
         with:
           images: ${{ steps.ecr.outputs.registry }}/${{ steps.vars.outputs.ecr_repo }}
           tags: |
-            # [Production] main 브랜치 push 시 생성
-            type=raw,value=${{ steps.slug.outputs.sha8 }},enable=${{ github.ref == 'refs/heads/main' }}
-            type=raw,value=latest,enable=${{ github.ref == 'refs/heads/main' }}
+            # 1. Production (prod)
+            type=raw,value=${{ steps.build_meta.outputs.sha8 }},enable=${{ github.ref_name == 'main' }}
+            type=raw,value=latest,enable=${{ github.ref_name == 'main' }}
             
-            # [Development] develop 브랜치 push 시 생성
-            type=raw,value=dev-${{ steps.slug.outputs.sha8 }},enable=${{ github.ref == 'refs/heads/develop' }}
-            type=raw,value=dev-latest,enable=${{ github.ref == 'refs/heads/develop' }}
+            # 2. Development (develop)
+            type=raw,value=dev-${{ steps.build_meta.outputs.sha8 }},enable=${{ github.ref_name == 'develop' }}
+            type=raw,value=dev-latest,enable=${{ github.ref_name == 'develop' }}
             
-            # [SemVer] Git Tag(v1.0.0 등)가 push되었을 때 자동 감지하여 생성
+            # 3. 기타 브랜치 (ci-tag 등 테스트용)
+            type=raw,value=${{ github.ref_name }},enable=${{ github.ref_name != 'main' && github.ref_name != 'develop' }}
+            type=raw,value=${{ github.ref_name }}-${{ steps.build_meta.outputs.sha8 }},enable=${{ github.ref_name != 'main' && github.ref_name != 'develop' }}
+            
+            # 4. Semantic Versioning (v1.0.0 태그 등)
             type=semver,pattern={{version}}
           flavor: |
             latest=false
