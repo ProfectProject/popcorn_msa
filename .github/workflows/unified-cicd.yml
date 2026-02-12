@@ -193,19 +193,9 @@ jobs:
       ECR_ORDER_REPOSITORY: goorm-popcorn-order
       ECR_GATEWAY_REPOSITORY: goorm-popcorn-api-gateway
 
-      ECS_TASK_DEFINITION: users/goorm-popcorn-dev-user-service-revision2.json
-      ECS_TASK_ORDER_DEFINITION: order/goorm-popcorn-dev-order-service.json
-      ECS_TASK_GATEWAY_DEFINITION: gateway/goorm-popcorn-dev-api-gateway.json
-
       CONTAINER_NAME: user-service
       CONTAINER_ORDER_NAME: order-service
       CONTAINER_GATEWAY_NAME: api-gateway
-
-      ECS_SERVICE: goorm-popcorn-dev-user-service
-      ECS_ORDER_SERVICE: goorm-popcorn-dev-order-service
-      ECS_APIGATE_SERVICE: goorm-popcorn-dev-api-gateway
-
-      ECS_CLUSTER: goorm-popcorn-dev-cluster
 
       DB_HOST: localhost
       DB_PORT: 5430
@@ -239,42 +229,34 @@ jobs:
             echo "ecr_repo=goorm-popcorn-order" >> $GITHUB_OUTPUT
             echo "task_def_file=order/goorm-popcorn-dev-order-service.json" >> $GITHUB_OUTPUT
             echo "container_name=order-service" >> $GITHUB_OUTPUT
-            echo "ecs_service=goorm-popcorn-dev-order-service" >> $GITHUB_OUTPUT
           elif [ "${{ matrix.service }}" == "gateway" ]; then
             echo "ecr_repo=goorm-popcorn-api-gateway" >> $GITHUB_OUTPUT
             echo "task_def_file=gateway/goorm-popcorn-dev-api-gateway.json" >> $GITHUB_OUTPUT
             echo "container_name=api-gateway" >> $GITHUB_OUTPUT
-            echo "ecs_service=goorm-popcorn-dev-api-gateway" >> $GITHUB_OUTPUT
           elif [ "${{ matrix.service }}" == "users" ]; then
             echo "ecr_repo=goorm-popcorn-user" >> $GITHUB_OUTPUT
             echo "task_def_file=users/goorm-popcorn-dev-user-service-revision2.json" >> $GITHUB_OUTPUT
             echo "container_name=user-service" >> $GITHUB_OUTPUT
-            echo "ecs_service=goorm-popcorn-dev-user-service" >> $GITHUB_OUTPUT
           elif [ "${{ matrix.service }}" == "orderQuery" ]; then
             echo "ecr_repo=goorm-popcorn-order-query" >> $GITHUB_OUTPUT
             echo "task_def_file=orderQuery/goorm-popcorn-dev-order-query.json" >> $GITHUB_OUTPUT
             echo "container_name=order-query" >> $GITHUB_OUTPUT
-            echo "ecs_service=goorm-popcorn-dev-order-query" >> $GITHUB_OUTPUT
           elif [ "${{ matrix.service }}" == "payment" ]; then
             echo "ecr_repo=goorm-popcorn-payment" >> $GITHUB_OUTPUT
             echo "task_def_file=payment/goorm-popcorn-dev-payment-service.json" >> $GITHUB_OUTPUT
             echo "container_name=payment-service" >> $GITHUB_OUTPUT
-            echo "ecs_service=goorm-popcorn-dev-payment-service" >> $GITHUB_OUTPUT
           elif [ "${{ matrix.service }}" == "stores" ]; then
             echo "ecr_repo=goorm-popcorn-store" >> $GITHUB_OUTPUT
             echo "task_def_file=stores/goorm-popcorn-dev-store-service.json" >> $GITHUB_OUTPUT
             echo "container_name=store-service" >> $GITHUB_OUTPUT
-            echo "ecs_service=goorm-popcorn-dev-store-service" >> $GITHUB_OUTPUT
           elif [ "${{ matrix.service }}" == "checkIns" ]; then
             echo "ecr_repo=goorm-popcorn-checkin" >> $GITHUB_OUTPUT
             echo "task_def_file=checkIns/goorm-popcorn-dev-checkin-service.json" >> $GITHUB_OUTPUT
             echo "container_name=checkin-service" >> $GITHUB_OUTPUT
-            echo "ecs_service=goorm-popcorn-dev-checkin-service" >> $GITHUB_OUTPUT
           else
             echo "ecr_repo=goorm-popcorn-${{ matrix.service }}" >> $GITHUB_OUTPUT
             echo "task_def_file=${{ matrix.service }}/goorm-popcorn-dev-${{ matrix.service }}.json" >> $GITHUB_OUTPUT
             echo "container_name=${{ matrix.service }}-service" >> $GITHUB_OUTPUT
-            echo "ecs_service=goorm-popcorn-dev-${{ matrix.service }}-service" >> $GITHUB_OUTPUT
           fi
 
       - name: Download build artifact
@@ -307,7 +289,7 @@ jobs:
           provenance: false
           sbom: false
 
-          # ✅ 요청하신 dev-latest 태그 적용
+          # dev-latest 태그 적용
           tags: |
             ${{ steps.ecr.outputs.registry }}/${{ steps.vars.outputs.ecr_repo }}:dev-latest
             ${{ steps.ecr.outputs.registry }}/${{ steps.vars.outputs.ecr_repo }}:test-${{ github.run_number }}
@@ -315,29 +297,6 @@ jobs:
           cache-from: type=gha
           cache-to: type=gha,mode=max
           outputs: type=image,oci-mediatypes=true
-
-      - name: Download Task Definition
-        run: |
-          aws ecs describe-task-definition \
-            --task-definition ${{ steps.vars.outputs.task_def_file }} \
-            --query taskDefinition \
-            | jq 'del(.taskDefinitionArn, .revision, .status, .registeredAt, .registeredBy)' > task-definition.json  
-
-      - name: Fill in the new image ID in the Amazon ECS task definition
-        id: task-def
-        uses: aws-actions/amazon-ecs-render-task-definition@c804dfbdd57f713b6c079302a4c01db7017a36fc
-        with:
-          task-definition: ${{ steps.vars.outputs.task_def_file }}
-          container-name: ${{ steps.vars.outputs.container_name }}
-          image: ${{ steps.vars.outputs.ecr_repo }}:dev-latest
-
-      - name: Deploy Amazon ECS task definition
-        uses: aws-actions/amazon-ecs-deploy-task-definition@df9643053eda01f169e64a0e60233aacca83799a
-        with:
-          task-definition: ${{ steps.vars.outputs.task_def_file }}
-          service: ${{ steps.vars.outputs.ecs_service }}
-          cluster: ${{ env.ECS_CLUSTER }}
-          wait-for-service-stability: true
 
       - name: Notify Discord (success)
         if: success()
