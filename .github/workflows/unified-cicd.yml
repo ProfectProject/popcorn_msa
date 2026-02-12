@@ -49,7 +49,7 @@ jobs:
               - 'gradle/**'
               - '*.gradle'
               - 'gradle.properties'
-              - '.github/workflows/unified-cicd.yml'
+            #  - '.github/workflows/unified-cicd.yml'
 
       - name: Build matrix output
         id: set-matrix
