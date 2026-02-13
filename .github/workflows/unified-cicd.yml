@@ -385,7 +385,7 @@ jobs:
       GITOPS_REPO: ProfectProject/popcorn_deploy
       GITOPS_BRANCH: main 
       VALUES_FILE: helm/popcorn-umbrella/values-dev.yaml
-      IMAGE_TAG: test-${{ github.run_number }}
+      IMAGE_TAG: dev-${{ github.sha }}
 
     steps:
       - name: Install tools (jq, yq)
