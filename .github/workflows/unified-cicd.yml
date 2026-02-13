@@ -338,7 +338,7 @@ jobs:
           # dev-latest 태그 적용
           tags: |
             ${{ steps.meta.outputs.tags }}
-            ${{ steps.ecr.outputs.registry }}/${{ steps.vars.outputs.ecr_repo }}:test-${{ github.run_number }}
+            ${{ steps.ecr.outputs.registry }}/${{ steps.vars.outputs.ecr_repo }}:${{ steps.build_meta.outputs.sha8 }}
 
 
           cache-from: type=gha
