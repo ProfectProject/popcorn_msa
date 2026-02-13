@@ -385,9 +385,18 @@ jobs:
       GITOPS_REPO: ProfectProject/popcorn_deploy
       GITOPS_BRANCH: main 
       VALUES_FILE: helm/popcorn-umbrella/values-dev.yaml
-      IMAGE_TAG: dev-${{ github.sha }}
-
+    
+    
     steps:
+      - name: Set IMAGE_TAG (dev-<sha8>)
+        id: gitops_tag
+        shell: bash
+        run: |
+          set -euo pipefail
+          SHA8="${GITHUB_SHA::8}"
+          echo "IMAGE_TAG=dev-${SHA8}" >> "$GITHUB_ENV"
+          echo "Using IMAGE_TAG=dev-${SHA8}"
+          
       - name: Install tools (jq, yq)
         shell: bash
         run: |
