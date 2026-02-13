@@ -335,11 +335,11 @@ jobs:
     runs-on: ubuntu-latest
 
     permissions:
-      contents: read  # 이 repo(asdf2-msa)는 read만이면 충분 (GitOps repo push는 PAT로)
+      contents: read 
 
     env:
       GITOPS_REPO: ProfectProject/popcorn_deploy
-      GITOPS_BRANCH: main
+      GITOPS_BRANCH: argo
       VALUES_FILE: helm/popcorn-umbrella/values-dev.yaml
       IMAGE_TAG: test-${{ github.run_number }}
 
