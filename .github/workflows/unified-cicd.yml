@@ -327,3 +327,96 @@ jobs:
             - Run: #${{ github.run_number }}
             - Commit: ${{ github.sha }}
             // - Logs: https://github.com/${{ github.repository }}/actions/runs/${{ github.run_id }}
+  
+  update-gitops-values:
+    name: Update GitOps values (single commit)
+    needs: [detect-changes, docker-build-push-ecr]
+    if: github.event_name == 'push' && needs.detect-changes.outputs.has_changes == 'true'
+    runs-on: ubuntu-latest
+
+    permissions:
+      contents: read  # 이 repo(asdf2-msa)는 read만이면 충분 (GitOps repo push는 PAT로)
+
+    env:
+      GITOPS_REPO: ProfectProject/popcorn_deploy
+      GITOPS_BRANCH: main
+      VALUES_FILE: helm/popcorn-umbrella/values-dev.yaml
+      IMAGE_TAG: test-${{ github.run_number }}
+
+    steps:
+      - name: Install tools (jq, yq)
+        shell: bash
+        run: |
+          set -euo pipefail
+          sudo apt-get update -y
+          sudo apt-get install -y jq
+          sudo wget -qO /usr/local/bin/yq https://github.com/mikefarah/yq/releases/latest/download/yq_linux_amd64
+          sudo chmod +x /usr/local/bin/yq
+          yq --version
+          jq --version
+
+      - name: Clone GitOps repo
+        shell: bash
+        env:
+          GITOPS_TOKEN: ${{ secrets.GITOPS_TOKEN }}
+        run: |
+          set -euo pipefail
+          git clone "https://x-access-token:${GITOPS_TOKEN}@github.com/${GITOPS_REPO}.git" gitops
+          cd gitops
+          git checkout "${GITOPS_BRANCH}"
+
+      - name: Update values-dev.yaml for changed services only
+        shell: bash
+        run: |
+          set -euo pipefail
+
+          SERVICES_JSON='${{ needs.detect-changes.outputs.services_json }}'
+          echo "Changed services json: ${SERVICES_JSON}"
+          echo "Using IMAGE_TAG=${IMAGE_TAG}"
+
+          cd gitops
+
+          # 변경된 서비스 목록을 순회하면서 values-dev.yaml의 service.image.tag만 갱신
+          # services_json 예: ["users","order","gateway"]
+          echo "${SERVICES_JSON}" | jq -r '.[]' | while read -r svc; do
+            case "$svc" in
+              users)      key="users" ;;
+              stores)     key="stores" ;;
+              order)      key="order" ;;
+              orderQuery) key="orderQuery" ;;
+              payment)    key="payment" ;;
+              gateway)    key="gateway" ;;
+              checkIns)   key="checkIns" ;;
+              *)
+                echo "Unknown service key: $svc"
+                exit 1
+                ;;
+            esac
+
+            echo "Updating .${key}.image.tag -> ${IMAGE_TAG}"
+            yq -i ".${key}.image.tag = \"${IMAGE_TAG}\"" "${VALUES_FILE}"
+          done
+
+          echo "---- diff ----"
+          git diff -- "${VALUES_FILE}" || true
+
+      - name: Commit & push (single commit)
+        shell: bash
+        run: |
+          set -euo pipefail
+          cd gitops
+
+          if git diff --quiet; then
+            echo "No changes to commit."
+            exit 0
+          fi
+
+          # 커밋 메시지에 변경된 서비스들 넣기
+          SERVICES_CSV=$(echo '${{ needs.detect-changes.outputs.services_json }}' | jq -r 'join(",")')
+
+          git config user.name "github-actions"
+          git config user.email "actions@github.com"
+
+          git add "${VALUES_FILE}"
+          git commit -m "chore(gitops): bump image tags (${SERVICES_CSV}) -> ${IMAGE_TAG}"
+          git push origin "${GITOPS_BRANCH}"
