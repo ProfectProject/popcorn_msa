@@ -335,8 +335,11 @@ jobs:
           provenance: false
           sbom: false
 
-          # sha 번호 적용
-          tags: ${{ steps.meta.outputs.tags }}
+          # dev-latest 태그 적용
+          tags: |
+            ${{ steps.meta.outputs.tags }}
+            ${{ steps.ecr.outputs.registry }}/${{ steps.vars.outputs.ecr_repo }}:test-${{ github.run_number }}
+
 
           cache-from: type=gha
           cache-to: type=gha,mode=max
@@ -385,7 +388,7 @@ jobs:
       GITOPS_REPO: ProfectProject/popcorn_deploy
       GITOPS_BRANCH: main 
       VALUES_FILE: helm/popcorn-umbrella/values-dev.yaml
-      IMAGE_TAG: test-${{ github.run_number }}
+      IMAGE_TAG: dev-${{ github.sha }}
 
     steps:
       - name: Install tools (jq, yq)
