@@ -335,11 +335,8 @@ jobs:
           provenance: false
           sbom: false
 
-          # dev-latest 태그 적용
-          tags: |
-            ${{ steps.meta.outputs.tags }}
-            ${{ steps.ecr.outputs.registry }}/${{ steps.vars.outputs.ecr_repo }}:test-${{ github.run_number }}
-
+          # sha 번호 적용
+          tags: ${{ steps.meta.outputs.tags }}
 
           cache-from: type=gha
           cache-to: type=gha,mode=max
