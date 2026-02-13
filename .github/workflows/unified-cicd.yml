@@ -386,7 +386,7 @@ jobs:
 
     env:
       GITOPS_REPO: ProfectProject/popcorn_deploy
-      GITOPS_BRANCH: argo 
+      GITOPS_BRANCH: main 
       VALUES_FILE: helm/popcorn-umbrella/values-dev.yaml
       IMAGE_TAG: test-${{ github.run_number }}
 
