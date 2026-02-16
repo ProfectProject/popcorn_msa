@@ -354,7 +354,9 @@ resilience4j:
       cbCheckInDocService:
         timeout-duration: 1200ms
       cbOrderQueryService:
-        timeout-duration: 700ms
+        # OrderQuery is DB-heavy and can legitimately exceed sub-second latency (especially with size=200).
+        timeout-duration: 5000ms
+        cancel-running-future: true
 
 management:
   endpoints:
