@@ -106,7 +106,7 @@ data class Coupon(
             throw IllegalArgumentException("최소 주문 금액($minOrderAmount)을 만족하지 않습니다.")
         }
 
-        return when (discountType) {
+        val rawDiscountAmount = when (discountType) {
             DiscountType.AMOUNT -> discountAmount ?: throw IllegalStateException("정액 할인 쿠폰에 할인 금액이 설정되지 않았습니다.")
             DiscountType.PERCENTAGE -> {
                 val percentage = discountPercentage ?: throw IllegalStateException("정률 할인 쿠폰에 할인 비율이 설정되지 않았습니다.")
@@ -115,6 +115,13 @@ data class Coupon(
                     if (calculatedDiscount > maxAmount) maxAmount else calculatedDiscount
                 } ?: calculatedDiscount
             }
+        }
+
+        // 🚫 할인 금액이 주문 금액을 초과할 수 없음
+        return if (rawDiscountAmount > orderAmount) {
+            orderAmount // 주문 금액을 할인 한도로 제한
+        } else {
+            rawDiscountAmount
         }
     }
 

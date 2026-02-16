@@ -91,6 +91,102 @@ class CouponEventPublisher(
     }
 
     /**
+     * 쿠폰 수정 이벤트 발행 (호환성 유지)
+     */
+    suspend fun publishCouponUpdatedEvent(updatedCoupon: Coupon, originalCoupon: Coupon, adminId: Long) = withContext(Dispatchers.IO) {
+        val eventData = mapOf(
+            "couponId" to updatedCoupon.id,
+            "originalName" to originalCoupon.name,
+            "updatedName" to updatedCoupon.name,
+            "originalDiscountAmount" to originalCoupon.discountAmount,
+            "updatedDiscountAmount" to updatedCoupon.discountAmount,
+            "originalDiscountPercentage" to originalCoupon.discountPercentage,
+            "updatedDiscountPercentage" to updatedCoupon.discountPercentage,
+            "originalValidFrom" to originalCoupon.validFrom.toString(),
+            "updatedValidFrom" to updatedCoupon.validFrom.toString(),
+            "originalValidUntil" to originalCoupon.validUntil.toString(),
+            "updatedValidUntil" to updatedCoupon.validUntil.toString(),
+            "originalTotalQuantity" to originalCoupon.totalQuantity,
+            "updatedTotalQuantity" to updatedCoupon.totalQuantity,
+            "status" to updatedCoupon.status.name,
+            "adminId" to adminId,
+            "timestamp" to LocalDateTime.now().toString()
+        )
+
+        publishOutboxEvent(
+            eventType = "COUPON_UPDATED",
+            aggregateId = updatedCoupon.id.toString(),
+            payload = eventData
+        )
+
+        logger.info { "📢 쿠폰 수정 이벤트 발행: couponId=${updatedCoupon.id}" }
+    }
+
+    /**
+     * ⚡ 성능 최적화: 쿠폰 수정 이벤트 발행 (원본 정보 불필요)
+     */
+    suspend fun publishCouponUpdatedEventOptimized(
+        updatedCoupon: Coupon,
+        changedFields: List<String>,
+        adminId: Long
+    ) = withContext(Dispatchers.IO) {
+        val eventData = mapOf(
+            "couponId" to updatedCoupon.id,
+            "name" to updatedCoupon.name,
+            "discountType" to updatedCoupon.discountType.name,
+            "discountAmount" to updatedCoupon.discountAmount,
+            "discountPercentage" to updatedCoupon.discountPercentage,
+            "minOrderAmount" to updatedCoupon.minOrderAmount,
+            "maxDiscountAmount" to updatedCoupon.maxDiscountAmount,
+            "totalQuantity" to updatedCoupon.totalQuantity,
+            "issuedQuantity" to updatedCoupon.issuedQuantity,
+            "validFrom" to updatedCoupon.validFrom.toString(),
+            "validUntil" to updatedCoupon.validUntil.toString(),
+            "targetType" to updatedCoupon.targetType.name,
+            "status" to updatedCoupon.status.name,
+            "changedFields" to changedFields, // 변경된 필드만 명시
+            "changeCount" to changedFields.size,
+            "adminId" to adminId,
+            "timestamp" to LocalDateTime.now().toString()
+        )
+
+        publishOutboxEvent(
+            eventType = "COUPON_UPDATED_V2",
+            aggregateId = updatedCoupon.id.toString(),
+            payload = eventData
+        )
+
+        logger.info { "📢 쿠폰 수정 이벤트 발행 (최적화): couponId=${updatedCoupon.id}, 변경=${changedFields.joinToString()}" }
+    }
+
+    /**
+     * 쿠폰 삭제 이벤트 발행
+     */
+    suspend fun publishCouponDeletedEvent(coupon: Coupon, adminId: Long) = withContext(Dispatchers.IO) {
+        val eventData = mapOf(
+            "couponId" to coupon.id,
+            "name" to coupon.name,
+            "discountType" to coupon.discountType.name,
+            "discountAmount" to coupon.discountAmount,
+            "discountPercentage" to coupon.discountPercentage,
+            "totalQuantity" to coupon.totalQuantity,
+            "issuedQuantity" to coupon.issuedQuantity,
+            "status" to coupon.status.name,
+            "adminId" to adminId,
+            "deletedAt" to LocalDateTime.now().toString(),
+            "timestamp" to LocalDateTime.now().toString()
+        )
+
+        publishOutboxEvent(
+            eventType = "COUPON_DELETED",
+            aggregateId = coupon.id.toString(),
+            payload = eventData
+        )
+
+        logger.info { "📢 쿠폰 삭제 이벤트 발행: couponId=${coupon.id}, name=${coupon.name}" }
+    }
+
+    /**
      * 쿠폰 발급 이벤트 발행
      */
     suspend fun publishCouponIssuedEvent(userCoupon: UserCoupon, coupon: Coupon) = withContext(Dispatchers.IO) {

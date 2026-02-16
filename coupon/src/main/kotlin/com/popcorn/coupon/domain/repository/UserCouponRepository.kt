@@ -115,7 +115,7 @@ interface UserCouponRepository : JpaRepository<UserCoupon, Long> {
      */
     @Modifying
     @Query("UPDATE UserCoupon uc SET uc.status = :status WHERE uc.id = :id")
-    fun updateStatus(@Param("id") id: Long, @Param("status") status: UserCouponStatus)
+    fun updateStatus(@Param("id") id: Long, @Param("status") status: UserCouponStatus): Int
 
     /**
      * 사용자 쿠폰 사용 처리
@@ -131,7 +131,7 @@ interface UserCouponRepository : JpaRepository<UserCoupon, Long> {
         @Param("status") status: UserCouponStatus,
         @Param("usedAt") usedAt: LocalDateTime,
         @Param("discountApplied") discountApplied: BigDecimal
-    )
+    ): Int
 
     /**
      * 예약된 쿠폰 중 만료 시간이 지난 것들 조회 (복구용)

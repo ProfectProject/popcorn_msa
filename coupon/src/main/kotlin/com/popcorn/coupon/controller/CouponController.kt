@@ -20,6 +20,7 @@ import org.springframework.http.ResponseEntity
 import org.springframework.security.access.prepost.PreAuthorize
 import org.springframework.security.core.context.SecurityContextHolder
 import org.springframework.web.bind.annotation.*
+import org.springframework.data.domain.PageRequest
 
 @RestController
 @RequestMapping("/api/v1/coupons")
@@ -131,7 +132,7 @@ class CouponController(
     /**
      * 활성 쿠폰 목록 조회
      */
-    @GetMapping
+    @GetMapping("/active")
     @Operation(
         summary = "활성 쿠폰 목록 조회",
         description = """
@@ -148,6 +149,9 @@ class CouponController(
             **사용 목적:**
             - 전체 쿠폰 목록 페이지
             - 관리자 대시보드
+
+            **사용법:**
+            - /api/v1/coupons/active?page=0&size=20
         """
     )
     @ApiResponses(
@@ -155,13 +159,66 @@ class CouponController(
             content = [Content(schema = Schema(implementation = CouponSummaryResponse::class, type = "array"))]),
         ApiResponse(responseCode = "500", description = "서버 내부 오류")
     )
-    fun getActiveCoupons(): ResponseEntity<List<CouponSummaryResponse>> {
-        logger.info { "📋 활성 쿠폰 목록 조회" }
+    fun getActiveCoupons(
+        @Parameter(description = "페이지 번호 (0부터 시작)", example = "0")
+        @RequestParam(defaultValue = "0") page: Int,
+        @Parameter(description = "페이지 크기", example = "20")
+        @RequestParam(defaultValue = "20") size: Int
+    ): ResponseEntity<List<CouponSummaryResponse>> {
+        logger.info { "📋 활성 쿠폰 목록 조회: page=$page, size=$size" }
 
         return runBlocking {
-            val coupons = couponQueryService.getActiveCoupons()
-            val responses = coupons.map { CouponSummaryResponse.from(it) }
+            // ⚡ 성능 최적화: DB 레벨 페이지네이션 + 최대 100개 제한
+            val limitedSize = minOf(size, 100)
+            val pageable = PageRequest.of(page, limitedSize)
+            val couponPage = couponQueryService.getActiveCouponsWithPagination(pageable)
+            val responses = couponPage.content.map { CouponSummaryResponse.from(it) }
             ResponseEntity.ok(responses)
+        }
+    }
+
+    /**
+     * 쿠폰 템플릿 목록 조회 (관리자 전용, 전체 상태 포함)
+     */
+    @GetMapping("/all")
+    @PreAuthorize("hasAnyRole('MANAGER', 'OWNER')")
+    @Operation(
+        summary = "쿠폰 템플릿 전체 목록 조회 (관리자)",
+        description = """
+            관리자가 생성된 쿠폰 템플릿 목록을 조회합니다. (ACTIVE/INACTIVE/DRAFT/EXPIRED 포함)
+
+            **⚡ 성능 최적화:**
+            - 페이지네이션 지원으로 빠른 응답 속도
+            - 기본 20개씩 조회 (최대 100개까지 가능)
+
+            **정렬:**
+            - 생성일 기준 최신순
+
+            **사용법:**
+            - /api/v1/coupons/all?page=0&size=20
+        """
+    )
+    @ApiResponses(
+        ApiResponse(responseCode = "200", description = "쿠폰 전체 목록 조회 성공",
+            content = [Content(schema = Schema(implementation = CouponSummaryResponse::class, type = "array"))]),
+        ApiResponse(responseCode = "401", description = "인증되지 않은 사용자"),
+        ApiResponse(responseCode = "403", description = "권한 없음 (관리자 권한 필요)"),
+        ApiResponse(responseCode = "500", description = "서버 내부 오류")
+    )
+    fun getAllCoupons(
+        @Parameter(description = "페이지 번호 (0부터 시작)", example = "0")
+        @RequestParam(defaultValue = "0") page: Int,
+        @Parameter(description = "페이지 크기 (1-100)", example = "20")
+        @RequestParam(defaultValue = "20") size: Int
+    ): ResponseEntity<List<CouponSummaryResponse>> {
+        // ⚡ 성능 보호: 페이지 크기 제한
+        val limitedSize = size.coerceIn(1, 100)
+        logger.info { "🎫 쿠폰 전체 목록 조회 (관리자) - page: $page, size: $limitedSize" }
+
+        return runBlocking {
+            val pageable = PageRequest.of(page, limitedSize)
+            val couponPage = couponQueryService.getAllCouponsWithPagination(pageable)
+            ResponseEntity.ok(couponPage.content.map { CouponSummaryResponse.from(it) })
         }
     }
 
@@ -332,6 +389,122 @@ class CouponController(
             val adminId = getCurrentUserId()
             val coupon = couponCommandService.deactivateCoupon(couponId, adminId)
             ResponseEntity.ok(CouponDetailResponse.from(coupon))
+        }
+    }
+
+    /**
+     * 쿠폰 수정 (관리자 전용)
+     */
+    @PutMapping("/{couponId}")
+    @PreAuthorize("hasAnyRole('MANAGER', 'OWNER')")
+    @Operation(
+        summary = "쿠폰 수정",
+        description = """
+            기존 쿠폰 정보를 수정합니다.
+
+            **수정 가능 항목:**
+            - 쿠폰명, 설명
+            - 할인 금액/비율, 최대 할인 금액
+            - 최소 주문 금액
+            - 총 수량 (현재 발급량보다 많게만 가능)
+            - 유효 기간 (현재 시점 이후로만 가능)
+            - 대상 사용자 유형
+
+            **수정 제한 사항:**
+            - 만료된 쿠폰은 수정 불가
+            - 이미 발급된 쿠폰이 있는 경우 일부 제한 적용
+            - 할인 타입은 수정 불가
+
+            **권한:**
+            - 매장 관리자(MANAGER) 또는 사업자(OWNER) 권한 필요
+        """
+    )
+    @ApiResponses(
+        ApiResponse(responseCode = "200", description = "쿠폰 수정 성공",
+            content = [Content(schema = Schema(implementation = CouponDetailResponse::class))]),
+        ApiResponse(responseCode = "400", description = "수정할 수 없는 상태의 쿠폰 또는 잘못된 수정 값"),
+        ApiResponse(responseCode = "401", description = "인증되지 않은 사용자"),
+        ApiResponse(responseCode = "403", description = "권한 없음 (관리자 권한 필요)"),
+        ApiResponse(responseCode = "404", description = "쿠폰을 찾을 수 없음"),
+        ApiResponse(responseCode = "500", description = "서버 내부 오류")
+    )
+    fun updateCoupon(
+        @PathVariable
+        @Parameter(description = "수정할 쿠폰 ID", required = true, example = "1")
+        couponId: Long,
+        @Valid @RequestBody
+        @Parameter(description = "쿠폰 수정 요청 정보", required = true)
+        request: CouponUpdateRequest
+    ): ResponseEntity<CouponDetailResponse> {
+        logger.info { "📝 쿠폰 수정: couponId=$couponId, name=${request.name}" }
+
+        return runBlocking {
+            val adminId = getCurrentUserId()
+            val coupon = couponCommandService.updateCoupon(
+                couponId = couponId,
+                name = request.name,
+                description = request.description,
+                discountAmount = request.discountAmount,
+                discountPercentage = request.discountPercentage?.toBigDecimal(),
+                minOrderAmount = request.minOrderAmount,
+                maxDiscountAmount = request.maxDiscountAmount,
+                totalQuantity = request.totalQuantity,
+                validFrom = request.validFrom,
+                validUntil = request.validUntil,
+                targetType = request.targetType,
+                adminId = adminId
+            )
+            ResponseEntity.ok(CouponDetailResponse.from(coupon))
+        }
+    }
+
+    /**
+     * 쿠폰 삭제 (관리자 전용)
+     */
+    @DeleteMapping("/{couponId}")
+    @PreAuthorize("hasAnyRole('MANAGER', 'OWNER')")
+    @Operation(
+        summary = "쿠폰 삭제",
+        description = """
+            쿠폰을 완전히 삭제합니다.
+
+            **삭제 조건:**
+            - 발급된 쿠폰이 없어야 함 (issuedQuantity = 0)
+            - 활성화 상태가 아니어야 함 (먼저 비활성화 필요)
+            - DRAFT, INACTIVE, EXPIRED 상태의 쿠폰만 삭제 가능
+
+            **주의사항:**
+            - 삭제는 되돌릴 수 없는 작업입니다
+            - 쿠폰 관련 모든 데이터가 함께 삭제됩니다
+            - 통계 및 이력 데이터에 영향을 줄 수 있습니다
+
+            **대안:**
+            - 삭제 대신 비활성화를 권장합니다
+            - 비활성화된 쿠폰은 언제든 재활성화 가능합니다
+
+            **권한:**
+            - 매장 관리자(MANAGER) 또는 사업자(OWNER) 권한 필요
+        """
+    )
+    @ApiResponses(
+        ApiResponse(responseCode = "204", description = "쿠폰 삭제 성공"),
+        ApiResponse(responseCode = "400", description = "삭제할 수 없는 상태의 쿠폰 (발급된 쿠폰 있음, 활성화 상태 등)"),
+        ApiResponse(responseCode = "401", description = "인증되지 않은 사용자"),
+        ApiResponse(responseCode = "403", description = "권한 없음 (관리자 권한 필요)"),
+        ApiResponse(responseCode = "404", description = "쿠폰을 찾을 수 없음"),
+        ApiResponse(responseCode = "500", description = "서버 내부 오류")
+    )
+    fun deleteCoupon(
+        @PathVariable
+        @Parameter(description = "삭제할 쿠폰 ID", required = true, example = "1")
+        couponId: Long
+    ): ResponseEntity<Void> {
+        logger.info { "🗑️ 쿠폰 삭제: couponId=$couponId" }
+
+        return runBlocking {
+            val adminId = getCurrentUserId()
+            couponCommandService.deleteCoupon(couponId, adminId)
+            ResponseEntity.noContent().build()
         }
     }
 

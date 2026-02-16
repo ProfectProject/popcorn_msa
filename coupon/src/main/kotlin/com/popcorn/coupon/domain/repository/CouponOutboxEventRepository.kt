@@ -73,7 +73,7 @@ interface CouponOutboxEventRepository : JpaRepository<CouponOutboxEvent, Long> {
     fun markAsProcessed(
         @Param("id") id: Long,
         @Param("processedAt") processedAt: LocalDateTime
-    )
+    ): Int
 
     /**
      * 여러 이벤트 처리 완료 상태 일괄 업데이트
@@ -87,7 +87,7 @@ interface CouponOutboxEventRepository : JpaRepository<CouponOutboxEvent, Long> {
     fun markAsProcessed(
         @Param("ids") ids: List<Long>,
         @Param("processedAt") processedAt: LocalDateTime
-    )
+    ): Int
 
     /**
      * 오래된 처리된 이벤트 조회 (정리용)

@@ -3,11 +3,14 @@ package com.popcorn.coupon.domain.repository
 import com.popcorn.coupon.domain.entity.Coupon
 import com.popcorn.coupon.domain.entity.CouponStatus
 import com.popcorn.coupon.domain.entity.TargetType
+import org.springframework.data.domain.Page
+import org.springframework.data.domain.Pageable
 import org.springframework.data.jpa.repository.JpaRepository
 import org.springframework.data.jpa.repository.Modifying
 import org.springframework.data.jpa.repository.Query
 import org.springframework.data.repository.query.Param
 import org.springframework.stereotype.Repository
+import org.springframework.transaction.annotation.Transactional
 import java.time.LocalDateTime
 
 @Repository
@@ -27,6 +30,22 @@ interface CouponRepository : JpaRepository<Coupon, Long> {
         @Param("status") status: CouponStatus = CouponStatus.ACTIVE,
         @Param("now") now: LocalDateTime = LocalDateTime.now()
     ): List<Coupon>
+
+    /**
+     * 활성 쿠폰 페이지네이션 조회 (성능 최적화)
+     */
+    @Query("""
+        SELECT c FROM Coupon c
+        WHERE c.status = :status
+        AND c.validFrom <= :now
+        AND c.validUntil > :now
+        ORDER BY c.createdAt DESC
+    """)
+    fun findActiveCouponsWithPagination(
+        @Param("status") status: CouponStatus = CouponStatus.ACTIVE,
+        @Param("now") now: LocalDateTime = LocalDateTime.now(),
+        pageable: Pageable
+    ): Page<Coupon>
 
     /**
      * 대상 타입별 활성 쿠폰 조회
@@ -103,13 +122,59 @@ interface CouponRepository : JpaRepository<Coupon, Long> {
      * 발급 수량 업데이트
      */
     @Modifying
+    @Transactional
     @Query("UPDATE Coupon c SET c.issuedQuantity = c.issuedQuantity + :increment WHERE c.id = :id")
-    fun updateIssuedQuantity(@Param("id") id: Long, @Param("increment") increment: Int = 1)
+    fun updateIssuedQuantity(@Param("id") id: Long, @Param("increment") increment: Int = 1): Int
 
     /**
      * 상태 업데이트
      */
     @Modifying
-    @Query("UPDATE Coupon c SET c.status = :status WHERE c.id = :id")
-    fun updateStatus(@Param("id") id: Long, @Param("status") status: CouponStatus)
+    @Transactional
+    @Query(
+        value = """
+            UPDATE coupons.coupons
+            SET status = CAST(:status AS coupons.coupon_status), updated_at = NOW()
+            WHERE id = :id
+        """,
+        nativeQuery = true
+    )
+    fun updateStatus(@Param("id") id: Long, @Param("status") status: String): Int
+
+    /**
+     * ⚡ 성능 최적화: 쿠폰 필드 선택적 업데이트
+     */
+    @Modifying
+    @Transactional
+    @Query(
+        value = """
+            UPDATE coupons.coupons
+            SET name = COALESCE(:name, name),
+                description = COALESCE(:description, description),
+                discount_amount = COALESCE(:discountAmount, discount_amount),
+                discount_percentage = COALESCE(:discountPercentage, discount_percentage),
+                min_order_amount = COALESCE(:minOrderAmount, min_order_amount),
+                max_discount_amount = COALESCE(:maxDiscountAmount, max_discount_amount),
+                total_quantity = COALESCE(:totalQuantity, total_quantity),
+                valid_from = COALESCE(:validFrom, valid_from),
+                valid_until = COALESCE(:validUntil, valid_until),
+                target_type = COALESCE(CAST(:targetType AS coupons.target_type), target_type),
+                updated_at = NOW()
+            WHERE id = :couponId
+        """,
+        nativeQuery = true
+    )
+    fun updateCouponFields(
+        @Param("couponId") couponId: Long,
+        @Param("name") name: String?,
+        @Param("description") description: String?,
+        @Param("discountAmount") discountAmount: java.math.BigDecimal?,
+        @Param("discountPercentage") discountPercentage: java.math.BigDecimal?,
+        @Param("minOrderAmount") minOrderAmount: java.math.BigDecimal?,
+        @Param("maxDiscountAmount") maxDiscountAmount: java.math.BigDecimal?,
+        @Param("totalQuantity") totalQuantity: Int?,
+        @Param("validFrom") validFrom: LocalDateTime?,
+        @Param("validUntil") validUntil: LocalDateTime?,
+        @Param("targetType") targetType: String?
+    ): Int
 }

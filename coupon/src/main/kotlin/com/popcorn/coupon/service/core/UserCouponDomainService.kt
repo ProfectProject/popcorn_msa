@@ -116,7 +116,10 @@ class UserCouponDomainService(
         logger.info { "⏰ 쿠폰 만료 처리: userCouponId=$userCouponId" }
 
         val userCoupon = getUserCouponById(userCouponId)
-        userCouponRepository.updateStatus(userCouponId, UserCouponStatus.EXPIRED)
+        val updatedRows = userCouponRepository.updateStatus(userCouponId, UserCouponStatus.EXPIRED)
+        if (updatedRows == 0) {
+            throw CouponException("사용자 쿠폰 만료 처리 대상이 없습니다: userCouponId=$userCouponId")
+        }
 
         val expiredCoupon = userCoupon.copy(status = UserCouponStatus.EXPIRED)
         logger.info { "✅ 쿠폰 만료 처리 완료: userCouponId=$userCouponId" }

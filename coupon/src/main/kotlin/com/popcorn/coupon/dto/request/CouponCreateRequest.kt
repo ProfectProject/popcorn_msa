@@ -171,3 +171,46 @@ data class InternalCouponCancelRequest(
     val cancelReason: String? = null,
     val cancelAmount: BigDecimal? = null
 )
+
+/**
+ * 쿠폰 수정 요청 DTO
+ */
+data class CouponUpdateRequest(
+    @JsonAlias("name")
+    @field:Size(max = 100, message = "쿠폰명은 100자 이하여야 합니다")
+    val name: String?,
+
+    @JsonAlias("description")
+    @field:Size(max = 500, message = "설명은 500자 이하여야 합니다")
+    val description: String?,
+
+    @JsonAlias("discountAmount")
+    @field:DecimalMin(value = "0.01", message = "할인 금액은 0.01 이상이어야 합니다")
+    val discountAmount: BigDecimal?,
+
+    @JsonAlias("discountPercentage")
+    @field:Min(value = 1, message = "할인 비율은 1% 이상이어야 합니다")
+    @field:Max(value = 100, message = "할인 비율은 100% 이하여야 합니다")
+    val discountPercentage: Int?,
+
+    @JsonAlias("minOrderAmount")
+    @field:DecimalMin(value = "0", message = "최소 주문 금액은 0 이상이어야 합니다")
+    val minOrderAmount: BigDecimal?,
+
+    @JsonAlias("maxDiscountAmount")
+    @field:DecimalMin(value = "0.01", message = "최대 할인 금액은 0.01 이상이어야 합니다")
+    val maxDiscountAmount: BigDecimal?,
+
+    @JsonAlias("totalQuantity")
+    @field:Min(value = 1, message = "총 수량은 1개 이상이어야 합니다")
+    val totalQuantity: Int?,
+
+    @JsonAlias("validFrom")
+    val validFrom: LocalDateTime?,
+
+    @JsonAlias("validUntil")
+    val validUntil: LocalDateTime?,
+
+    @JsonAlias("targetType")
+    val targetType: TargetType?
+)

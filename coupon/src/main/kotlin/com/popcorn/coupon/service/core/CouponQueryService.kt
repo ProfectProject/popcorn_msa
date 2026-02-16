@@ -10,6 +10,7 @@ import kotlinx.coroutines.withContext
 import mu.KotlinLogging
 import org.springframework.data.domain.Page
 import org.springframework.data.domain.Pageable
+import org.springframework.data.domain.Sort
 import org.springframework.stereotype.Service
 import org.springframework.transaction.annotation.Transactional
 import java.math.BigDecimal
@@ -38,6 +39,27 @@ class CouponQueryService(
      */
     suspend fun getActiveCoupons(): List<Coupon> = withContext(Dispatchers.IO) {
         couponRepository.findActiveCoupons()
+    }
+
+    /**
+     * 관리자용: 전체 쿠폰 목록 조회 (최신 생성 순)
+     */
+    suspend fun getAllCoupons(): List<Coupon> = withContext(Dispatchers.IO) {
+        couponRepository.findAll(Sort.by(Sort.Direction.DESC, "createdAt"))
+    }
+
+    /**
+     * ⚡ 성능 최적화: 관리자용 전체 쿠폰 목록 페이지네이션 조회
+     */
+    suspend fun getAllCouponsWithPagination(pageable: Pageable): Page<Coupon> = withContext(Dispatchers.IO) {
+        couponRepository.findAll(pageable)
+    }
+
+    /**
+     * ⚡ 성능 최적화: 페이지네이션을 지원하는 활성 쿠폰 조회
+     */
+    suspend fun getActiveCouponsWithPagination(pageable: Pageable): Page<Coupon> = withContext(Dispatchers.IO) {
+        couponRepository.findActiveCouponsWithPagination(pageable = pageable)
     }
 
     /**
