@@ -383,7 +383,7 @@ jobs:
 
     env:
       GITOPS_REPO: ProfectProject/popcorn_deploy
-      GITOPS_BRANCH: main 
+      GITOPS_BRANCH: fix/helm
       VALUES_FILE: helm/popcorn-umbrella/values-dev.yaml
     
     
