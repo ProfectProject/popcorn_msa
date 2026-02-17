@@ -1,3 +1,7 @@
+x-db-defaults: &db-defaults
+  DB_HOST: ${DB_HOST:-db}
+  DB_PORT: ${DB_PORT:-5430}
+
 services:
   db:
     image: postgres:15-alpine
@@ -7,9 +11,6 @@ services:
       POSTGRES_DB: ${DB_NAME:-popcorn_db}
       POSTGRES_USER: ${DB_USERNAME:-postgres}
       POSTGRES_PASSWORD: ${DB_PASSWORD:-1234}
-    ports:
-      - "5432:5432"
-      - "5430:5432"
     volumes:
       - db_data:/var/lib/postgresql/data
       - ./db/init:/docker-entrypoint-initdb.d:ro
@@ -240,7 +241,7 @@ services:
     env_file:
       - ./.env
     environment:
-      DB_HOST: db
+      <<: *db-defaults
       REDIS_HOST: redis
       KAFKA_BOOTSTRAP_SERVERS: kafka-1:9092,kafka-2:9092,kafka-3:9092
       SPRING_DATA_REDIS_HOST: redis
@@ -260,8 +261,7 @@ services:
     env_file:
       - ./.env
     environment:
-      DB_HOST: db
-      DB_PORT: 5432
+      <<: *db-defaults
       REDIS_HOST: redis
       SPRING_DATA_REDIS_HOST: redis
       SPRING_DATA_REDIS_PORT: 6379
@@ -289,8 +289,7 @@ services:
     env_file:
       - ./.env
     environment:
-      DB_HOST: db
-      DB_PORT: 5432
+      <<: *db-defaults
       REDIS_HOST: redis
       KAFKA_BOOTSTRAP_SERVERS: kafka-1:9092,kafka-2:9092,kafka-3:9092
       SPRING_PROFILES_ACTIVE: local
@@ -311,8 +310,7 @@ services:
     env_file:
       - ./.env
     environment:
-      DB_HOST: db
-      DB_PORT: 5432
+      <<: *db-defaults
       REDIS_HOST: redis
       KAFKA_BOOTSTRAP_SERVERS: kafka-1:9092,kafka-2:9092,kafka-3:9092
       SPRING_PROFILES_ACTIVE: local
@@ -343,8 +341,7 @@ services:
     env_file:
       - ./.env
     environment:
-      DB_HOST: db
-      DB_PORT: 5432
+      <<: *db-defaults
       REDIS_HOST: redis
       KAFKA_BOOTSTRAP_SERVERS: kafka-1:9092,kafka-2:9092,kafka-3:9092
       SPRING_PROFILES_ACTIVE: local
@@ -376,8 +373,7 @@ services:
     env_file:
       - ./.env
     environment:
-      DB_HOST: db
-      DB_PORT: 5432
+      <<: *db-defaults
       DB_NAME: ${DB_NAME:-popcorn_db}
       JWT_SECRET: ${JWT_SECRET}
       ORDER_QUERY_DB_USERNAME: order_query_app
@@ -415,8 +411,7 @@ services:
     env_file:
       - ./.env
     environment:
-      DB_HOST: db
-      DB_PORT: 5432
+      <<: *db-defaults
       REDIS_HOST: redis
       KAFKA_BOOTSTRAP_SERVERS: kafka-1:9092,kafka-2:9092,kafka-3:9092
       SPRING_PROFILES_ACTIVE: local
@@ -444,8 +439,7 @@ services:
     env_file:
       - ./.env
     environment:
-      DB_HOST: db
-      DB_PORT: 5432
+      <<: *db-defaults
       REDIS_HOST: redis
       SPRING_REDIS_HOST: redis
       SPRING_DATA_REDIS_HOST: redis
