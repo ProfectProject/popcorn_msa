@@ -6,7 +6,7 @@ server:
 spring:
   config:
     activate:
-      on-profile: prod
+      on-profile: dev
   data:
     redis:
       host: ${REDIS_HOST}
@@ -16,6 +16,9 @@ spring:
     username: ${USER_AUTH_DB_USERNAME}
     password: ${USER_AUTH_DB_PASSWORD}
     driver-class-name: org.postgresql.Driver
+    hikari:
+      maximum-pool-size: 3
+      minimum-idle: 1
 
   jpa:
     open-in-view: false
@@ -40,7 +43,9 @@ spring:
     baseline-on-migrate: true
     validate-on-migrate: true
     clean-disabled: false
-    
+
+springdoc:
+  server-url: ${GATEWAY_SERVICE_URL}
 
 jwt:
   secret: ${JWT_SECRET}
@@ -57,3 +62,6 @@ logging:
     org.springframework.boot.web: DEBUG
     org.hibernate.SQL: DEBUG
     org.springframework.security: DEBUG
+app:
+  gateway:
+    url: ${GATEWAY_SERVICE_URL}
