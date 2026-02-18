@@ -3,6 +3,11 @@ server:
   shutdown: graceful  # 프로덕션에서는 graceful shutdown
 
 spring:
+  kafka:
+    enabled: true
+    bootstrap-servers: ${KAFKA_BOOTSTRAP_SERVERS}
+    consumer:
+      group-id: order-service-group
   config:
     activate:
       on-profile: prod
@@ -10,8 +15,8 @@ spring:
   # 데이터베이스 설정 (프로덕션 환경)
   datasource:
     url: jdbc:postgresql://${DB_HOST}:${DB_PORT}/${DB_NAME}
-    username: ${ORDER_DB_USERNAME}
-    password: ${ORDER_DB_PASSWORD}
+    username: ${ORDER_USERNAME}
+    password: ${ORDER_PASSWORD}
     driver-class-name: org.postgresql.Driver
     # 프로덕션 커넥션 풀 최적화
     hikari:
@@ -44,10 +49,10 @@ spring:
     user: ${ORDER_FLYWAY_USERNAME}
     password: ${ORDER_FLYWAY_PASSWORD}
     enabled: true
-    baseline-on-migrate: false  # 프로덕션에서는 baseline 비활성화
+    baseline-on-migrate: true  # 프로덕션에서는 baseline 비활성화
     validate-on-migrate: true
     out-of-order: false         # 프로덕션에서는 순서 엄격히 적용
-    locations: classpath:db/migration/order
+    locations: classpath:db/migration
     default-schema: orders
     schemas: orders
 
@@ -77,6 +82,10 @@ logging:
     org.springframework.web: WARN
     org.springframework.security: WARN
     org.hibernate.SQL: WARN
+    com.adjh.springbootkafka: DEBUG
+    org:
+      apache.kafka: INFO
+      springframework.kafka: INFO
   pattern:
     console: "%d{yyyy-MM-dd HH:mm:ss.SSS} [%thread] %-5level %logger{36} - %msg%n"
     file: "%d{yyyy-MM-dd HH:mm:ss.SSS} [%thread] %-5level %logger{36} - %msg%n"
@@ -121,10 +130,10 @@ management:
       show-details: never  # 프로덕션에서는 상세 정보 숨김
 
 passport:
-  secret: ${PASSPORT_SECRET:passport-shared-secret}
+  secret: ${PASSPORT_SECRET}
   ttl-seconds: 60
 
 jwt:
-  secret: ${JWT_SECRET:dGVzdC1qd3Qtc2VjcmV0LWtleS1mb3ItbG9jYWwtZGV2ZWxvcG1lbnQtb25seS1kb25vdC11c2UtaW4tcHJvZHVjdGlvbg==}
+  secret: ${JWT_SECRET}
   expiration: 3600000
   refresh-expiration-ms: 1209600000

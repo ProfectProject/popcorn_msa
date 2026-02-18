@@ -1,5 +1,5 @@
 server:
-  port: 8080
+  port: 8083
   shutdown: immediate
 spring:
   config:
@@ -56,7 +56,7 @@ spring:
     placeholders:
       STORE_MIGRATOR_PASSWORD: ${STORE_MIGRATOR_PASSWORD}
 
-  kafka:
+  Kafka:
     bootstrap-servers: ${KAFKA_BOOTSTRAP_SERVERS}
 
     producer:

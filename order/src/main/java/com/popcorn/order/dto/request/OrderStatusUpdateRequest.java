@@ -21,6 +21,7 @@ public class OrderStatusUpdateRequest {
 
     /** 상태를 변경할 주문 ID */
     @Schema(description = "상태를 변경할 주문 ID", example = "550e8400-e29b-41d4-a716-446655440000")
+    @NotNull(message = "주문 ID는 필수입니다.")
     private final UUID orderId;
 
     /** 주문 번호 (선택적, 검증용) */
@@ -43,6 +44,7 @@ public class OrderStatusUpdateRequest {
     private final String reason;
 
     /** 상태 변경 주체 (STORE, MANAGER, SYSTEM) */
+    @NotNull(message = "상태 변경 주체는 필수입니다.")
     private final String updatedBy;
 
     /** 변경 요청자 ID (관리자 ID 또는 스토어 ID) */

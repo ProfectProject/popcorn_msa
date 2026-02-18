@@ -88,6 +88,9 @@ dependencies {
     // === Servlet API ===
     implementation("jakarta.servlet:jakarta.servlet-api")
 
+    // === Logging helpers ===
+    implementation("net.logstash.logback:logstash-logback-encoder:7.4")
+
     // === Lombok (필수) - implementation으로 변경 ===
     implementation("org.projectlombok:lombok")
     annotationProcessor("org.projectlombok:lombok")

@@ -60,7 +60,7 @@ spring:
       STORE_MIGRATOR_PASSWORD: ${STORE_MIGRATOR_PASSWORD}
 
   kafka:
-    bootstrap-servers: ${KAFKA_BOOTSTRAP_SERVERS:kafka-1:9092}
+    bootstrap-servers: ${KAFKA_BOOTSTRAP_SERVERS:kafka-1:9092,kafka-2:9092,kafka-3:9092}
 
     producer:
       acks: all
@@ -70,7 +70,7 @@ spring:
       value-serializer: org.apache.kafka.common.serialization.StringSerializer
 
     consumer:
-      group-id: ${KAFKA_CONSUMER_GROUP_ID:store-service-group}
+      group-id: ${KAFKA_CONSUMER_GROUP_ID:stores-group}
       auto-offset-reset: earliest
       enable-auto-commit: false
       key-deserializer: org.apache.kafka.common.serialization.StringDeserializer

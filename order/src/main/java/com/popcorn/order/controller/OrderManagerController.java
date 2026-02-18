@@ -140,23 +140,13 @@ public class OrderManagerController {
                 orderId, request.getStatus(), request.getReason());
 
         try {
-            if (request.getOrderId() != null && !orderId.equals(request.getOrderId())) {
-                BaseResponse<BaseError> errorResponse = BaseResponse.error(
-                        CommonResponseCode.INVALID_REQUEST,
-                        "path orderId와 body orderId가 일치하지 않습니다.");
-                return ResponseEntity.badRequest().body((BaseResponse) errorResponse);
-            }
-
             // 권한이 검증된 후 실제 상태 변경 로직 호출
             orderCommandService.updateOrderStatus(orderId, request.getStatus(), request.getReason());
 
             OrderStatusUpdateResponse response = OrderStatusUpdateResponse.builder()
                     .orderId(orderId)
-                    .currentStatus(request.getStatus())
                     .status(request.getStatus())
                     .reason(request.getReason())
-                    .success(true)
-                    .message("주문 상태가 성공적으로 변경되었습니다.")
                     .updatedAt(java.time.LocalDateTime.now())
                     .build();
 
