@@ -411,6 +411,8 @@ services:
       context: ./payment
     image: popcorn/payment:local
     container_name: popcorn-payment
+    ports:
+      - "8085:8085"
     env_file:
       - ./.env
     environment:

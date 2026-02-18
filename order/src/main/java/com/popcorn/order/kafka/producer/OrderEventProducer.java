@@ -253,12 +253,4 @@ public class OrderEventProducer {
                 .build();
     }
 
-    /**
-     * PopupId로부터 StoreId 해결
-     */
-    private UUID resolveStoreId(UUID popupId) {
-        // TODO: 실제로는 PopupService나 StoreService를 통해 popupId로 storeId를 조회해야 함
-        // 현재는 테스트용으로 고정값 반환
-        return UUID.fromString("00000000-0000-0000-0000-000000000001");
-    }
 }

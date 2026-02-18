@@ -138,9 +138,14 @@ public class OrderDomainService {
      * 고객 정보 검증
      */
     private void validateCustomerInfo(Long customerId) {
-        if (customerId == null || customerId <= 0) {
+        // 시스템 사용자(내부 서비스 호출)는 customerId가 0일 수 있으므로 허용
+        if (customerId == null || customerId < 0) {
             throw new IllegalArgumentException("올바른 고객 정보가 필요해요!");
         }
+
+        // customerId가 0인 경우는 시스템 사용자로 간주하여 허용
+        log.debug("고객 정보 검증 완료 - 고객 ID: {} {}",
+                customerId, customerId == 0 ? "(시스템 사용자)" : "");
     }
 
     /**
