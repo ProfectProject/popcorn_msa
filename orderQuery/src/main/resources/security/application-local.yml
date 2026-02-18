@@ -22,7 +22,7 @@ spring:
           max-idle: 5
           min-idle: 0
   datasource:
-      url: jdbc:postgresql://${DB_HOST:localhost}:${DB_PORT:5432}/${DB_NAME:popcorn_db}
+      url: jdbc:postgresql://${DB_HOST:localhost}:${DB_PORT:5430}/${DB_NAME:popcorn_db}
       username: ${ORDER_QUERY_DB_USERNAME:order_query_app}
       password: ${ORDER_QUERY_DB_PASSWORD:quary123}
       driver-class-name: org.postgresql.Driver
