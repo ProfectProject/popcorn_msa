@@ -351,6 +351,7 @@ services:
       SPRING_KAFKA_BOOTSTRAP_SERVERS: kafka-1:9092,kafka-2:9092,kafka-3:9092
       STORE_SERVICE_BASE_URL: http://popcorn-gateway:8080
       USERS_SERVICE_BASE_URL: http://popcorn-gateway:8080
+      ORDERQUERY_SERVICE_BASE_URL: http://popcorn-gateway:8080
       STORE_SERVICE_URL: http://popcorn-gateway:8080
       USERS_SERVICE_URL: http://popcorn-gateway:8080
     ports:
@@ -373,17 +374,19 @@ services:
       context: ./orderQuery
     image: popcorn/orderquery:local
     container_name: popcorn-orderquery
+    ports:
+      - "8087:8087"
     env_file:
       - ./.env
     environment:
       DB_HOST: db
       DB_PORT: 5432
       DB_NAME: ${DB_NAME:-popcorn_db}
+      ORDER_QUERY_DB_USERNAME: ${ORDER_QUERY_DB_USERNAME:-order_query_app}
+      ORDER_QUERY_DB_PASSWORD: ${ORDER_QUERY_DB_PASSWORD:-quary123}
+      ORDER_QUERY_FLYWAY_USERNAME: ${ORDER_QUERY_FLYWAY_USERNAME:-order_query_migrator}
+      ORDER_QUERY_FLYWAY_PASSWORD: ${ORDER_QUERY_FLYWAY_PASSWORD:-quary321}
       JWT_SECRET: ${JWT_SECRET}
-      ORDER_QUERY_DB_USERNAME: order_query_app
-      ORDER_QUERY_DB_PASSWORD: quary123
-      ORDER_QUERY_FLYWAY_USERNAME: order_query_migrator
-      ORDER_QUERY_FLYWAY_PASSWORD: quary321
       REDIS_HOST: redis
       SPRING_DATA_REDIS_HOST: redis
       SPRING_DATA_REDIS_PORT: 6379

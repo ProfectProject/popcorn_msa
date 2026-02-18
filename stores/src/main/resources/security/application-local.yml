@@ -60,7 +60,7 @@ spring:
       STORE_MIGRATOR_PASSWORD: ${STORE_MIGRATOR_PASSWORD}
 
   kafka:
-    bootstrap-servers: ${KAFKA_BOOTSTRAP_SERVERS}
+    bootstrap-servers: ${KAFKA_BOOTSTRAP_SERVERS:kafka-1:9092}
 
     producer:
       acks: all
@@ -70,7 +70,7 @@ spring:
       value-serializer: org.apache.kafka.common.serialization.StringSerializer
 
     consumer:
-      group-id: ${KAFKA_CONSUMER_GROUP_ID}
+      group-id: ${KAFKA_CONSUMER_GROUP_ID:store-service-group}
       auto-offset-reset: earliest
       enable-auto-commit: false
       key-deserializer: org.apache.kafka.common.serialization.StringDeserializer
@@ -78,7 +78,7 @@ spring:
 
     listener:
       ack-mode: manual
-      concurrency: ${KAFKA_LISTENER_CONCURRENCY}
+      concurrency: ${KAFKA_LISTENER_CONCURRENCY:3}
 
 # 인증 설정
 passport:
@@ -120,9 +120,9 @@ popcorn:
     topics:
       storeEvents: store-events
     topic:
-      replicas: ${KAFKA_TOPIC_REPLICAS}
+      replicas: ${KAFKA_TOPIC_REPLICAS:1}
     partitions:
-      storeEvents: ${STORE_EVENTS_PARTITIONS}
+      storeEvents: ${STORE_EVENTS_PARTITIONS:12}
 
 management:
   endpoints:

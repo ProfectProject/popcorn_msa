@@ -8,8 +8,8 @@ spring:
       port: ${SPRING_DATA_REDIS_PORT:${SPRING_REDIS_PORT:${REDIS_PORT:6379}}}
       repositories:
         enabled: false
-  autoconfigure:
-    exclude: org.springframework.boot.autoconfigure.jdbc.DataSourceTransactionManagerAutoConfiguration
+  # autoconfigure:
+    # exclude: org.springframework.boot.autoconfigure.jdbc.DataSourceTransactionManagerAutoConfiguration
   profiles:
     default: local
   kafka:

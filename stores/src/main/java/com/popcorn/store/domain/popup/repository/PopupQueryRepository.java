@@ -109,4 +109,18 @@ public interface PopupQueryRepository extends Repository<Popup, UUID> {
 			   AND p.status = :status
 			""", nativeQuery = true)
 	long countPopupsByStatus(@Param("status") String status);
+
+	/**
+	 * 캐시 워밍용: 활성 상태 팝업 ID 목록 조회 (인기순)
+	 */
+	@Query(value = """
+			SELECT p.popup_id
+			  FROM popups p
+			 WHERE p.deleted_at IS NULL
+			   AND p.status IN ('ACTIVE', 'OPEN')
+			   AND p.event_end_at > CURRENT_TIMESTAMP
+			 ORDER BY p.created_at DESC, p.updated_at DESC
+			 LIMIT :limit
+			""", nativeQuery = true)
+	List<UUID> findActivePopupIds(@Param("limit") int limit);
 }

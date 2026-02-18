@@ -1,7 +1,11 @@
 package com.popcorn.order.dto.response;
 
 import java.time.LocalDateTime;
+import java.util.Collections;
+import java.util.EnumMap;
+import java.util.EnumSet;
 import java.util.List;
+import java.util.Map;
 import java.util.UUID;
 
 import com.popcorn.order.entity.Order;
@@ -60,6 +64,8 @@ public class OrderListResponse {
     @NoArgsConstructor
     @AllArgsConstructor
     public static class OrderItemDto {
+        private static final Map<OrderStatus, List<String>> NEXT_STATUS_MAP = buildNextStatusMap();
+
         /** 주문 ID */
         private UUID orderId;
 
@@ -71,6 +77,9 @@ public class OrderListResponse {
 
         /** 주문 상태 */
         private OrderStatus status;
+
+        /** UI 팝업에서 바로 사용할 수 있는 다음 가능 상태 목록 */
+        private List<String> nextAvailableStatuses;
 
         /** 팝업 ID */
         private UUID popupId;
@@ -101,6 +110,7 @@ public class OrderListResponse {
                     .orderNo(order.getOrderNo())
                     .orderType(order.getOrderType())
                     .status(order.getStatus())
+                    .nextAvailableStatuses(resolveNextStatuses(order.getStatus()))
                     .popupId(order.getPopupId())
                     .customerId(order.getCustomerId())
                     .totalAmount(order.getTotalAmount())
@@ -108,6 +118,36 @@ public class OrderListResponse {
                     .createdAt(order.getCreatedAt())
                     .updatedAt(order.getUpdatedAt())
                     .build();
+        }
+
+        private static List<String> resolveNextStatuses(OrderStatus currentStatus) {
+            if (currentStatus == null) {
+                return List.of();
+            }
+            return NEXT_STATUS_MAP.getOrDefault(currentStatus, List.of());
+        }
+
+        private static Map<OrderStatus, List<String>> buildNextStatusMap() {
+            Map<OrderStatus, List<String>> transitions = new EnumMap<>(OrderStatus.class);
+            transitions.put(OrderStatus.REQUESTED, toList(EnumSet.of(
+                    OrderStatus.ACCEPTED, OrderStatus.PAYMENT_PENDING, OrderStatus.PAID,
+                    OrderStatus.RESERVED, OrderStatus.REJECTED, OrderStatus.CANCELLED)));
+            transitions.put(OrderStatus.ACCEPTED, toList(EnumSet.of(
+                    OrderStatus.RESERVED, OrderStatus.CANCELLED)));
+            transitions.put(OrderStatus.RESERVED, toList(EnumSet.of(
+                    OrderStatus.PAYMENT_PENDING, OrderStatus.PAID, OrderStatus.COMPLETED, OrderStatus.CANCELLED)));
+            transitions.put(OrderStatus.PAYMENT_PENDING, toList(EnumSet.of(
+                    OrderStatus.PAID, OrderStatus.COMPLETED, OrderStatus.CANCELLED)));
+            transitions.put(OrderStatus.PAID, toList(EnumSet.of(
+                    OrderStatus.COMPLETED, OrderStatus.CANCELLED)));
+            transitions.put(OrderStatus.COMPLETED, toList(EnumSet.of(OrderStatus.PAID)));
+            transitions.put(OrderStatus.REJECTED, List.of());
+            transitions.put(OrderStatus.CANCELLED, List.of());
+            return Collections.unmodifiableMap(transitions);
+        }
+
+        private static List<String> toList(EnumSet<OrderStatus> statuses) {
+            return statuses.stream().map(Enum::name).toList();
         }
     }
 

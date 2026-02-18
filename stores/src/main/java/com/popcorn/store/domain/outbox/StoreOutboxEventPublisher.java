@@ -36,7 +36,7 @@ public class StoreOutboxEventPublisher {
         String partitionKey = extractPartitionKey(payload);
         String topic = Optional.ofNullable(payload.get("topic"))
                 .map(Object::toString)
-                .orElse(EventConstants.Streams.STORE_EVENTS);
+                .orElse(EventConstants.Topics.STORE_EVENTS);
 
         eventData.put("eventType", eventType);
         eventData.put("occurredAt", LocalDateTime.now().toString());

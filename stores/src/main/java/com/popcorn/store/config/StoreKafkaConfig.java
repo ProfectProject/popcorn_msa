@@ -102,16 +102,18 @@ public class StoreKafkaConfig {
     @Bean("storeKafkaListenerContainerFactory")
     public ConcurrentKafkaListenerContainerFactory<String, String> storeKafkaListenerContainerFactory(
             @Qualifier("storeConsumerFactory")
-            ConsumerFactory<String, String> cf,
-            @Qualifier("storeErrorHandler")
-            DefaultErrorHandler errorHandler
+            ConsumerFactory<String, String> cf
     ) {
         ConcurrentKafkaListenerContainerFactory<String, String> factory =
                 new ConcurrentKafkaListenerContainerFactory<>();
 
         factory.setConsumerFactory(cf);
 
-        // 실패 시 Retry 후 DLT로
+        // 기본 에러 핸들러 사용 (의존성 문제 방지)
+        ExponentialBackOffWithMaxRetries backOff = new ExponentialBackOffWithMaxRetries(3);
+        backOff.setInitialInterval(1_000L);
+        backOff.setMultiplier(2.0);
+        DefaultErrorHandler errorHandler = new DefaultErrorHandler(backOff);
         factory.setCommonErrorHandler(errorHandler);
 
         return factory;
@@ -125,19 +127,13 @@ public class StoreKafkaConfig {
      * 예) store-requests.DLT
      */
     @Bean
-    public DefaultErrorHandler storeErrorHandler(
-            @Qualifier("storeKafkaTemplate") KafkaTemplate<String, String> template) {
-        DeadLetterPublishingRecoverer recoverer = new DeadLetterPublishingRecoverer(
-                template,
-                (record, ex) -> new TopicPartition(record.topic() + ".DLT", record.partition())
-        );
-
+    public DefaultErrorHandler storeErrorHandler() {
         ExponentialBackOffWithMaxRetries backOff = new ExponentialBackOffWithMaxRetries(6);
         backOff.setInitialInterval(1_000L);
         backOff.setMultiplier(2.0);
         backOff.setMaxInterval(30_000L);
 
-        DefaultErrorHandler handler = new DefaultErrorHandler(recoverer, backOff);
+        DefaultErrorHandler handler = new DefaultErrorHandler(backOff);
 
         // 재시도 의미 없는 예외는 즉시 DLT로 보내고 싶으면 여기에 추가
         // handler.addNotRetryableExceptions(IllegalArgumentException.class);

@@ -24,6 +24,7 @@ import com.popcorn.order.repository.OrderRepository;
 import com.popcorn.order.repository.OrderStatusHistoryRepository;
 import com.popcorn.order.dto.store.PopupInfoResponse;
 import com.popcorn.order.service.lookup.OrderPopupLookupService;
+import com.popcorn.order.client.OrderQueryServiceClient;
 
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
@@ -52,6 +53,7 @@ public class OrderQueryService {
     private final OrderStatusHistoryRepository orderStatusHistoryRepository;
     private final OrderDomainService orderDomainService;
     private final OrderPopupLookupService orderPopupLookupService;
+    private final OrderQueryServiceClient orderQueryServiceClient;
 
     // ================ 단일 주문 조회 ================
 
@@ -657,6 +659,105 @@ public class OrderQueryService {
         } catch (Exception e) {
             log.error("팝업별 주문 목록 조회 실패 - popupId: {}", popupId, e);
             throw new RuntimeException("주문 목록 조회 중 오류가 발생했습니다.", e);
+        }
+    }
+
+    /**
+     * 필터를 적용한 전체 주문 조회 (매니저용) → OrderQuery 서비스로 위임
+     */
+    @Transactional(readOnly = true)
+    public List<OrderListResponse.OrderItemDto> findAllOrdersWithFilters(
+            String orderType, String paymentMethod, String status, Long userId,
+            Integer minAmount, Integer maxAmount, int page, int size,
+            String sortBy, String sortDirection) {
+
+        try {
+            log.info("📋 매니저용 주문 필터 조회 - 타입: {}, 결제: {}, 상태: {}, 사용자: {} - OrderQuery 서비스로 위임",
+                orderType, paymentMethod, status, userId);
+
+            // OrderQuery 서비스에서 고급 필터링 주문 조회
+            // 날짜 파라미터 변환 (year, month → startDate, endDate)
+            String startDate = null;
+            String endDate = null;
+            if (minAmount != null && maxAmount != null) {
+                // TODO: year, month를 실제 날짜 문자열로 변환하는 로직 추가
+                // 현재는 null로 전달
+            }
+
+            return orderQueryServiceClient.getAllOrdersWithFilters(
+                status, startDate, endDate, userId, minAmount, maxAmount,
+                page, size, sortBy, sortDirection);
+
+        } catch (Exception e) {
+            log.error("필터링된 주문 조회 실패 - OrderQuery 서비스 호출 오류", e);
+            throw new RuntimeException("주문 조회 중 오류가 발생했습니다.", e);
+        }
+    }
+
+    /**
+     * 주문 통계 조회 → OrderQuery 서비스로 위임
+     */
+    @Transactional(readOnly = true)
+    public com.popcorn.order.dto.response.OrderStatisticsResponse getOrderStatistics(String period) {
+        try {
+            log.info("📈 주문 통계 조회 - 기간: {}, OrderQuery 서비스로 위임", period);
+
+            // period를 days로 변환 (기본값: 7일)
+            int days = convertPeriodToDays(period);
+            String includeTypes = "all";
+
+            // OrderQuery 서비스에서 실제 통계 조회
+            return orderQueryServiceClient.getDetailedStatistics(days, includeTypes);
+
+        } catch (Exception e) {
+            log.error("주문 통계 조회 실패 - OrderQuery 서비스 호출 오류", e);
+            throw new RuntimeException("통계 조회 중 오류가 발생했습니다.", e);
+        }
+    }
+
+    /**
+     * 주문 상태별 요약 조회 → OrderQuery 서비스로 위임
+     */
+    @Transactional(readOnly = true)
+    public com.popcorn.order.dto.response.OrderStatusSummaryResponse getOrderStatusSummary() {
+        try {
+            log.info("📊 주문 상태별 요약 조회 - OrderQuery 서비스로 위임");
+
+            // OrderQuery 서비스에서 실시간 상태별 요약 조회
+            return orderQueryServiceClient.getRealtimeStatusSummary();
+
+        } catch (Exception e) {
+            log.error("주문 상태별 요약 조회 실패 - OrderQuery 서비스 호출 오류", e);
+            throw new RuntimeException("상태별 요약 조회 중 오류가 발생했습니다.", e);
+        }
+    }
+
+    /**
+     * period 문자열을 일 수로 변환하는 헬퍼 메서드
+     */
+    private int convertPeriodToDays(String period) {
+        if (period == null || period.isEmpty()) {
+            return 7; // 기본값: 7일
+        }
+
+        switch (period.toLowerCase()) {
+            case "today":
+                return 1;
+            case "week":
+                return 7;
+            case "month":
+                return 30;
+            case "year":
+                return 365;
+            case "all":
+                return 365; // 전체는 1년으로 제한
+            default:
+                try {
+                    return Integer.parseInt(period);
+                } catch (NumberFormatException e) {
+                    log.warn("잘못된 period 값: {}, 기본값 7일 사용", period);
+                    return 7;
+                }
         }
     }
 }

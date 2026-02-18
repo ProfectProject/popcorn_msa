@@ -88,7 +88,7 @@ public class OutboxEvent {
         this.aggregateType = aggregateType;
         this.aggregateId = aggregateId;
         this.eventType = eventType;
-        this.topic = (topic != null) ? topic : EventConstants.Streams.STORE_EVENTS;
+        this.topic = (topic != null) ? topic : EventConstants.Topics.STORE_EVENTS;
         this.partitionKey = partitionKey;
         this.schemaVersion = (schemaVersion != null) ? schemaVersion : 4;
         this.eventData = eventData;
