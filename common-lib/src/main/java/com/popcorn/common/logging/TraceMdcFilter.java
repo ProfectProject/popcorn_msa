@@ -1,4 +1,4 @@
-package com.popcorn.store.logging;
+package com.popcorn.common.logging;
 
 import jakarta.servlet.FilterChain;
 import jakarta.servlet.ServletException;
@@ -24,7 +24,6 @@ public class TraceMdcFilter extends OncePerRequestFilter {
                                     HttpServletResponse response,
                                     FilterChain filterChain) throws ServletException, IOException {
 
-        // 클라이언트가 traceId를 보내면 그대로 쓰고, 없으면 생성
         String traceId = Optional.ofNullable(request.getHeader("X-Trace-Id"))
                 .filter(s -> !s.isBlank())
                 .orElseGet(() -> UUID.randomUUID().toString().replace("-", ""));
@@ -32,11 +31,13 @@ public class TraceMdcFilter extends OncePerRequestFilter {
         MDC.put(TRACE_ID, traceId);
         MDC.put("httpMethod", request.getMethod());
         MDC.put("path", request.getRequestURI());
+        long startTime = System.currentTimeMillis();
 
         try {
             filterChain.doFilter(request, response);
         } finally {
-            MDC.put("status", String.valueOf(response.getStatus()));
+            MDC.put("httpStatus", String.valueOf(response.getStatus()));
+            MDC.put("elapsedMs", String.valueOf(System.currentTimeMillis() - startTime));
             MDC.clear();
         }
     }

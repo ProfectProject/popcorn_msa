@@ -2,6 +2,7 @@ package com.popcorn.order.kafka.producer;
 
 import com.fasterxml.jackson.core.type.TypeReference;
 import com.fasterxml.jackson.databind.ObjectMapper;
+import com.popcorn.order.dto.store.PopupInfoResponse;
 import com.popcorn.order.entity.ItemType;
 import com.popcorn.order.entity.Order;
 import com.popcorn.order.entity.OrderItem;
@@ -15,8 +16,6 @@ import com.popcorn.order.kafka.event.order_events.OrderLine;
 import com.popcorn.order.kafka.event.order_events.OrderPAIDEvent;
 import com.popcorn.order.kafka.event.order_events.OrderStatusUpdatedEvent;
 import com.popcorn.order.service.lookup.OrderPopupLookupService;
-import com.fasterxml.jackson.core.JsonProcessingException;
-import com.fasterxml.jackson.databind.ObjectMapper;
 
 import lombok.RequiredArgsConstructor;
 import org.springframework.stereotype.Component;
@@ -29,8 +28,6 @@ import java.util.HashMap;
 import java.util.Map;
 import java.util.UUID;
 
-import javax.sound.sampled.Line;
-
 @Component
 @RequiredArgsConstructor
 public class OrderEventProducer {
@@ -40,6 +37,7 @@ public class OrderEventProducer {
 
     private final OutboxEventRepository outboxEventRepository;
     private final ObjectMapper objectMapper;
+    private final OrderPopupLookupService orderPopupLookupService;
 
     /*
     * ORDER_CREATED
@@ -220,6 +218,16 @@ public class OrderEventProducer {
         );
 
         outboxEventRepository.save(outboxEvent);
+    }
+
+    private UUID resolveStoreId(UUID popupId) {
+        if (popupId == null) {
+            return null;
+        }
+
+        return orderPopupLookupService.getPopupInfo(popupId)
+                .map(PopupInfoResponse::getStoreId)
+                .orElse(null);
     }
 
     private OrderLine toLine(OrderItem item) {

@@ -34,6 +34,26 @@ spring:
     schemas: store
     clean-disabled: false
 
+  Kafka:
+    bootstrap-servers: ${KAFKA_BOOTSTRAP_SERVERS}
+
+    producer:
+      acks: all
+      properties:
+        enable.idempotence: true
+      key-serializer: org.apache.kafka.common.serialization.StringSerializer
+      value-serializer: org.apache.kafka.common.serialization.StringSerializer
+
+    consumer:
+      group-id: ${KAFKA_CONSUMER_GROUP_ID}
+      auto-offset-reset: earliest
+      enable-auto-commit: false
+      key-deserializer: org.apache.kafka.common.serialization.StringDeserializer
+      value-deserializer: org.apache.kafka.common.serialization.StringDeserializer
+
+    listener:
+      ack-mode: manual
+      concurrency: ${KAFKA_LISTENER_CONCURRENCY}
 
 jwt:
   secret: ${JWT_SECRET:dGVzdC1qd3Qtc2VjcmV0LWtleS1mb3ItbG9jYWwtZGV2ZWxvcG1lbnQtb25seS1kb25vdC11c2UtaW4tcHJvZHVjdGlvbg==}
@@ -43,3 +63,24 @@ jwt:
 passport:
   secret: ${PASSPORT_SECRET:passport-shared-secret}
   ttl-seconds: 60
+
+logging:
+  level:
+    com.popcorn.store: DEBUG
+    org.springframework.web: DEBUG
+    org.springframework.boot.web: DEBUG
+    org.hibernate.SQL: DEBUG
+    org.springframework.security: DEBUG
+    com.adjh.springbootkafka: DEBUG
+    org:
+      apache.kafka: INFO
+      springframework.kafka: INFO
+
+popcorn:
+  kafka:
+    topics:
+      storeEvents: store-events
+    topic:
+      replicas: ${KAFKA_TOPIC_REPLICAS}
+    partitions:
+      storeEvents: ${STORE_EVENTS_PARTITIONS}
