@@ -143,7 +143,43 @@ ALTER ROLE payment_app SET search_path TO payment, public;
 ALTER DEFAULT PRIVILEGES IN SCHEMA payment GRANT SELECT, INSERT, UPDATE, DELETE ON TABLES TO payment_app;
 ALTER DEFAULT PRIVILEGES IN SCHEMA payment GRANT USAGE, SELECT ON SEQUENCES TO payment_app;
 
--- 6. Order Query 서비스 권한 설정
+-- 6. Coupon 서비스 권한 설정
+-- --------------------------
+-- Coupon 서비스용 마이그레이션 사용자 생성
+DO $$ BEGIN
+    IF NOT EXISTS (SELECT 1 FROM pg_roles WHERE rolname = 'coupon_migrator') THEN
+        CREATE ROLE coupon_migrator LOGIN PASSWORD 'coupon321';
+    END IF;
+END $$;
+
+-- Coupon 서비스용 애플리케이션 사용자 생성
+DO $$ BEGIN
+    IF NOT EXISTS (SELECT 1 FROM pg_roles WHERE rolname = 'coupon_app') THEN
+        CREATE ROLE coupon_app LOGIN PASSWORD 'coupon123';
+    END IF;
+END $$;
+
+-- coupons 스키마 생성 및 소유권 설정
+CREATE SCHEMA IF NOT EXISTS coupons AUTHORIZATION coupon_migrator;
+
+-- coupons 스키마에 대한 migrator 권한 (DDL 작업용)
+GRANT ALL PRIVILEGES ON SCHEMA coupons TO coupon_migrator;
+GRANT ALL PRIVILEGES ON ALL TABLES IN SCHEMA coupons TO coupon_migrator;
+GRANT ALL PRIVILEGES ON ALL SEQUENCES IN SCHEMA coupons TO coupon_migrator;
+
+-- coupons 스키마에 대한 app 권한 (CRUD 작업용)
+GRANT USAGE ON SCHEMA coupons TO coupon_app;
+GRANT SELECT, INSERT, UPDATE, DELETE ON ALL TABLES IN SCHEMA coupons TO coupon_app;
+GRANT USAGE, SELECT ON ALL SEQUENCES IN SCHEMA coupons TO coupon_app;
+
+-- coupon_app 사용자의 기본 스키마 경로 설정
+ALTER ROLE coupon_app SET search_path TO coupons, public;
+
+-- 향후 생성될 테이블에 대한 기본 권한 설정
+ALTER DEFAULT PRIVILEGES IN SCHEMA coupons GRANT SELECT, INSERT, UPDATE, DELETE ON TABLES TO coupon_app;
+ALTER DEFAULT PRIVILEGES IN SCHEMA coupons GRANT USAGE, SELECT ON SEQUENCES TO coupon_app;
+
+-- 7. Order Query 서비스 권한 설정
 -- -------------------------------
 -- Order Query 서비스용 마이그레이션 사용자 생성
 DO $$ BEGIN
@@ -180,7 +216,7 @@ ALTER DEFAULT PRIVILEGES IN SCHEMA order_query GRANT SELECT, INSERT, UPDATE, DEL
 ALTER DEFAULT PRIVILEGES IN SCHEMA order_query GRANT USAGE, SELECT ON SEQUENCES TO order_query_app;
 
 
--- 7. 기존 테이블 소유권 정리
+-- 8. 기존 테이블 소유권 정리
 -- -------------------------
 
 -- Store 테이블들의 소유권을 store_migrator로 변경
@@ -234,7 +270,7 @@ BEGIN
 END $$;
 
 
--- 8. 권한 설정 완료 확인
+-- 9. 권한 설정 완료 확인
 -- ---------------------
 \echo '=== 권한 설정 완료 ==='
 
@@ -243,7 +279,7 @@ SELECT
     schemaname as "스키마",
     count(*) as "테이블 수"
 FROM pg_tables
-WHERE schemaname IN ('store', 'checkIns', 'orders', 'payment', 'user_auth', 'order_query')
+WHERE schemaname IN ('store', 'checkIns', 'orders', 'payment', 'user_auth', 'order_query', 'coupons')
 GROUP BY schemaname
 ORDER BY schemaname;
 
@@ -262,6 +298,7 @@ ORDER BY rolname;
 \echo '- CheckIns: qr_app (CRUD), qr_migrator (DDL)'
 \echo '- Orders: order_app (CRUD), order_migrator (DDL)'
 \echo '- Payment: payment_app (CRUD), payment_migrator (DDL)'
+\echo '- Coupon: coupon_app (CRUD), coupon_migrator (DDL)'
 \echo '- Order Query: order_query_app (CRUD), order_query_migrator (DDL)'
 \echo ''
 \echo '각 app 사용자는 해당 스키마를 기본 경로로 설정됨'

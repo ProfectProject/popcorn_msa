@@ -54,7 +54,7 @@ spring:
     validate-on-migrate: true
     clean-disabled: false
     placeholders:
-      STORE_MIGRATOR_PASSWORD: ${STORE_MIGRATOR_PASSWORD}
+      STORE_MIGRATOR_PASSWORD: ${STORE_FLYWAY_PASSWORD}
 
   Kafka:
     bootstrap-servers: ${KAFKA_BOOTSTRAP_SERVERS}
@@ -67,7 +67,7 @@ spring:
       value-serializer: org.apache.kafka.common.serialization.StringSerializer
 
     consumer:
-      group-id: ${KAFKA_CONSUMER_GROUP_ID}
+      group-id: ${STORE_KAFKA_CONSUMER_GROUP_ID}
       auto-offset-reset: earliest
       enable-auto-commit: false
       key-deserializer: org.apache.kafka.common.serialization.StringDeserializer
