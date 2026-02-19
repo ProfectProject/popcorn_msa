@@ -317,8 +317,8 @@ jobs:
             type=raw,value=latest,enable=${{ github.ref_name == 'main' }}
             
             # Development 전략 (develop 및 ci-tag 전용)
-            type=raw,value=dev-${{ steps.build_meta.outputs.sha8 }},enable=${{ github.ref_name == 'develop' }}
-            type=raw,value=dev-latest,enable=${{ github.ref_name == 'develop' }}
+            type=raw,value=dev-${{ steps.build_meta.outputs.sha8 }},enable=${{ github.ref_name == 'develop-kafka' }}
+            type=raw,value=dev-latest,enable=${{ github.ref_name == 'develop-kafka' }}
             
             # 공통: Semantic Versioning
             type=semver,pattern={{version}}
