@@ -86,7 +86,7 @@ public class OrderCommandService {
     private final PaymentCacheService paymentCacheService;
     private final PaymentPerformanceMonitor paymentPerformanceMonitor;
 
-    @org.springframework.beans.factory.annotation.Value("${frontend.base-url:http://localhost:3000}")
+    @org.springframework.beans.factory.annotation.Value("${frontend.base-url}")
     private String frontendBaseUrl;
 
     @org.springframework.beans.factory.annotation.Value("${order.reservation.wait-timeout-ms:0}")

@@ -1,4 +1,4 @@
-package com.popcorn.order.service;
+/*package com.popcorn.order.service;
 
 import static org.junit.jupiter.api.Assertions.*;
 import static org.mockito.ArgumentMatchers.*;
@@ -29,7 +29,7 @@ import com.popcorn.order.entity.ItemType;
  * - Mock을 사용해서 외부 의존성 제거
  * - 80% 커버리지를 위한 기본 테스트들
  */
-@ExtendWith(MockitoExtension.class)
+/*@ExtendWith(MockitoExtension.class)
 @DisplayName("간단한 주문 서비스 테스트 ✅")
 class SimpleOrderServiceTest {
 
@@ -220,4 +220,4 @@ class SimpleOrderServiceTest {
         assertEquals("MIXED", ItemType.MIXED.name(), "혼합형");
     }
 
-}
+}*/

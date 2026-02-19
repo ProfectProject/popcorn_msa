@@ -550,6 +550,8 @@ public class OrderDashboardService {
             try {
                 UserSimpleResponse response = client.get()
                         .uri("/api/users/v1/users/{userId}", userId)
+                        .header("X-Internal-Service", "orderquery-service")
+                        .header("X-Internal-Call", "true")
                         .retrieve()
                         .body(UserSimpleResponse.class);
 

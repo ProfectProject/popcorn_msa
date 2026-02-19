@@ -6,16 +6,16 @@ spring:
     activate:
       on-profile: prod
   datasource:
-    url: jdbc:postgresql://${DB_HOST:localhost}:${DB_PORT:5432}/${DB_NAME:popcorn_db}?currentSchema=store
-    username: ${STORE_USERNAME:store_app}
-    password: ${STORE_PASSWORD:store123}
+    url: jdbc:postgresql://${DB_HOST}:${DB_PORT}/${DB_NAME}
+    username: ${STORE_USERNAME}
+    password: ${STORE_PASSWORD}
     driver-class-name: org.postgresql.Driver
     hikari:
       connection-init-sql: SET search_path TO store
   jpa:
     open-in-view: false
     hibernate:
-      ddl-auto: validate
+      ddl-auto: none
     properties:
       hibernate:
         type:
@@ -23,9 +23,9 @@ spring:
         default_schema: store
 
   flyway:
-    url: jdbc:postgresql://${DB_HOST:localhost}:${DB_PORT:5432}/${DB_NAME:popcorn_db}
-    user: ${STORE_FLYWAY_USERNAME:store_migrator}
-    password: ${STORE_FLYWAY_PASSWORD:store123}
+    url: jdbc:postgresql://${DB_HOST}:${DB_PORT}/${DB_NAME}
+    user: ${STORE_FLYWAY_USERNAME}
+    password: ${STORE_FLYWAY_PASSWORD}
     enabled: true
     baseline-on-migrate: true
     validate-on-migrate: true
@@ -45,7 +45,7 @@ spring:
       value-serializer: org.apache.kafka.common.serialization.StringSerializer
 
     consumer:
-      group-id: ${KAFKA_CONSUMER_GROUP_ID}
+      group-id: ${STORE_KAFKA_CONSUMER_GROUP_ID}
       auto-offset-reset: earliest
       enable-auto-commit: false
       key-deserializer: org.apache.kafka.common.serialization.StringDeserializer
@@ -56,12 +56,12 @@ spring:
       concurrency: ${KAFKA_LISTENER_CONCURRENCY}
 
 jwt:
-  secret: ${JWT_SECRET:dGVzdC1qd3Qtc2VjcmV0LWtleS1mb3ItbG9jYWwtZGV2ZWxvcG1lbnQtb25seS1kb25vdC11c2UtaW4tcHJvZHVjdGlvbg==}
+  secret: ${JWT_SECRET}
   expiration: 3600000
   refresh-expiration-ms: 1209600000
 
 passport:
-  secret: ${PASSPORT_SECRET:passport-shared-secret}
+  secret: ${PASSPORT_SECRET}
   ttl-seconds: 60
 
 logging:

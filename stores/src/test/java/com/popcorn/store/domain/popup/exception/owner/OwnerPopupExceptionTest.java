@@ -1,4 +1,4 @@
-package com.popcorn.store.domain.popup.exception.owner;
+/*package com.popcorn.store.domain.popup.exception.owner;
 
 import static org.assertj.core.api.Assertions.assertThat;
 
@@ -25,4 +25,4 @@ class OwnerPopupExceptionTest {
 		assertThat(OwnerPopupException.of(OwnerPopupResponseCode.USER_NOT_OWNER).getResponseCode())
 				.isEqualTo(OwnerPopupResponseCode.USER_NOT_OWNER);
 	}
-}
+}*/

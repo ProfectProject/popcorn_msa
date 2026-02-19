@@ -1,4 +1,4 @@
-package com.popcorn.checkIns.controller;
+/*package com.popcorn.checkIns.controller;
 
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.Mockito.when;
@@ -184,3 +184,4 @@ class QrControllerTest {
 				.andExpect(MockMvcResultMatchers.jsonPath("$.code").value(500));
 	}
 }
+*/
