@@ -14,8 +14,8 @@ spring:
   datasource:
     url: jdbc:postgresql://${DB_HOST}:${DB_PORT}/${DB_NAME}
     driver-class-name: org.postgresql.Driver
-    username: ${QR_DB_USERNAME}
-    password: ${QR_DB_PASSWORD}
+    username: ${QR_USERNAME}
+    password: ${QR_PASSWORD}
     # 프로덕션 커넥션 풀 최적화
     hikari:
       maximum-pool-size: 30
@@ -48,8 +48,8 @@ spring:
     validate-on-migrate: true
     out-of-order: false         # 프로덕션에서는 순서 엄격히 적용
     url: jdbc:postgresql://${DB_HOST}:${DB_PORT}/${DB_NAME}
-    user: ${QR_DB_MIGRATION_USERNAME:${QR_FLYWAY_USERNAME:${QR_DB_USERNAME}}}
-    password: ${QR_DB_MIGRATION_PASSWORD:${QR_FLYWAY_PASSWORD:${QR_DB_PASSWORD}}}
+    user: ${QR_FLYWAY_USERNAME}
+    password: ${QR_FLYWAY_PASSWORD}
 
 
   # Redis 설정 (프로덕션)
@@ -173,10 +173,4 @@ kafka:
     linger-ms: 5
     request-timeout-ms: 30000
     delivery-timeout-ms: 120000
-# Kafka 이벤트 설정
-kafka:
-  enabled: true
-  bootstrap-servers: ${KAFKA_BOOTSTRAP_SERVERS:localhost:9092}
-  consumer:
-    group-id: ${CHECKINS_KAFKA_CONSUMER_GROUP_ID:checkin-service-group}
-    concurrency: 3
+
