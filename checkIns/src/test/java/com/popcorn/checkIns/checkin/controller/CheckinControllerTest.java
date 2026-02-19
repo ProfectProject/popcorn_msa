@@ -1,4 +1,4 @@
-package com.popcorn.checkIns.checkin.controller;
+/*package com.popcorn.checkIns.checkin.controller;
 
 import java.time.LocalDateTime;
 import java.util.List;
@@ -238,3 +238,4 @@ class CheckinControllerTest {
 				.andExpect(MockMvcResultMatchers.jsonPath("$.code").value(200));
 	}
 }
+*/

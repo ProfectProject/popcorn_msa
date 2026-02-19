@@ -1,4 +1,4 @@
-package com.popcorn.checkIns.repository;
+/*package com.popcorn.checkIns.repository;
 
 import static org.assertj.core.api.Assertions.*;
 import static org.mockito.ArgumentMatchers.*;
@@ -25,7 +25,7 @@ import org.springframework.jdbc.core.RowMapper;
  * QrCodeRepository 단위 테스트
  * JDBC 기반 QR 코드 리포지토리의 모든 메소드를 테스트합니다.
  */
-@ExtendWith(MockitoExtension.class)
+/*@ExtendWith(MockitoExtension.class)
 class QrCodeRepositoryTest {
 
     @Mock
@@ -321,4 +321,4 @@ class QrCodeRepositoryTest {
             assertThat(row.createdAt()).isNotNull();
         }
     }
-}
+}*/

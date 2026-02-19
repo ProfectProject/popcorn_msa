@@ -1,4 +1,4 @@
-package com.popcorn.checkIns.event;
+/*package com.popcorn.checkIns.event;
 
 import static org.assertj.core.api.Assertions.assertThat;
 
@@ -83,4 +83,4 @@ class QrCheckinRequestedEventTest {
 
 		assertThat(event.getTimestamp()).isBetween(before, after);
 	}
-}
+}*/

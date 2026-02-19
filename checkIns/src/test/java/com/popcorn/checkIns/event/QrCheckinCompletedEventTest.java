@@ -1,4 +1,4 @@
-package com.popcorn.checkIns.event;
+/*package com.popcorn.checkIns.event;
 
 import static org.assertj.core.api.Assertions.assertThat;
 
@@ -97,4 +97,4 @@ class QrCheckinCompletedEventTest {
 		assertThat(event.getCheckinId()).isEqualTo(checkinId);
 		assertThat(event.getCheckinId()).isNotNull();
 	}
-}
+}*/

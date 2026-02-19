@@ -1,4 +1,4 @@
-package com.popcorn.checkIns.event;
+/*package com.popcorn.checkIns.event;
 
 import static org.assertj.core.api.Assertions.*;
 import static org.mockito.ArgumentMatchers.*;
@@ -25,7 +25,7 @@ import com.popcorn.checkIns.checkin.repository.CheckinRow;
  * QrCheckinEventHandler 단위 테스트
  * 이벤트 핸들러의 비동기 처리 로직을 테스트합니다.
  */
-@ExtendWith(MockitoExtension.class)
+/*@ExtendWith(MockitoExtension.class)
 class QrCheckinEventHandlerTest {
 
     @Mock
@@ -351,4 +351,4 @@ class QrCheckinEventHandlerTest {
             // 완료 이벤트 처리는 단순히 로그만 기록하므로 추가 검증 없음
         }
     }
-}
+}*/

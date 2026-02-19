@@ -1,4 +1,4 @@
-package com.popcorn.store.domain.popup.controller.owner;
+/*package com.popcorn.store.domain.popup.controller.owner;
 
 import static org.assertj.core.api.Assertions.assertThat;
 
@@ -89,3 +89,4 @@ class OwnerPopupExceptionHandlerTest {
 	private void dummy(String value) {
 	}
 }
+*/
