@@ -19,8 +19,8 @@ spring:
   # 데이터베이스 설정 (프로덕션 환경)
   datasource:
     url: jdbc:postgresql://${DB_HOST}:${DB_PORT}/${DB_NAME}
-    username: ${PAYMENT_DB_USERNAME}
-    password: ${PAYMENT_DB_PASSWORD}
+    username: ${PAYMENT_USERNAME}
+    password: ${PAYMENT_PASSWORD}
     driver-class-name: org.postgresql.Driver
     # 프로덕션 커넥션 풀 최적화
     hikari:
@@ -81,8 +81,8 @@ spring:
   # Flyway 설정 (프로덕션)
   flyway:
     enabled: true
-    user: ${PAYMENT_DB_MIGRATION_USERNAME:${PAYMENT_FLYWAY_USERNAME:${PAYMENT_DB_USERNAME}}}
-    password: ${PAYMENT_DB_MIGRATION_PASSWORD:${PAYMENT_FLYWAY_PASSWORD:${PAYMENT_DB_PASSWORD}}}
+    user: ${PAYMENT_FLYWAY_USERNAME}
+    password: ${PAYMENT_FLYWAY_PASSWORD}
     default-schema: payment
     schemas: payment
     locations: classpath:db/migration
@@ -92,7 +92,7 @@ spring:
 
 # 인증 설정 - 게이트웨이와 동일한 키 사용 (프로덕션에서는 환경변수로 설정)
 passport:
-  secret: ${PASSPORT_SECRET:my-super-secret-key-for-popcorn-msa-development-only-do-not-use-in-production}
+  secret: ${PASSPORT_SECRET}
   ttl-seconds: 60
 
 # Redis 이벤트 설정
@@ -157,15 +157,15 @@ logging:
 
 # HTTP 클라이언트 설정 - 게이트웨이를 통한 서비스 간 통신 (MSA 원칙 준수)
 gateway:
-  base-url: ${GATEWAY_URL:http://popcorn-gateway:8080}
+  base-url: ${GATEWAY_URL}
 
 order:
   service:
-    base-url: ${ORDER_SERVICE_BASE_URL:http://popcorn-gateway:8080}
+    base-url: ${ORDER_SERVICE_BASE_URL}
 
 user:
   service:
-    base-url: ${USER_SERVICE_BASE_URL:http://popcorn-gateway:8080}
+    base-url: ${USER_SERVICE_BASE_URL}
 
 # 프로덕션 Payment 서비스 비즈니스 설정
 payment:
@@ -183,8 +183,8 @@ payment:
   # Toss Payments 설정
   toss:
     base-url: ${TOSS_PAYMENTS_BASE_URL}
-    secret-key: ${TOSS_PAYMENTS_SECRET_KEY}
-    client-key: ${TOSS_PAYMENTS_CLIENT_KEY}
+    secret-key: ${TOSS_SECRET_KEY}
+    client-key: ${TOSS_CLIENT_KEY}
     test-mode: ${TOSS_PAYMENTS_TEST_MODE:false}
 
 # 프로덕션 보안 설정
