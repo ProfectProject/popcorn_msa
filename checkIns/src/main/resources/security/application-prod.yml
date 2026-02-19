@@ -173,3 +173,4 @@ kafka:
     linger-ms: 5
     request-timeout-ms: 30000
     delivery-timeout-ms: 120000
+

@@ -383,7 +383,7 @@ jobs:
     env:
       GITOPS_REPO: ProfectProject/popcorn_deploy
       GITOPS_BRANCH: main
-      VALUES_FILE: helm/popcorn-umbrella/values-dev.yaml
+      VALUES_FILE: helm/popcorn-umbrella/values-prod.yaml
     
     
     steps:
@@ -417,7 +417,7 @@ jobs:
           cd gitops
           git checkout "${GITOPS_BRANCH}"
 
-      - name: Update values-dev.yaml for changed services only
+      - name: Update values-prod.yaml for changed services only
         shell: bash
         run: |
           set -euo pipefail
