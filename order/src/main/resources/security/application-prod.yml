@@ -1,6 +1,6 @@
 server:
   port: 8084
-  shutdown: graceful  # 프로덕션에서는 graceful shutdown
+  shutdown: immediate
 
 spring:
   kafka:
@@ -63,7 +63,7 @@ spring:
       port: ${REDIS_PORT}
       password: ${REDIS_PASSWORD}
       timeout: 3000ms
-      database: ${REDIS_DATABASE:1}
+      database: 0
       connection-timeout: 3000ms
       # 프로덕션 레디스 풀 설정
       lettuce:
@@ -86,26 +86,23 @@ logging:
     org:
       apache.kafka: INFO
       springframework.kafka: INFO
-  pattern:
-    console: "%d{yyyy-MM-dd HH:mm:ss.SSS} [%thread] %-5level %logger{36} - %msg%n"
-    file: "%d{yyyy-MM-dd HH:mm:ss.SSS} [%thread] %-5level %logger{36} - %msg%n"
-  file:
-    name: /var/log/order-service/application.log
-  logback:
-    rollingpolicy:
-      max-file-size: 100MB
-      max-history: 30
-      total-size-cap: 3GB
 
-# 이벤트 기반 아키텍처 - HTTP 통신 제거 (프로덕션)
-# microservices 통신은 Redis Stream 이벤트로 대체
+
+# 프론트엔드 주소 설정
+frontend:
+  base-url: ${FRONTEND_BASE_URL}
 
 # 프로덕션 Order 서비스 비즈니스 설정
 order:
   payment:
     timeout: ${ORDER_PAYMENT_TIMEOUT:15000}  # 프로덕션에서는 15초
+    token-cache-ttl: 1800  # 결제 토큰 캐시 TTL (30분)
+    url-cache-ttl: 1800    # 결제 URL 캐시 TTL (30분)
+    status-cache-ttl: 300  # 결제 상태 캐시 TTL (5분)
   cancel:
     timeout: ${ORDER_CANCEL_TIMEOUT:900}     # 프로덕션에서는 15분
+  reservation:
+    wait-timeout-ms: ${ORDER_RESERVATION_WAIT_TIMEOUT_MS:0}  # 예약 응답 대기 시간 (즉시 응답)
   validation:
     max-quantity: ${ORDER_MAX_QUANTITY:50}   # 프로덕션에서는 더 제한적
     min-quantity: ${ORDER_MIN_QUANTITY:1}
@@ -113,6 +110,8 @@ order:
     enabled: ${ORDER_NOTIFICATION_ENABLED:true}
     retry-count: ${ORDER_NOTIFICATION_RETRY:5}  # 프로덕션에서는 더 많은 재시도
     timeout: 5000  # 알림 타임아웃 5초
+  orderquery:
+    timeout-ms: ${ORDER_ORDERQUERY_TIMEOUT:3000}  # OrderQuery 서비스 호출 타임아웃 (3초)
 
 # 프로덕션 보안 설정
 security:
@@ -137,3 +136,21 @@ jwt:
   secret: ${JWT_SECRET}
   expiration: 3600000
   refresh-expiration-ms: 1209600000
+
+springdoc:
+  api-docs:
+    enabled: true
+    path: /v3/api-docs
+  swagger-ui:
+    enabled: true
+    path: /swagger-ui.html
+
+# 외부 서비스 설정
+external:
+  services:
+    users:
+      base-url: ${USER_SERVICE_BASE_URL}
+    store:
+      base-url: ${STORE_SERVICE_BASE_URL}
+    orderquery:
+      base-url: ${ORDERQUERY_SERVICE_BASE_URL}

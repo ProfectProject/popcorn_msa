@@ -1,8 +1,6 @@
 server:
   port: 8082
   shutdown: immediate
-  tomcat:
-    uri-encoding: UTF-8
 spring:
   config:
     activate:

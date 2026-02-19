@@ -115,6 +115,13 @@ resilience4j:
         minimum-number-of-calls: 5
         sliding-window-size: 10
         wait-duration-in-open-state: 5s
+      orderquery-service:
+        failure-rate-threshold: 60
+        minimum-number-of-calls: 3
+        sliding-window-size: 10
+        wait-duration-in-open-state: 8s
+        permitted-number-of-calls-in-half-open-state: 2
+        automatic-transition-from-open-to-half-open-enabled: true
       default:
         failure-rate-threshold: 50
         minimum-number-of-calls: 5
@@ -129,6 +136,10 @@ resilience4j:
       userService:
         max-attempts: 2  # 3 → 2 (빠른 실패)
         wait-duration: 100ms  # 1s → 100ms (90% 단축)
+      orderquery-service:
+        max-attempts: 2  # OrderQuery 서비스 재시도 횟수
+        wait-duration: 150ms  # OrderQuery 서비스 재시도 대기 시간
+        exponential-backoff-multiplier: 1.5
       default:
         max-attempts: 2  # 3 → 2 (빠른 실패)
         wait-duration: 100ms  # 1s → 100ms (90% 단축)
@@ -142,6 +153,10 @@ resilience4j:
         limit-for-period: 300  # 200 → 300 (더 높은 처리량)
         limit-refresh-period: 1s
         timeout-duration: 200ms  # 1s → 200ms (80% 단축)
+      orderquery-service:
+        limit-for-period: 200  # OrderQuery 서비스 호출 제한 (초당 200회)
+        limit-refresh-period: 1s
+        timeout-duration: 250ms  # OrderQuery 서비스 호출 타임아웃
 
 
 
@@ -165,6 +180,8 @@ order:
     enabled: ${ORDER_NOTIFICATION_ENABLED:true}  # 알림 활성화
     retry-count: ${ORDER_NOTIFICATION_RETRY:2}   # ⚡ 알림 재시도 횟수: 3 → 2 (빠른 실패)
     async: true  # 비동기 알림 처리 (성능 최적화)
+  orderquery:
+    timeout-ms: ${ORDER_ORDERQUERY_TIMEOUT:3000}  # OrderQuery 서비스 호출 타임아웃 (3초)
 
 logging:
   level:
@@ -186,5 +203,7 @@ external:
       base-url: ${USERS_SERVICE_BASE_URL:http://popcorn-gateway:8080}
     store:
       base-url: ${STORE_SERVICE_BASE_URL:http://popcorn-gateway:8080}
+    orderquery:
+      base-url: ${ORDERQUERY_SERVICE_BASE_URL:http://popcorn-gateway:8080}
   http:
     enabled: true  # HTTP 기반 외부 서비스 호출 활성화 (개발환경)
