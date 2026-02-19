@@ -1,5 +1,6 @@
 package com.popcorn.payment.event
 
+import com.popcorn.payment.event.domain.legacy.PaymentCompletedEvent
 import org.junit.jupiter.api.Test
 import java.time.LocalDateTime
 import java.util.*

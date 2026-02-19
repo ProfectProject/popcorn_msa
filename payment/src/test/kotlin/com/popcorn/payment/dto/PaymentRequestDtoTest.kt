@@ -119,6 +119,7 @@ class PaymentRequestDtoTest {
     fun `PaymentCancelRequest 유효한 요청 테스트`() {
         // Given
         val request = PaymentCancelRequest(
+            paymentId = UUID.randomUUID(),
             cancelReason = "사용자 요청으로 인한 취소",
             cancelAmount = 10000
         )
@@ -136,6 +137,7 @@ class PaymentRequestDtoTest {
     fun `PaymentCancelRequest 기본값 테스트`() {
         // Given
         val request = PaymentCancelRequest(
+            paymentId = UUID.randomUUID(),
             cancelReason = "전체 취소"
             // cancelAmount는 기본값 null 사용
         )
@@ -152,6 +154,7 @@ class PaymentRequestDtoTest {
     fun `PaymentCancelRequest 빈 취소 사유 검증 실패 테스트`() {
         // Given
         val request = PaymentCancelRequest(
+            paymentId = UUID.randomUUID(),
             cancelReason = "",
             cancelAmount = 5000
         )
@@ -169,6 +172,7 @@ class PaymentRequestDtoTest {
         // Given
         val longReason = "a".repeat(201)
         val request = PaymentCancelRequest(
+            paymentId = UUID.randomUUID(),
             cancelReason = longReason,
             cancelAmount = 5000
         )
@@ -185,6 +189,7 @@ class PaymentRequestDtoTest {
     fun `PaymentCancelRequest 최소 취소 금액 검증 실패 테스트`() {
         // Given
         val request = PaymentCancelRequest(
+            paymentId = UUID.randomUUID(),
             cancelReason = "부분 취소",
             cancelAmount = 0
         )
