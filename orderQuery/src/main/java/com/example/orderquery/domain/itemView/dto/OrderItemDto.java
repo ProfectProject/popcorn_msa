@@ -18,6 +18,8 @@ public class OrderItemDto {
     private final UUID orderId;
     private final UUID storeId;
     private final Long userId;
+    private final String customerName;
+    private final String customerPhone;
 
     // 필드명 호환성을 위한 추가 필드들
     private final String orderNo;

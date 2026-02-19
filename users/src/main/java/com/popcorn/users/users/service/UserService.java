@@ -13,6 +13,7 @@ import com.popcorn.users.users.dto.UserAddressRequest;
 import com.popcorn.users.users.dto.UserUpdateRequest;
 import com.popcorn.users.users.entity.User;
 import com.popcorn.users.users.entity.UserAddress;
+import com.popcorn.users.users.entity.enums.UserRole;
 //import com.popcorn.users.users.event.TestProducer;
 import com.popcorn.users.users.repository.UserAddressRepository;
 import com.popcorn.users.users.repository.UserRepository;
@@ -37,13 +38,25 @@ public class UserService {
     private final UserAddressRepository userAddressRepository;
     //private final TestProducer testProducer;
 
-    //추가
 
+    /**
+     * 활성 CUSTOMER 사용자 ID 목록 조회 (내부 서비스용)
+     */
+    @Transactional(readOnly = true)
+    public List<Long> getAllActiveCustomerUserIds() {
+        return userRepository.findAllByRoleAndIsActiveTrue(UserRole.CUSTOMER)
+                .stream()
+                .map(User::getUserId)
+                .toList();
+    }
 
-
-    //추가
-
-
+    /**
+     * 활성 사용자 존재 여부 확인 (내부 서비스용)
+     */
+    @Transactional(readOnly = true)
+    public boolean existsActiveUser(Long userId) {
+        return userRepository.existsByUserIdAndIsActiveTrue(userId);
+    }
 
     public SignupResponse register(SignupRequest request){
         if (userRepository.findByEmail(request.getEmail()).isPresent()) {

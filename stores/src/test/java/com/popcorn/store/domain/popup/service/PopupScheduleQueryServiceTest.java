@@ -123,8 +123,7 @@ class PopupScheduleQueryServiceTest {
 		@Override
 		public Integer getRemainingCapacity() { return remainingCapacity; }
 
-		@Override
-		public Integer getReservationCapacity() { return reservationCapacity; }
+		// reservationCapacity는 인터페이스에 없는 메서드이므로 제거
 
 		@Override
 		public Boolean getIsActive() { return isActive; }

@@ -2,6 +2,7 @@ package com.popcorn.users.users.controller;
 
 import java.util.List;
 import java.util.UUID;
+import java.util.Map;
 
 import org.springframework.http.ResponseEntity;
 import org.springframework.security.access.prepost.PreAuthorize;
@@ -262,6 +263,32 @@ public class UserController {
 
         return UserResponse.from(user);
     }
+
+    /**
+     * 내부 서비스용 사용자 조회 (userId 기반)
+     */
+    @GetMapping("/{userId}")
+    public UserResponse getUserById(@PathVariable Long userId) {
+        User user = userService.getUserById(userId);
+        return UserResponse.from(user);
+    }
+
+    /**
+     * 내부 서비스용 - 활성 CUSTOMER 사용자 ID 목록 조회
+     */
+    @GetMapping("/customer-ids")
+    public List<Long> getCustomerUserIdsForInternal() {
+        return userService.getAllActiveCustomerUserIds();
+    }
+
+    /**
+     * 내부 서비스용 - 활성 사용자 존재 여부 확인
+     */
+    @GetMapping("/{userId}/exists")
+    public Map<String, Boolean> existsUserForInternal(@PathVariable Long userId) {
+        return Map.of("exists", userService.existsActiveUser(userId));
+    }
+
 
     @Operation(
         summary = "내 정보 수정",

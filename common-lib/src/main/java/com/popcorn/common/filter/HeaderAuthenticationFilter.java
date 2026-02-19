@@ -45,6 +45,18 @@ public class HeaderAuthenticationFilter extends OncePerRequestFilter {
             return;
         }
 
+        // Allow public API endpoints that are configured as permitAll in SecurityConfig
+        if (isPublicApiPath(uri)) {
+            filterChain.doFilter(request, response);
+            return;
+        }
+
+        // Allow refresh token API - uses refresh token for authentication instead of headers
+        if (uri != null && (uri.startsWith("/api/users/v1/auth/refresh") || uri.startsWith("/users/v1/auth/refresh"))) {
+            filterChain.doFilter(request, response);
+            return;
+        }
+
         // 기존 인증이 없을 때만 헤더에서 인증 정보 추출
         if (SecurityContextHolder.getContext().getAuthentication() == null) {
             String internalServiceHeader = request.getHeader("X-Internal-Service");
@@ -110,6 +122,28 @@ public class HeaderAuthenticationFilter extends OncePerRequestFilter {
         }
 
         filterChain.doFilter(request, response);
+    }
+
+    /**
+     * 공개 API 경로인지 확인
+     * SecurityConfig에서 permitAll로 설정된 경로들과 동일하게 유지
+     */
+    private boolean isPublicApiPath(String uri) {
+        if (uri == null) return false;
+
+        // Store service public APIs
+        if (uri.startsWith("/api/stores/v1/popups")) return true;
+
+        // User service public APIs
+        if (uri.startsWith("/api/users/v1/auth/login")) return true;
+        if (uri.startsWith("/api/users/v1/auth/signup")) return true;
+        if (uri.startsWith("/api/users/v1/auth/refresh") || uri.startsWith("/users/v1/auth/refresh")) return true;
+        // refresh API는 공개 처리 (SecurityConfig와 일치)
+
+        // Swagger and documentation
+        if (uri.startsWith("/swagger-ui") || uri.startsWith("/v3/api-docs")) return true;
+
+        return false;
     }
 
     /*private String resolveRoleHeader(HttpServletRequest request) {

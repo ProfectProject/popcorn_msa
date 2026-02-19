@@ -19,8 +19,8 @@ spring:
   # 데이터베이스 설정 (프로덕션 환경)
   datasource:
     url: jdbc:postgresql://${DB_HOST}:${DB_PORT}/${DB_NAME}
-    username: ${PAYMENT_DB_USERNAME}
-    password: ${PAYMENT_DB_PASSWORD}
+    username: ${PAYMENT_USERNAME}
+    password: ${PAYMENT_PASSWORD}
     driver-class-name: org.postgresql.Driver
     # 프로덕션 커넥션 풀 최적화
     hikari:
@@ -81,8 +81,8 @@ spring:
   # Flyway 설정 (프로덕션)
   flyway:
     enabled: true
-    user: ${PAYMENT_DB_MIGRATION_USERNAME:${PAYMENT_FLYWAY_USERNAME:${PAYMENT_DB_USERNAME}}}
-    password: ${PAYMENT_DB_MIGRATION_PASSWORD:${PAYMENT_FLYWAY_PASSWORD:${PAYMENT_DB_PASSWORD}}}
+    user: ${PAYMENT_FLYWAY_USERNAME}
+    password: ${PAYMENT_FLYWAY_PASSWORD}
     default-schema: payment
     schemas: payment
     locations: classpath:db/migration

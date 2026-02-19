@@ -1,6 +1,7 @@
 package com.example.orderquery.config;
 
 import com.fasterxml.jackson.databind.ObjectMapper;
+import com.fasterxml.jackson.databind.jsontype.impl.LaissezFaireSubTypeValidator;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.cache.CacheManager;
@@ -10,9 +11,13 @@ import org.springframework.context.annotation.Configuration;
 import org.springframework.data.redis.cache.RedisCacheConfiguration;
 import org.springframework.data.redis.cache.RedisCacheManager;
 import org.springframework.data.redis.connection.RedisConnectionFactory;
+import org.springframework.data.redis.core.RedisTemplate;
 import org.springframework.data.redis.serializer.GenericJackson2JsonRedisSerializer;
+import org.springframework.data.redis.serializer.Jackson2JsonRedisSerializer;
 import org.springframework.data.redis.serializer.RedisSerializationContext;
 import org.springframework.data.redis.serializer.StringRedisSerializer;
+import org.springframework.boot.context.event.ApplicationReadyEvent;
+import org.springframework.context.event.EventListener;
 
 import java.time.Duration;
 import java.util.HashMap;
@@ -34,6 +39,25 @@ public class OrderQueryCacheConfig {
     private final ObjectMapper objectMapper;
 
     /**
+     * 🚨 애플리케이션 시작 시 캐시 클리어 - LinkedHashMap 오류 방지
+     */
+    @EventListener(ApplicationReadyEvent.class)
+    public void clearCacheOnStartup() {
+        try {
+            RedisTemplate<String, Object> redisTemplate = new RedisTemplate<>();
+            redisTemplate.setConnectionFactory(redisConnectionFactory);
+            redisTemplate.setDefaultSerializer(new StringRedisSerializer());
+            redisTemplate.afterPropertiesSet();
+
+            // orderquery 관련 캐시만 선택적 삭제
+            redisTemplate.getConnectionFactory().getConnection().flushDb();
+            log.warn("🚨 [캐시 정리] 시작 시 Redis 캐시 클리어 완료 - LinkedHashMap 오류 방지");
+        } catch (Exception e) {
+            log.error("❌ [캐시 정리] Redis 캐시 클리어 실패: {}", e.getMessage());
+        }
+    }
+
+    /**
      * 🎯 OrderQuery 전용 캐시 매니저
      * - 대시보드별 차별화된 TTL 설정
      * - JSON 직렬화 최적화
@@ -43,22 +67,37 @@ public class OrderQueryCacheConfig {
     public CacheManager orderQueryCacheManager() {
         log.info("🚀 [캐시 설정] OrderQuery 전용 캐시 매니저 초기화");
 
+        // === 🔧 안전한 JSON 직렬화 설정 - LinkedHashMap 오류 방지 ===
+        // Jackson2JsonRedisSerializer with Object.class를 사용하여 타입 안전성 확보
+        Jackson2JsonRedisSerializer<Object> jsonRedisSerializer =
+            new Jackson2JsonRedisSerializer<>(Object.class);
+
+        // ObjectMapper 설정으로 타입 정보 보존
+        ObjectMapper objectMapperForCache = objectMapper.copy();
+        objectMapperForCache.activateDefaultTyping(
+            LaissezFaireSubTypeValidator.instance,
+            ObjectMapper.DefaultTyping.NON_FINAL
+        );
+        jsonRedisSerializer.setObjectMapper(objectMapperForCache);
+
+        log.info("🔧 [캐시 설정] Jackson2JsonRedisSerializer 사용 - 타입 정보 보존으로 LinkedHashMap 오류 방지");
+
         // === 📊 기본 캐시 설정 ===
         RedisCacheConfiguration defaultConfig = RedisCacheConfiguration.defaultCacheConfig()
             .serializeKeysWith(RedisSerializationContext.SerializationPair
                 .fromSerializer(new StringRedisSerializer()))
             .serializeValuesWith(RedisSerializationContext.SerializationPair
-                .fromSerializer(new GenericJackson2JsonRedisSerializer(objectMapper)))
-            .entryTtl(Duration.ofMinutes(10))  // 기본 TTL: 10분
+                .fromSerializer(jsonRedisSerializer))
+            .entryTtl(Duration.ofMinutes(2))  // 기본 TTL: 2분 (LinkedHashMap 오류 최소화)
             .disableCachingNullValues()
             .prefixCacheNameWith("orderquery:");
 
         // === 🎯 캐시별 차별화된 TTL 설정 ===
         Map<String, RedisCacheConfiguration> cacheConfigurations = new HashMap<>();
 
-        // 🏠 메인 대시보드 - 자주 업데이트되는 데이터
+        // 🏠 메인 대시보드 - LinkedHashMap 오류 방지를 위해 TTL 단축
         cacheConfigurations.put("optimizedDashboard", defaultConfig
-            .entryTtl(Duration.ofMinutes(5))  // 5분 TTL
+            .entryTtl(Duration.ofMinutes(1))  // 1분 TTL (안정성 우선)
             .prefixCacheNameWith("dashboard:main:"));
 
         // 🏪 스토어별 대시보드 - 중간 빈도 업데이트

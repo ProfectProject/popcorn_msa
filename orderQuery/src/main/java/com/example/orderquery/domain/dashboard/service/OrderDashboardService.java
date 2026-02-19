@@ -13,6 +13,7 @@ import com.example.orderquery.dto.response.OrderStatisticsResponse;
 import com.example.orderquery.dto.response.OrderStatusSummaryResponse;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
+import org.springframework.beans.factory.annotation.Value;
 import org.springframework.cache.annotation.Cacheable;
 import org.springframework.data.domain.Page;
 import org.springframework.data.domain.PageRequest;
@@ -21,6 +22,7 @@ import org.springframework.data.domain.Sort;
 import org.springframework.data.jpa.domain.Specification;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
+import org.springframework.web.client.RestClient;
 
 import java.math.BigDecimal;
 import java.math.RoundingMode;
@@ -41,6 +43,10 @@ import java.util.Collections;
 public class OrderDashboardService {
 
     private final OrderItemViewRepository orderItemViewRepository;
+    private final RestClient.Builder restClientBuilder;
+
+    @Value("${USERS_SERVICE_BASE_URL:http://localhost:8080}")
+    private String usersServiceBaseUrl;
 
     /**
      * 🏠 대시보드 메인 데이터 조회 (시스템 전체)
@@ -110,7 +116,7 @@ public class OrderDashboardService {
     /**
      * 🏪 스토어별 대시보드 메인 데이터 조회
      */
-    @Cacheable(value = "dashboardMainByStore", key = "#storeId + '_' + #baseDate", unless = "#result == null")
+    @Cacheable(value = "optimizedDashboardByStore", key = "#storeId + '_' + #baseDate", unless = "#result == null")
     public OrderDashboardResponse getDashboardMainDataByStore(UUID storeId, LocalDate baseDate) {
         log.info("🏪 스토어별 대시보드 메인 데이터 조회 시작 - storeId: {}, baseDate: {}", storeId, baseDate);
 
@@ -223,9 +229,16 @@ public class OrderDashboardService {
         // 데이터 조회
         Page<OrderItemView> orderPage = orderItemViewRepository.findAll(spec, pageable);
 
+        Map<Long, String> userNames = resolveUserNames(
+                orderPage.getContent().stream()
+                        .map(OrderItemView::getUserId)
+                        .filter(Objects::nonNull)
+                        .collect(Collectors.toSet())
+        );
+
         // DTO 변환
         List<OrderItemDto> orderItems = orderPage.getContent().stream()
-                .map(this::convertToDto)
+                .map(orderView -> convertToDto(orderView, userNames.get(orderView.getUserId())))
                 .collect(Collectors.toList());
 
         // 페이지 정보
@@ -248,7 +261,7 @@ public class OrderDashboardService {
     /**
      * 📈 상세 주문 통계
      */
-    @Cacheable(value = "orderStatistics", key = "'detailed_' + #days + '_' + #includeTypes")
+    @Cacheable(value = "optimizedStatistics", key = "'detailed_' + #days + '_' + #includeTypes", unless = "#result == null")
     public OrderStatisticsResponse getDetailedStatistics(int days, String includeTypes) {
         LocalDateTime endDate = LocalDateTime.now();
         LocalDateTime startDate = endDate.minusDays(days);
@@ -391,7 +404,9 @@ public class OrderDashboardService {
                     .itemId(row[0] != null ? row[0].toString() : "unknown")
                     .itemName(row[0] != null ? row[0].toString() : "상품명 미정")
                     .orderCount(((Number) row[1]).longValue())
-                    .totalRevenue((BigDecimal) row[2])
+                    .totalRevenue(row[2] != null ?
+                        (row[2] instanceof BigDecimal ? (BigDecimal) row[2] :
+                         BigDecimal.valueOf(((Number) row[2]).longValue())) : BigDecimal.ZERO)
                     .build())
                 .collect(Collectors.toList());
     }
@@ -416,7 +431,9 @@ public class OrderDashboardService {
                 .map(row -> OrderStatisticsResponse.DailyOrderCount.builder()
                     .date(row[0].toString())
                     .count(((Number) row[1]).longValue())
-                    .revenue((BigDecimal) row[2])
+                    .revenue(row[2] != null ?
+                        (row[2] instanceof BigDecimal ? (BigDecimal) row[2] :
+                         BigDecimal.valueOf(((Number) row[2]).longValue())) : BigDecimal.ZERO)
                     .build())
                 .collect(Collectors.toList());
     }
@@ -430,7 +447,9 @@ public class OrderDashboardService {
                     row -> row[0].toString(),
                     row -> {
                         Long count = ((Number) row[1]).longValue();
-                        BigDecimal amount = (BigDecimal) row[2];
+                        BigDecimal amount = row[2] != null ?
+                            (row[2] instanceof BigDecimal ? (BigDecimal) row[2] :
+                             BigDecimal.valueOf(((Number) row[2]).longValue())) : BigDecimal.ZERO;
                         Double ratio = total > 0 ? (count * 100.0) / total : 0.0;
 
                         return OrderStatisticsResponse.PaymentMethodStats.builder()
@@ -519,13 +538,44 @@ public class OrderDashboardService {
             startOfMonth.atStartOfDay(), today.atTime(LocalTime.MAX));
     }
 
+    private Map<Long, String> resolveUserNames(Set<Long> userIds) {
+        if (userIds == null || userIds.isEmpty()) {
+            return Collections.emptyMap();
+        }
+
+        RestClient client = restClientBuilder.baseUrl(usersServiceBaseUrl).build();
+        Map<Long, String> userNames = new HashMap<>();
+
+        for (Long userId : userIds) {
+            try {
+                UserSimpleResponse response = client.get()
+                        .uri("/api/users/v1/users/{userId}", userId)
+                        .retrieve()
+                        .body(UserSimpleResponse.class);
+
+                if (response != null && response.name() != null && !response.name().isBlank()) {
+                    userNames.put(userId, response.name());
+                }
+            } catch (Exception ex) {
+                log.debug("사용자 이름 조회 실패 - userId: {}", userId, ex);
+            }
+        }
+
+        return userNames;
+    }
+
     private OrderItemDto convertToDto(OrderItemView orderView) {
+        return convertToDto(orderView, null);
+    }
+
+    private OrderItemDto convertToDto(OrderItemView orderView, String customerName) {
         return OrderItemDto.builder()
                 .popupId(orderView.getId().getPopupId())
                 .orderGoodsId(orderView.getId().getOrderGoodsId())
                 .orderId(orderView.getOrderId())
                 .storeId(orderView.getStoreId())
                 .userId(orderView.getUserId())
+                .customerName(customerName)
                 .orderNo(orderView.getOrderNo())
                 .orderNumber(orderView.getOrderNo())  // 호환성을 위한 별칭
                 .orderStatus(orderView.getOrderStatus() != null ? orderView.getOrderStatus().name() : null)
@@ -551,6 +601,8 @@ public class OrderDashboardService {
                 .popupName("팝업명 미정")  // 현재는 엔터티에 없으므로 기본값
                 .build();
     }
+
+    private record UserSimpleResponse(Long id, String name) {}
 
     // === 🏪 스토어별 헬퍼 메서드들 ===
 
@@ -584,7 +636,9 @@ public class OrderDashboardService {
                     .itemId(row[0] != null ? row[0].toString() : "unknown")
                     .itemName(row[0] != null ? row[0].toString() : "상품명 미정")
                     .orderCount(((Number) row[1]).longValue())
-                    .totalRevenue((BigDecimal) row[2])
+                    .totalRevenue(row[2] != null ?
+                        (row[2] instanceof BigDecimal ? (BigDecimal) row[2] :
+                         BigDecimal.valueOf(((Number) row[2]).longValue())) : BigDecimal.ZERO)
                     .build())
                 .collect(Collectors.toList());
     }

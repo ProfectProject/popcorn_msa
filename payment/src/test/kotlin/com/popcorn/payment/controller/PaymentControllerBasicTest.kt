@@ -62,7 +62,7 @@ class PaymentControllerBasicTest {
 
         coEvery {
             paymentApprovalAsyncService.confirmAsync(request)
-        } returns Unit
+        } just Runs
 
         // When
         val response = paymentController.confirmPaymentAsync(request)

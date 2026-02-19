@@ -14,7 +14,7 @@ public class PopupValidationService {
 
 	private static final int DEFAULT_PAGE = 1;
 	private static final int DEFAULT_SIZE = 20;
-	private static final int MAX_SIZE = 100;
+	private static final int MAX_SIZE = 200;
 	public PopupListQuery normalizeListQuery(PopupListQuery query) {
 		if (query == null) {
 			return PopupListQuery.builder()

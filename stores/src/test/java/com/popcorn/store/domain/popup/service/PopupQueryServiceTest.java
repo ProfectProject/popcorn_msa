@@ -138,7 +138,6 @@ class PopupQueryServiceTest {
 		PopupScheduleView valid = new TestPopupScheduleView(
 				popupId,
 				"00000000-0000-0000-0000-000000000201",
-				popupId,
 				LocalDateTime.of(2025, 1, 2, 10, 0),
 				LocalDateTime.of(2025, 1, 2, 12, 0),
 				10000,
@@ -149,7 +148,6 @@ class PopupQueryServiceTest {
 		PopupScheduleView invalid = new TestPopupScheduleView(
 				popupId,
 				null,
-				popupId,
 				LocalDateTime.of(2025, 1, 3, 10, 0),
 				LocalDateTime.of(2025, 1, 3, 12, 0),
 				10000,
@@ -196,7 +194,6 @@ class PopupQueryServiceTest {
 	private record TestPopupScheduleView(
 			UUID popupId,
 			String scheduleId,
-			UUID popupId,
 			LocalDateTime startAt,
 			LocalDateTime endAt,
 			Integer price,
@@ -210,7 +207,6 @@ class PopupQueryServiceTest {
 		@Override public Integer getPrice() { return price; }
 		@Override public Integer getCapacity() { return capacity; }
 		@Override public Integer getRemainingCapacity() { return remainingCapacity; }
-		@Override public Integer getReservationCapacity() { return 0; }
 		@Override public Boolean getIsActive() { return isActive; }
 	}
 }

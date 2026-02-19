@@ -25,8 +25,9 @@ class UserServiceClient(
 
             val response = userServiceWebClient
                 .get()
-                .uri("/api/v1/internal/users/customer-ids")
-                .header("Authorization", "Bearer system-token") // 시스템 토큰
+                .uri("/api/users/v1/users/customer-ids")
+                .header("X-Internal-Service", "coupon-service")
+                .header("X-Internal-Call", "true")
                 .retrieve()
                 .awaitBody<List<Long>>()
 
@@ -46,8 +47,9 @@ class UserServiceClient(
         return try {
             userServiceWebClient
                 .get()
-                .uri("/api/v1/internal/users/{userId}/exists", userId)
-                .header("Authorization", "Bearer system-token")
+                .uri("/api/users/v1/users/{userId}/exists", userId)
+                .header("X-Internal-Service", "coupon-service")
+                .header("X-Internal-Call", "true")
                 .retrieve()
                 .awaitBody<Map<String, Boolean>>()
                 .get("exists") ?: false

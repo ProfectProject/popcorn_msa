@@ -3,6 +3,7 @@ package com.example.orderquery.global.config;
 import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.Configuration;
 import org.springframework.security.config.annotation.web.builders.HttpSecurity;
+import org.springframework.security.config.annotation.method.configuration.EnableMethodSecurity;
 import org.springframework.security.config.annotation.web.configuration.EnableWebSecurity;
 import org.springframework.security.config.http.SessionCreationPolicy;
 import org.springframework.security.web.SecurityFilterChain;
@@ -12,6 +13,7 @@ import com.popcorn.common.filter.HeaderAuthenticationFilter;
 
 @Configuration
 @EnableWebSecurity
+@EnableMethodSecurity
 public class SecurityConfig {
 
     @Bean
@@ -28,7 +30,7 @@ public class SecurityConfig {
                 .httpBasic(basic -> basic.disable())
                 .authorizeHttpRequests(auth -> auth
                         .requestMatchers("/swagger-ui.html", "/swagger-ui/**", "/v3/api-docs/**", "/actuator/**").permitAll()
-                        .requestMatchers("/api/orderquery/v1/owner/**").authenticated()
+                        .requestMatchers("/api/orderquery/v1/owner/**", "/api/orderquery/v1/dashboard/**").authenticated()
                         .anyRequest().permitAll()
                 )
                 .addFilterBefore(headerAuthenticationFilter(), UsernamePasswordAuthenticationFilter.class)
