@@ -2,12 +2,12 @@ name: Unified CI/CD Pipeline
 
 on:
   push:
-    branches: [main, develop-kafka]
+    branches: [main, develop, develop-kafka]
   pull_request:
     branches: ['**']
 
 permissions:
-  contents: read
+  contents: write
   id-token: write
 
 jobs:
@@ -290,7 +290,7 @@ jobs:
           # 알림용 디스플레이 태그 결정
           if [[ "${{ github.ref_name }}" == "main" ]]; then
             echo "display_tag=latest" >> $GITHUB_OUTPUT
-          elif [[ "${{ github.ref_name }}" == "develop" ]]; then
+          elif [[ "${{ github.ref_name }}" == "develop" || "${{ github.ref_name }}" == "develop-kafka" ]]; then
             echo "display_tag=dev-latest" >> $GITHUB_OUTPUT
           else
             # ci-tag 같은 기타 브랜치는 브랜치명 자체를 태그로 사용
@@ -313,15 +313,13 @@ jobs:
           images: ${{ steps.ecr.outputs.registry }}/${{ steps.vars.outputs.ecr_repo }}
           tags: |
             # Production 전략 (main 전용)
+            type=raw,value=${{ steps.build_meta.outputs.sha8 }},enable=${{ github.ref_name == 'main' }}
             type=raw,value=${{ steps.tag_version.outputs.new_tag }},enable=${{ github.ref_name == 'main' }}
             type=raw,value=latest,enable=${{ github.ref_name == 'main' }}
             
-            # Development 전략 (develop 및 ci-tag 전용)
-            type=raw,value=dev-${{ steps.build_meta.outputs.sha8 }},enable=${{ github.ref_name == 'develop-kafka' }}
-            type=raw,value=dev-latest,enable=${{ github.ref_name == 'develop-kafka' }}
-            
-            # 공통: Semantic Versioning
-            type=semver,pattern={{version}}
+            # Development 전략 (develop/develop-kafka 전용)
+            type=raw,value=dev-${{ steps.build_meta.outputs.sha8 }},enable=${{ github.ref_name == 'develop' || github.ref_name == 'develop-kafka' }}
+            type=raw,value=dev-latest,enable=${{ github.ref_name == 'develop' || github.ref_name == 'develop-kafka' }}
           flavor: |
             latest=false
 
@@ -354,7 +352,7 @@ jobs:
             - 👤 Author: `${{ github.actor }}`
             - Service: ${{ matrix.service }}
             - Repo: ${{ steps.vars.outputs.ecr_repo }}
-            - Image: ${{ steps.ecr.outputs.registry }}/${{ steps.vars.outputs.ecr_repo }}:dev-latest
+            - Image: ${{ steps.ecr.outputs.registry }}/${{ steps.vars.outputs.ecr_repo }}:${{ steps.build_meta.outputs.display_tag }}
             - Run: #${{ github.run_number }}
             - Commit: ${{ github.sha }}
 

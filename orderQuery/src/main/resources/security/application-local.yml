@@ -9,8 +9,8 @@ spring:
       on-profile: local
   datasource:
       url: jdbc:postgresql://${DB_HOST:localhost}:${DB_PORT:5430}/${DB_NAME:popcorn_db}
-      username: ${ORDER_USERNAME:order_query_app}
-      password: ${ORDER_PASSWORD:quary123}
+      username: ${ORDER_QUERY_USERNAME:order_query_app}
+      password: ${ORDER_QUERY_PASSWORD:order_query123}
       driver-class-name: org.postgresql.Driver
   jpa:
     open-in-view: false
@@ -55,10 +55,10 @@ spring:
 popcorn:
   kafka:
     topics:
-      order-events: ${KAFKA_TOPIC_ORDER_EVENTS}
-      payment-events: ${KAFKA_TOPIC_PAYMENT_EVENTS}
-      store-events: ${KAFKA_TOPIC_STORE_EVENTS}
-      checkin-events: ${KAFKA_TOPIC_CHECKIN_EVENTS}
+      order-events: ${KAFKA_TOPIC_ORDER_EVENTS:order-events}
+      payment-events: ${KAFKA_TOPIC_PAYMENT_EVENTS:payment-events}
+      store-events: ${KAFKA_TOPIC_STORE_EVENTS:store-events}
+      checkin-events: ${KAFKA_TOPIC_CHECKIN_EVENTS:checkin-events}
 jwt:
   secret: ${JWT_SECRET}
   expiration: 3600000
@@ -80,5 +80,3 @@ logging:
 passport:
   secret: ${PASSPORT_SECRET}
   ttl-seconds: 60
-
-

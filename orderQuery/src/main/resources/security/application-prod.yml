@@ -7,7 +7,7 @@ spring:
       on-profile: prod
   datasource:
     url: jdbc:postgresql://${DB_HOST}:${DB_PORT}/${DB_NAME}
-    username: ${ORDER_QUERY_USERNAM}
+    username: ${ORDER_QUERY_USERNAME}
     password: ${ORDER_QUERY_PASSWORD}
     driver-class-name: org.postgresql.Driver
     hikari:
@@ -54,10 +54,10 @@ spring:
 popcorn:
   kafka:
     topics:
-      order-events: ${KAFKA_TOPIC_ORDER_EVENTS}
-      payment-events: ${KAFKA_TOPIC_PAYMENT_EVENTS}
-      store-events: ${KAFKA_TOPIC_STORE_EVENTS}
-      checkin-events: ${KAFKA_TOPIC_CHECKIN_EVENTS}
+      order-events: ${KAFKA_TOPIC_ORDER_EVENTS:order-events}
+      payment-events: ${KAFKA_TOPIC_PAYMENT_EVENTS:payment-events}
+      store-events: ${KAFKA_TOPIC_STORE_EVENTS:store-events}
+      checkin-events: ${KAFKA_TOPIC_CHECKIN_EVENTS:checkin-events}
 springdoc:
   server-url: ${GATEWAY_SERVICE_URL}
 

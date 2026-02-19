@@ -208,11 +208,6 @@ spring:
             - RewritePath=^/api/orderquery/(?<remaining>swagger-ui.*), /${remaining}
             - RewritePath=^/api/orderquery/(?<remaining>webjars.*), /${remaining}
             # 1) CircuitBreaker (Resilience4j 인스턴스명 연결)
-            - name: CircuitBreaker
-              args:
-                name: cbOrderQueryService
-                fallbackUri: forward:/fallback/orderQuery-service
-            # 2) Retry (Gateway 필터로만 적용) --> 서버 5xx / 502/504 만 재시도
             - name: Retry
               args:
                 retries: 2

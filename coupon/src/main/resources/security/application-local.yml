@@ -54,7 +54,7 @@ spring:
   flyway:
     url: jdbc:postgresql://${DB_HOST:localhost}:${DB_PORT:5432}/${DB_NAME:popcorn_db}
     user: ${COUPON_FLYWAY_USERNAME:coupon_migrator}
-    password: ${COUPON_MIGRATOR_PASSWORD:coupon_password}
+    password: ${COUPON_FLYWAY_PASSWORD:coupon_password}
     enabled: true
     locations: classpath:db/migration
     schemas: coupons  # 쿠폰 서비스 전용 스키마 사용
@@ -63,7 +63,7 @@ spring:
     validate-on-migrate: true
     clean-disabled: false
     placeholders:
-      COUPON_MIGRATOR_PASSWORD: ${COUPON_MIGRATOR_PASSWORD:coupon_password}
+      COUPON_MIGRATOR_PASSWORD: ${COUPON_FLYWAY_PASSWORD:coupon_password}
 
   # Redis 설정
   data:
