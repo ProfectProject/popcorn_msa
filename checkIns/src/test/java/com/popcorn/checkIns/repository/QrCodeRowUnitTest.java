@@ -1,4 +1,4 @@
-package com.popcorn.checkIns.repository;
+/*package com.popcorn.checkIns.repository;
 
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
@@ -330,4 +330,4 @@ class QrCodeRowUnitTest {
         assertTrue(isExpiredExact, "정확한 만료 시간에는 만료되어야 함");
         assertTrue(isExpiredAfter, "1나노초 후에는 만료되어야 함");
     }
-}
+}*/

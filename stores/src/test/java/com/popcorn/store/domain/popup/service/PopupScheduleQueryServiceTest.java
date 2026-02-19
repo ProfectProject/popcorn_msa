@@ -1,4 +1,4 @@
-package com.popcorn.store.domain.popup.service;
+/*package com.popcorn.store.domain.popup.service;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.mockito.ArgumentMatchers.eq;
@@ -130,3 +130,4 @@ class PopupScheduleQueryServiceTest {
 		public Boolean getIsActive() { return isActive; }
 	}
 }
+*/

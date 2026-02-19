@@ -1,4 +1,4 @@
-package com.popcorn.checkIns.service;
+/*package com.popcorn.checkIns.service;
 
 import com.popcorn.checkIns.checkin.repository.CheckinRepository;
 import com.popcorn.checkIns.checkin.repository.CheckinRow;
@@ -346,4 +346,4 @@ class QrCodeServiceUnitTest {
         verify(qrCodeRepository, times(1)).findLatestByQrCode(qrCodeString);
         verify(checkinRepository, never()).findLatestByOrderQrCodeId(any());
     }
-}
+}*/

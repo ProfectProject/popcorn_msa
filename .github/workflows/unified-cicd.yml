@@ -2,7 +2,7 @@ name: Unified CI/CD Pipeline
 
 on:
   push:
-    branches: [main, develop]
+    branches: [main, develop-kafka]
   pull_request:
     branches: ['**']
 
@@ -193,19 +193,9 @@ jobs:
       ECR_ORDER_REPOSITORY: goorm-popcorn-order
       ECR_GATEWAY_REPOSITORY: goorm-popcorn-api-gateway
 
-      ECS_TASK_DEFINITION: users/goorm-popcorn-dev-user-service-revision2.json
-      ECS_TASK_ORDER_DEFINITION: order/goorm-popcorn-dev-order-service.json
-      ECS_TASK_GATEWAY_DEFINITION: gateway/goorm-popcorn-dev-api-gateway.json
-
       CONTAINER_NAME: user-service
       CONTAINER_ORDER_NAME: order-service
       CONTAINER_GATEWAY_NAME: api-gateway
-
-      ECS_SERVICE: goorm-popcorn-dev-user-service
-      ECS_ORDER_SERVICE: goorm-popcorn-dev-order-service
-      ECS_APIGATE_SERVICE: goorm-popcorn-dev-api-gateway
-
-      ECS_CLUSTER: goorm-popcorn-dev-cluster
 
       DB_HOST: localhost
       DB_PORT: 5430
@@ -225,7 +215,8 @@ jobs:
 
       REDIS_HOST: localhost
       REDIS_PORT: 6379
-      JWT_SECRET: dGVzdC1qd3Qtc2VjcmV0LWtleS1mb3ItbG9jYWwtZGV2ZWxvcG1lbnQtb25seS1kb25vdC11c2UtaW4tcHJvZHVjdGlvbg==PASSPORT_SECRET=passport-shared-secret
+      JWT_SECRET: dGVzdC1qd3Qtc2VjcmV0LWtleS1mb3ItbG9jYWwtZGV2ZWxvcG1lbnQtb25seS1kb25vdC11c2UtaW4tcHJvZHVjdGlvbg==
+      PASSPORT_SECRET: passport-shared-secret
 
     steps:
       - name: Checkout code
@@ -239,42 +230,34 @@ jobs:
             echo "ecr_repo=goorm-popcorn-order" >> $GITHUB_OUTPUT
             echo "task_def_file=order/goorm-popcorn-dev-order-service.json" >> $GITHUB_OUTPUT
             echo "container_name=order-service" >> $GITHUB_OUTPUT
-            echo "ecs_service=goorm-popcorn-dev-order-service" >> $GITHUB_OUTPUT
           elif [ "${{ matrix.service }}" == "gateway" ]; then
             echo "ecr_repo=goorm-popcorn-api-gateway" >> $GITHUB_OUTPUT
             echo "task_def_file=gateway/goorm-popcorn-dev-api-gateway.json" >> $GITHUB_OUTPUT
             echo "container_name=api-gateway" >> $GITHUB_OUTPUT
-            echo "ecs_service=goorm-popcorn-dev-api-gateway" >> $GITHUB_OUTPUT
           elif [ "${{ matrix.service }}" == "users" ]; then
             echo "ecr_repo=goorm-popcorn-user" >> $GITHUB_OUTPUT
             echo "task_def_file=users/goorm-popcorn-dev-user-service-revision2.json" >> $GITHUB_OUTPUT
             echo "container_name=user-service" >> $GITHUB_OUTPUT
-            echo "ecs_service=goorm-popcorn-dev-user-service" >> $GITHUB_OUTPUT
           elif [ "${{ matrix.service }}" == "orderQuery" ]; then
             echo "ecr_repo=goorm-popcorn-order-query" >> $GITHUB_OUTPUT
             echo "task_def_file=orderQuery/goorm-popcorn-dev-order-query.json" >> $GITHUB_OUTPUT
             echo "container_name=order-query" >> $GITHUB_OUTPUT
-            echo "ecs_service=goorm-popcorn-dev-order-query" >> $GITHUB_OUTPUT
           elif [ "${{ matrix.service }}" == "payment" ]; then
             echo "ecr_repo=goorm-popcorn-payment" >> $GITHUB_OUTPUT
             echo "task_def_file=payment/goorm-popcorn-dev-payment-service.json" >> $GITHUB_OUTPUT
             echo "container_name=payment-service" >> $GITHUB_OUTPUT
-            echo "ecs_service=goorm-popcorn-dev-payment-service" >> $GITHUB_OUTPUT
           elif [ "${{ matrix.service }}" == "stores" ]; then
             echo "ecr_repo=goorm-popcorn-store" >> $GITHUB_OUTPUT
             echo "task_def_file=stores/goorm-popcorn-dev-store-service.json" >> $GITHUB_OUTPUT
             echo "container_name=store-service" >> $GITHUB_OUTPUT
-            echo "ecs_service=goorm-popcorn-dev-store-service" >> $GITHUB_OUTPUT
           elif [ "${{ matrix.service }}" == "checkIns" ]; then
             echo "ecr_repo=goorm-popcorn-checkin" >> $GITHUB_OUTPUT
             echo "task_def_file=checkIns/goorm-popcorn-dev-checkin-service.json" >> $GITHUB_OUTPUT
             echo "container_name=checkin-service" >> $GITHUB_OUTPUT
-            echo "ecs_service=goorm-popcorn-dev-checkin-service" >> $GITHUB_OUTPUT
           else
             echo "ecr_repo=goorm-popcorn-${{ matrix.service }}" >> $GITHUB_OUTPUT
             echo "task_def_file=${{ matrix.service }}/goorm-popcorn-dev-${{ matrix.service }}.json" >> $GITHUB_OUTPUT
             echo "container_name=${{ matrix.service }}-service" >> $GITHUB_OUTPUT
-            echo "ecs_service=goorm-popcorn-dev-${{ matrix.service }}-service" >> $GITHUB_OUTPUT
           fi
 
       - name: Download build artifact
@@ -297,6 +280,52 @@ jobs:
       - name: Set up Docker Buildx
         uses: docker/setup-buildx-action@v3
 
+    # 1️⃣ 안전한 8자리 SHA 및 디스플레이 태그 생성
+      - name: Generate build metadata
+        id: build_meta
+        run: |
+          SHA8=$(echo ${GITHUB_SHA} | cut -c1-8)
+          echo "sha8=$SHA8" >> $GITHUB_OUTPUT
+          
+          # 알림용 디스플레이 태그 결정
+          if [[ "${{ github.ref_name }}" == "main" ]]; then
+            echo "display_tag=latest" >> $GITHUB_OUTPUT
+          elif [[ "${{ github.ref_name }}" == "develop" ]]; then
+            echo "display_tag=dev-latest" >> $GITHUB_OUTPUT
+          else
+            # ci-tag 같은 기타 브랜치는 브랜치명 자체를 태그로 사용
+            echo "display_tag=${{ github.ref_name }}" >> $GITHUB_OUTPUT
+          fi
+
+      # 1-1. 자동으로 다음 버전 계산 (커밋 메시지 분석)
+      - name: Bump version and push tag
+        id: tag_version
+        if: github.ref_name == 'main'
+        uses: mathieudutour/github-tag-action@v6.2
+        with:
+          github_token: ${{ secrets.GITHUB_TOKEN }}
+          default_bump: patch # 기본적으로 Patch 숫자(마지막 숫자) 증가
+
+      - name: Docker metadata
+        id: meta
+        uses: docker/metadata-action@v5
+        with:
+          images: ${{ steps.ecr.outputs.registry }}/${{ steps.vars.outputs.ecr_repo }}
+          tags: |
+            # Production 전략 (main 전용)
+            type=raw,value=${{ steps.tag_version.outputs.new_tag }},enable=${{ github.ref_name == 'main' }}
+            type=raw,value=latest,enable=${{ github.ref_name == 'main' }}
+            
+            # Development 전략 (develop 및 ci-tag 전용)
+            type=raw,value=dev-${{ steps.build_meta.outputs.sha8 }},enable=${{ github.ref_name == 'develop' }}
+            type=raw,value=dev-latest,enable=${{ github.ref_name == 'develop' }}
+            
+            # 공통: Semantic Versioning
+            type=semver,pattern={{version}}
+          flavor: |
+            latest=false
+
+
       - name: Build and push Docker image
         uses: docker/build-push-action@v6
         with:
@@ -307,37 +336,12 @@ jobs:
           provenance: false
           sbom: false
 
-          # ✅ 요청하신 dev-latest 태그 적용
-          tags: |
-            ${{ steps.ecr.outputs.registry }}/${{ steps.vars.outputs.ecr_repo }}:dev-latest
-            ${{ steps.ecr.outputs.registry }}/${{ steps.vars.outputs.ecr_repo }}:test-${{ github.run_number }}
+          # sha 번호 적용
+          tags: ${{ steps.meta.outputs.tags }}
 
           cache-from: type=gha
           cache-to: type=gha,mode=max
           outputs: type=image,oci-mediatypes=true
-
-      - name: Download Task Definition
-        run: |
-          aws ecs describe-task-definition \
-            --task-definition ${{ steps.vars.outputs.task_def_file }} \
-            --query taskDefinition \
-            | jq 'del(.taskDefinitionArn, .revision, .status, .registeredAt, .registeredBy)' > task-definition.json  
-
-      - name: Fill in the new image ID in the Amazon ECS task definition
-        id: task-def
-        uses: aws-actions/amazon-ecs-render-task-definition@c804dfbdd57f713b6c079302a4c01db7017a36fc
-        with:
-          task-definition: ${{ steps.vars.outputs.task_def_file }}
-          container-name: ${{ steps.vars.outputs.container_name }}
-          image: ${{ steps.vars.outputs.ecr_repo }}:dev-latest
-
-      - name: Deploy Amazon ECS task definition
-        uses: aws-actions/amazon-ecs-deploy-task-definition@df9643053eda01f169e64a0e60233aacca83799a
-        with:
-          task-definition: ${{ steps.vars.outputs.task_def_file }}
-          service: ${{ steps.vars.outputs.ecs_service }}
-          cluster: ${{ env.ECS_CLUSTER }}
-          wait-for-service-stability: true
 
       - name: Notify Discord (success)
         if: success()
@@ -368,3 +372,105 @@ jobs:
             - Run: #${{ github.run_number }}
             - Commit: ${{ github.sha }}
             // - Logs: https://github.com/${{ github.repository }}/actions/runs/${{ github.run_id }}
+  
+  update-gitops-values:
+    name: Update GitOps values (single commit)
+    needs: [detect-changes, docker-build-push-ecr]
+    if: github.event_name == 'push' && needs.detect-changes.outputs.has_changes == 'true'
+    runs-on: ubuntu-latest
+
+    permissions:
+      contents: read 
+
+    env:
+      GITOPS_REPO: ProfectProject/popcorn_deploy
+      GITOPS_BRANCH: main
+      VALUES_FILE: helm/popcorn-umbrella/values-dev.yaml
+    
+    
+    steps:
+      - name: Set IMAGE_TAG (dev-<sha8>)
+        id: gitops_tag
+        shell: bash
+        run: |
+          set -euo pipefail
+          SHA8="${GITHUB_SHA::8}"
+          echo "IMAGE_TAG=dev-${SHA8}" >> "$GITHUB_ENV"
+          echo "Using IMAGE_TAG=dev-${SHA8}"
+          
+      - name: Install tools (jq, yq)
+        shell: bash
+        run: |
+          set -euo pipefail
+          sudo apt-get update -y
+          sudo apt-get install -y jq
+          sudo wget -qO /usr/local/bin/yq https://github.com/mikefarah/yq/releases/latest/download/yq_linux_amd64
+          sudo chmod +x /usr/local/bin/yq
+          yq --version
+          jq --version
+
+      - name: Clone GitOps repo
+        shell: bash
+        env:
+          GITOPS_TOKEN: ${{ secrets.GITOPS_TOKEN }}
+        run: |
+          set -euo pipefail
+          git clone "https://x-access-token:${GITOPS_TOKEN}@github.com/${GITOPS_REPO}.git" gitops
+          cd gitops
+          git checkout "${GITOPS_BRANCH}"
+
+      - name: Update values-dev.yaml for changed services only
+        shell: bash
+        run: |
+          set -euo pipefail
+
+          SERVICES_JSON='${{ needs.detect-changes.outputs.services_json }}'
+          echo "Changed services json: ${SERVICES_JSON}"
+          echo "Using IMAGE_TAG=${IMAGE_TAG}"
+
+          cd gitops
+
+          # 변경된 서비스 목록을 순회하면서 values-dev.yaml의 service.image.tag만 갱신
+          # services_json 예: ["users","order","gateway"]
+          echo "${SERVICES_JSON}" | jq -r '.[]' | while read -r svc; do
+            case "$svc" in
+              users)      key="users" ;;
+              stores)     key="stores" ;;
+              order)      key="order" ;;
+              orderQuery) key="orderQuery" ;;
+              payment)    key="payment" ;;
+              gateway)    key="gateway" ;;
+              checkIns)   key="checkIns" ;;
+              *)
+                echo "Unknown service key: $svc"
+                exit 1
+                ;;
+            esac
+
+            echo "Updating .${key}.image.tag -> ${IMAGE_TAG}"
+            yq -i ".${key}.image.tag = \"${IMAGE_TAG}\"" "${VALUES_FILE}"
+          done
+
+          echo "---- diff ----"
+          git diff -- "${VALUES_FILE}" || true
+
+      - name: Commit & push (single commit)
+        shell: bash
+        run: |
+          set -euo pipefail
+          cd gitops
+
+          if git diff --quiet; then
+            echo "No changes to commit."
+            exit 0
+          fi
+
+          # 커밋 메시지에 변경된 서비스들 넣기
+          SERVICES_CSV=$(echo '${{ needs.detect-changes.outputs.services_json }}' | jq -r 'join(",")')
+
+          git config user.name "github-actions"
+          git config user.email "actions@github.com"
+
+          git add "${VALUES_FILE}"
+          git commit -m "chore(gitops): bump image tags (${SERVICES_CSV}) -> ${IMAGE_TAG}"
+          git push origin "${GITOPS_BRANCH}"
