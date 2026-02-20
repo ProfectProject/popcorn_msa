@@ -94,3 +94,6 @@ logs/
 **/logs/
 
 docker-compose.yml
+
+# Kubernetes manifests
+/k8s/
