@@ -42,25 +42,26 @@ public class OrderItemViewService {
                 OrderItemViewSpecifications.byStorePopupAndFilters(storeId, popupId, query, orderStatus, paymentStatus),
                 pageRequest);
 
-        if (page.getTotalElements() == 0) {
-            throw ItemViewException.itemsNotFound(storeId, popupId);
-        }
-
         List<OrderItemDto> items = page.getContent()
                 .stream()
                 .map(OrderItemMapper::toDto)
                 .toList();
 
+        // 🔧 데이터가 없어도 빈 결과 반환 (예외 던지지 않음)
+        // 프론트엔드에서 스토어별 데이터 표시를 위해 500 에러 대신 빈 목록 반환
+
         PageInfoDto pageInfo = PageInfoDto.builder()
                 .page(page.getNumber())
+                .currentPage(page.getNumber())
                 .size(page.getSize())
                 .totalElements(page.getTotalElements())
                 .totalPages(page.getTotalPages())
                 .hasNext(page.hasNext())
+                .hasPrevious(page.hasPrevious())
                 .build();
 
         return OrderItemPageDto.builder()
-                .items(items)
+                .orders(items)
                 .pageInfo(pageInfo)
                 .build();
     }

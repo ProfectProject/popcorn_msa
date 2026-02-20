@@ -157,7 +157,7 @@ class PaymentControllerAdvancedTest {
     fun `결제 취소 성공 테스트`() = runBlocking {
         // Given
         val paymentId = UUID.randomUUID()
-        val request = PaymentCancelRequest("고객 요청 취소", 10000)
+        val request = PaymentCancelRequest(paymentId, "고객 요청 취소", 10000)
 
         val paymentDetail = PaymentDetailResult(
             paymentId = paymentId,
@@ -195,7 +195,7 @@ class PaymentControllerAdvancedTest {
     fun `결제 취소 실패 - PaymentException 테스트`() = runBlocking {
         // Given
         val paymentId = UUID.randomUUID()
-        val request = PaymentCancelRequest("취소 사유", 10000)
+        val request = PaymentCancelRequest(paymentId, "취소 사유", 10000)
 
         coEvery { paymentCommandService.getLatestPaymentByOrderId(any()) } throws
             PaymentException.paymentNotFound()

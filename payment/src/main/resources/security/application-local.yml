@@ -45,8 +45,8 @@ spring:
   # 데이터베이스 설정
   datasource:
     url: jdbc:postgresql://${DB_HOST:localhost}:${DB_PORT:5432}/${DB_NAME:popcorn_db}
-    username: ${PAYMENT_DB_USERNAME:payment_app}
-    password: ${PAYMENT_DB_PASSWORD:payment123}
+    username: ${PAYMENT_USERNAME:payment_app}
+    password: ${PAYMENT_PASSWORD:payment123}
     driver-class-name: org.postgresql.Driver
     hikari:
       maximum-pool-size: 10  # 최적화: 20 → 10

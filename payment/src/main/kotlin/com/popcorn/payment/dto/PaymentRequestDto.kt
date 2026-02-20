@@ -8,16 +8,17 @@ import java.util.*
 /**
  * 결제 승인 요청 DTO
  */
+@JsonIgnoreProperties(ignoreUnknown = true)
 data class PaymentConfirmRequest(
     @field:NotBlank(message = "결제키는 필수입니다")
-    val paymentKey: String,
+    val paymentKey: String = "",
 
     @field:NotBlank(message = "주문ID는 필수입니다")
-    val orderId: String,
+    val orderId: String = "",
 
     @field:Min(value = 1, message = "결제 금액은 1원 이상이어야 합니다")
     @field:Max(value = 100_000_000, message = "결제 금액은 1억원을 초과할 수 없습니다")
-    val amount: Int
+    val amount: Int = 0
 )
 
 /**

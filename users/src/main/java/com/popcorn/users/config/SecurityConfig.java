@@ -70,7 +70,9 @@ public class SecurityConfig {
 				.authorizeHttpRequests(authz -> authz
 						.requestMatchers(HttpMethod.OPTIONS, "/**").permitAll() // CORS preflight 요청 허용
 						.requestMatchers("/api/auth/login").permitAll()
-						.requestMatchers("/api/users/v1/auth/**").permitAll() // swagger api 테스트
+						.requestMatchers("/api/users/v1/auth/login").permitAll() // 로그인 API - 공개
+						.requestMatchers("/api/users/v1/auth/signup").permitAll() // 회원가입 API - 공개
+						.requestMatchers(HttpMethod.POST, "/api/users/v1/auth/refresh", "/api/users/v1/auth/refresh/**", "/users/v1/auth/refresh", "/users/v1/auth/refresh/**").permitAll() // 리프레시 API - 리프레시 토큰 기반 인증
 						.requestMatchers("/api/users/v1/users/signup").permitAll()
 						.requestMatchers("/api/users/v1/users/**").permitAll()
 						//.requestMatchers("/api/users/v1/users/**").hasAnyRole("CUSTOMER", "OWNER")
@@ -81,6 +83,7 @@ public class SecurityConfig {
 						.requestMatchers("/api/users/v3/api-docs/**", "/api/users/v3/api-docs", "/api/users/swagger-ui/**", "/api/users/swagger-ui.html").permitAll()
 						// Actuator 엔드포인트 허용
 						.requestMatchers("/actuator/**").permitAll()
+						.requestMatchers("/error").permitAll()
 						.anyRequest().authenticated()
 				)
 				.formLogin(form -> form.disable())

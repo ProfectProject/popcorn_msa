@@ -7,41 +7,31 @@ spring:
   config:
     activate:
       on-profile: local
-  data:
-    redis:
-      host: ${REDIS_HOST:localhost}
-      port: ${REDIS_PORT:6379}
-      password: ${REDIS_PASSWORD:}
-      timeout: 10000ms
-      database: ${REDIS_DATABASE:0}
-      lettuce:
-        pool:
-          enabled: true
-          max-active: 20
-          max-wait: -1ms
-          max-idle: 5
-          min-idle: 0
   datasource:
       url: jdbc:postgresql://${DB_HOST:localhost}:${DB_PORT:5430}/${DB_NAME:popcorn_db}
-      username: ${ORDER_QUERY_DB_USERNAME:order_query_app}
-      password: ${ORDER_QUERY_DB_PASSWORD:quary123}
+      username: ${ORDER_QUERY_USERNAME:order_query_app}
+      password: ${ORDER_QUERY_PASSWORD:order_query123}
       driver-class-name: org.postgresql.Driver
   jpa:
     open-in-view: false
     hibernate:
-      ddl-auto: none
+      ddl-auto: validate
+    show-sql: true
     properties:
       hibernate:
+        dialect: org.hibernate.dialect.PostgreSQLDialect
+        format_sql: true
+        default_schema: order_query
         type:
           preferred_enum_jdbc_type: NAMED_ENUM
 
   cache:
-    type: simple
+    type: redis  # Redis 캐시 사용
 
   flyway:
     enabled: true
-    user: ${ORDER_QUERY_FLYWAY_USERNAME:order_query_migrator}
-    password: ${ORDER_QUERY_FLYWAY_PASSWORD:quary321}
+    user: ${ORDER_QUERY_FLYWAY_USERNAME}
+    password: ${ORDER_QUERY_FLYWAY_PASSWORD}
     default-schema: order_query
     schemas: order_query
     locations: classpath:db/migration/schema,classpath:db/migration/seed
@@ -49,10 +39,10 @@ spring:
     validate-on-migrate: true
     clean-disabled: false
   kafka:
-    bootstrap-servers: ${KAFKA_BOOTSTRAP_SERVERS:localhost:29092}
+    bootstrap-servers: ${KAFKA_BOOTSTRAP_SERVERS}
 
     consumer:
-      group-id: ${ORDER_QUERY_KAFKA_GROUP:order-query-cg}
+      group-id: ${ORDER_QUERY_KAFKA_GROUP}
       auto-offset-reset: earliest
       enable-auto-commit: false
       key-deserializer: org.apache.kafka.common.serialization.StringDeserializer
@@ -60,7 +50,7 @@ spring:
 
     listener:
       ack-mode: manual
-      concurrency: ${KAFKA_LISTENER_CONCURRENCY:3}
+      concurrency: ${KAFKA_LISTENER_CONCURRENCY}
 
 popcorn:
   kafka:
@@ -70,7 +60,7 @@ popcorn:
       store-events: ${KAFKA_TOPIC_STORE_EVENTS:store-events}
       checkin-events: ${KAFKA_TOPIC_CHECKIN_EVENTS:checkin-events}
 jwt:
-  secret: ${JWT_SECRET:dGVzdC1qd3Qtc2VjcmV0LWtleS1mb3ItbG9jYWwtZGV2ZWxvcG1lbnQtb25seS1kb25vdC11c2UtaW4tcHJvZHVjdGlvbg==}
+  secret: ${JWT_SECRET}
   expiration: 3600000
 
 management:
@@ -88,6 +78,5 @@ logging:
 
 
 passport:
-  secret: ${PASSPORT_SECRET:passport-shared-secret}
+  secret: ${PASSPORT_SECRET}
   ttl-seconds: 60
-

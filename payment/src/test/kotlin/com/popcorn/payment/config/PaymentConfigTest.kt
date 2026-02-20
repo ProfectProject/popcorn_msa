@@ -1,6 +1,6 @@
 package com.popcorn.payment.config
 
-import com.popcorn.common.security.HeaderAuthenticationFilter
+import com.popcorn.common.filter.HeaderAuthenticationFilter
 import com.popcorn.common.security.JwtAuthenticationFilter
 import com.popcorn.common.security.PassportPrincipal
 import org.junit.jupiter.api.Test

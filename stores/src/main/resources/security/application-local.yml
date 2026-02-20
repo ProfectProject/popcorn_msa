@@ -9,8 +9,8 @@ spring:
       on-profile: local
   datasource:
       url: jdbc:postgresql://${DB_HOST}:${DB_PORT}/${DB_NAME}
-      username: ${STORE_DB_USERNAME}
-      password: ${STORE_DB_PASSWORD}
+      username: ${STORE_USERNAME}
+      password: ${STORE_PASSWORD}
       driver-class-name: org.postgresql.Driver
   jpa:
     open-in-view: false
@@ -70,7 +70,7 @@ spring:
       value-serializer: org.apache.kafka.common.serialization.StringSerializer
 
     consumer:
-      group-id: ${KAFKA_CONSUMER_GROUP_ID:stores-group}
+      group-id: ${STORE_KAFKA_CONSUMER_GROUP_ID:stores-group}
       auto-offset-reset: earliest
       enable-auto-commit: false
       key-deserializer: org.apache.kafka.common.serialization.StringDeserializer

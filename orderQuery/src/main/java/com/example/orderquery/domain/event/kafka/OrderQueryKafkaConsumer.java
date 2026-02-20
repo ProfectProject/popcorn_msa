@@ -3,6 +3,7 @@ package com.example.orderquery.domain.event.kafka;
 import java.util.Map;
 
 import org.springframework.kafka.annotation.KafkaListener;
+import org.springframework.kafka.support.Acknowledgment;
 import org.springframework.kafka.support.KafkaHeaders;
 import org.springframework.messaging.handler.annotation.Header;
 import org.springframework.stereotype.Component;
@@ -34,7 +35,8 @@ public class OrderQueryKafkaConsumer {
             },
             groupId = "${spring.kafka.consumer.group-id}"
     )
-    public void consume(String rawMessage, @Header(KafkaHeaders.RECEIVED_TOPIC) String topic) {
+    public void consume(String rawMessage, @Header(KafkaHeaders.RECEIVED_TOPIC) String topic,
+                        Acknowledgment acknowledgment) {
         if (!StringUtils.hasText(rawMessage)) {
             log.debug("Ignoring empty Kafka message from topic {}", topic);
             return;
@@ -43,6 +45,9 @@ public class OrderQueryKafkaConsumer {
         try {
             Map<String, Object> envelope = parseEnvelope(rawMessage);
             orderEventProcessor.processEvent(topic, envelope);
+            if (acknowledgment != null) {
+                acknowledgment.acknowledge();
+            }
         } catch (Exception e) {
             log.error("Failed to handle Kafka message from topic {}: {}", topic, e.getMessage(), e);
         }

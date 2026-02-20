@@ -1,0 +1,179 @@
+# =====================================
+# 🚀 OrderQuery 성능 최적화 설정
+# 작성일: 2026-02-18
+# 목적: 대시보드 쿼리 성능 및 캐시 최적화
+# =====================================
+
+spring:
+  # === 📊 데이터베이스 최적화 ===
+  datasource:
+    hikari:
+      # 🔧 연결 풀 최적화 (대시보드 쿼리 고려)
+      maximum-pool-size: 20          # 최대 연결 수
+      minimum-idle: 5                # 최소 유휴 연결
+      connection-timeout: 30000      # 연결 타임아웃 30초
+      idle-timeout: 600000           # 유휴 타임아웃 10분
+      max-lifetime: 1800000          # 최대 생존 시간 30분
+      leak-detection-threshold: 60000 # 누수 감지 1분
+      pool-name: "OrderQueryOptimizedPool"
+
+      # 📈 PostgreSQL 최적화 설정
+      data-source-properties:
+        cachePrepStmts: true
+        prepStmtCacheSize: 250
+        prepStmtCacheSqlLimit: 2048
+        useServerPrepStmts: true
+        useLocalSessionState: true
+        rewriteBatchedStatements: true
+        maintainTimeStats: false
+        tcpKeepAlive: true
+        socketTimeout: 30
+        defaultFetchSize: 1000
+        ApplicationName: "OrderQuery-Dashboard"
+
+  # === 🚀 JPA 성능 최적화 ===
+  jpa:
+    properties:
+      hibernate:
+        # 🔧 배치 처리 최적화
+        jdbc:
+          batch_size: 30
+          batch_versioned_data: true
+          fetch_size: 50
+        order_inserts: true
+        order_updates: true
+
+        # 📊 쿼리 캐시 및 최적화
+        cache:
+          use_query_cache: true
+          use_second_level_cache: true
+          region:
+            factory_class: org.hibernate.cache.jcache.JCacheRegionFactory
+
+        # 🎯 대시보드 쿼리 최적화
+        query:
+          plan_cache_max_size: 2048
+          plan_parameter_metadata_max_size: 128
+
+        # 📈 성능 모니터링 (개발 환경에서만)
+        generate_statistics: false
+        default_batch_fetch_size: 16
+
+  # === 🔧 Redis 캐시 최적화 ===
+  cache:
+    type: redis
+    redis:
+      time-to-live: 600000  # 기본 TTL 10분
+      cache-null-values: false
+      enable-statistics: true
+
+  # === 📡 트랜잭션 최적화 ===
+  transaction:
+    default-timeout: 30
+    rollback-on-commit-failure: true
+
+# === 🎯 OrderQuery 전용 최적화 설정 ===
+order-query:
+  optimization:
+    # 📊 대시보드 설정
+    dashboard:
+      cache-ttl-minutes: 5          # 대시보드 캐시 TTL
+      max-query-timeout-seconds: 30  # 최대 쿼리 타임아웃
+      enable-query-logging: false    # 쿼리 로깅 (성능상 비활성화)
+      batch-size: 1000              # 배치 조회 크기
+
+    # 🔍 쿼리 최적화
+    query:
+      enable-index-hints: true      # 인덱스 힌트 활성화
+      parallel-execution: true       # 병렬 쿼리 실행
+      connection-pool-validation: true
+
+    # 📈 통계 설정
+    statistics:
+      cache-ttl-minutes: 15         # 통계 캐시 TTL
+      popular-items-limit: 10       # 인기 상품 조회 제한
+      hourly-distribution-cache: true
+
+    # 🚨 실시간 요약 설정
+    realtime:
+      cache-ttl-seconds: 120        # 실시간 데이터 캐시 TTL
+      urgent-threshold-minutes: 30   # 긴급 처리 임계값
+      max-recent-orders: 50         # 최근 주문 조회 제한
+
+# === 📊 성능 모니터링 설정 ===
+management:
+  endpoints:
+    web:
+      exposure:
+        include: health,metrics,prometheus,caches
+  endpoint:
+    health:
+      show-details: always
+    metrics:
+      enabled: true
+  metrics:
+    export:
+      prometheus:
+        enabled: true
+    distribution:
+      percentiles-histogram:
+        http.server.requests: true
+      percentiles:
+        http.server.requests: 0.5,0.9,0.95,0.99
+
+# === 🔍 로깅 최적화 ===
+logging:
+  level:
+    com.example.orderquery.domain.dashboard: INFO
+    com.example.orderquery.domain.dashboard.service.OptimizedDashboardService: DEBUG
+    com.zaxxer.hikari.HikariConfig: INFO
+    com.zaxxer.hikari.pool.HikariPool: WARN
+    org.hibernate.SQL: WARN           # SQL 로깅 최소화 (성능상)
+    org.hibernate.type.descriptor: WARN
+    org.springframework.cache: INFO
+  pattern:
+    console: "%d{yyyy-MM-dd HH:mm:ss.SSS} %highlight(%-5level) %cyan([%thread]) %yellow(%logger{36}) - %msg%n"
+    file: "%d{yyyy-MM-dd HH:mm:ss.SSS} %-5level [%thread] %logger{36} - %msg%n"
+
+# === 🎯 프로파일별 설정 ===
+---
+spring:
+  config:
+    activate:
+      on-profile: local
+
+order-query:
+  optimization:
+    dashboard:
+      enable-query-logging: true    # 로컬에서는 쿼리 로깅 활성화
+    query:
+      parallel-execution: false     # 로컬에서는 병렬 처리 비활성화 (디버깅)
+
+logging:
+  level:
+    com.example.orderquery: DEBUG  # 로컬에서는 상세 로깅
+
+---
+spring:
+  config:
+    activate:
+      on-profile: prod
+
+order-query:
+  optimization:
+    dashboard:
+      cache-ttl-minutes: 10         # 프로덕션에서는 캐시 TTL 증가
+    statistics:
+      cache-ttl-minutes: 30         # 통계 캐시 TTL 증가
+
+# === 📈 프로덕션 최적화 ===
+spring:
+  datasource:
+    hikari:
+      maximum-pool-size: 30         # 프로덕션에서는 더 많은 연결
+      leak-detection-threshold: 120000 # 누수 감지 임계값 증가
+
+logging:
+  level:
+    com.example.orderquery: WARN   # 프로덕션에서는 경고 이상만 로깅
+    org.springframework.cache: WARN

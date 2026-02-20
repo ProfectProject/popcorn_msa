@@ -6,9 +6,9 @@ spring:
     activate:
       on-profile: prod
   datasource:
-    url: jdbc:postgresql://${DB_HOST:localhost}:${DB_PORT:5432}/${DB_NAME:popcorn_db}
-    username: ${ORDER_QUERY_DB_USERNAME:order_query_app}
-    password: ${ORDER_QUERY_DB_PASSWORD:order_query123}
+    url: jdbc:postgresql://${DB_HOST}:${DB_PORT}/${DB_NAME}
+    username: ${ORDER_QUERY_USERNAME}
+    password: ${ORDER_QUERY_PASSWORD}
     driver-class-name: org.postgresql.Driver
     hikari:
       maximum-pool-size: 3
@@ -26,9 +26,9 @@ spring:
     type: simple
 
   flyway:
-    url: jdbc:postgresql://${DB_HOST:localhost}:${DB_PORT:5432}/${DB_NAME:popcorn_db}
-    user: ${ORDER_QUERY_FLYWAY_USERNAME:order_query_migrator}
-    password: ${ORDER_QUERY_FLYWAY_PASSWORD:order_query123}
+    url: jdbc:postgresql://${DB_HOST}:${DB_PORT}/${DB_NAME}
+    user: ${ORDER_QUERY_FLYWAY_USERNAME}
+    password: ${ORDER_QUERY_FLYWAY_PASSWORD}
     enabled: true
     baseline-on-migrate: true
     validate-on-migrate: true
@@ -38,10 +38,10 @@ spring:
     clean-disabled: false
 
   kafka:
-    bootstrap-servers: ${KAFKA_BOOTSTRAP_SERVERS:localhost:29092}
+    bootstrap-servers: ${KAFKA_BOOTSTRAP_SERVERS}
 
     consumer:
-      group-id: ${ORDER_QUERY_KAFKA_GROUP:order-query-cg}
+      group-id: ${ORDER_QUERY_KAFKA_GROUP}
       auto-offset-reset: earliest
       enable-auto-commit: false
       key-deserializer: org.apache.kafka.common.serialization.StringDeserializer
@@ -59,13 +59,13 @@ popcorn:
       store-events: ${KAFKA_TOPIC_STORE_EVENTS:store-events}
       checkin-events: ${KAFKA_TOPIC_CHECKIN_EVENTS:checkin-events}
 springdoc:
-  server-url: ${GATEWAY_SERVICE_URL:https://dev.goormpopcorn.shop}
+  server-url: ${GATEWAY_SERVICE_URL}
 
 passport:
-  secret: ${PASSPORT_SECRET:passport-shared-secret}
+  secret: ${PASSPORT_SECRET}
   ttl-seconds: 60
 
 jwt:
-  secret: ${JWT_SECRET:dGVzdC1qd3Qtc2VjcmV0LWtleS1mb3ItbG9jYWwtZGV2ZWxvcG1lbnQtb25seS1kb25vdC11c2UtaW4tcHJvZHVjdGlvbg==}
+  secret: ${JWT_SECRET}
   expiration: 3600000
   refresh-expiration-ms: 1209600000

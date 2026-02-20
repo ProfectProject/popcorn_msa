@@ -251,5 +251,6 @@ public class OrderEventProducer {
                 .unitPrice(item.getUnitPrice()) // 있으면
                 .lineAmount(item.getLineAmount())
                 .build();
-        }
+    }
+
 }

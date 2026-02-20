@@ -26,6 +26,20 @@ public class RefreshTokenService {
     public boolean isRefreshTokenValid(Long userId, String refreshToken) {
         String key = buildKey(userId);
         String stored = stringRedisTemplate.opsForValue().get(key);
+
+        // 디버깅 로그 추가
+        log.info("🔍 Refresh token validation - userId: {}, key: {}", userId, key);
+        log.info("🔍 Request token length: {}", refreshToken != null ? refreshToken.length() : 0);
+        log.info("🔍 Stored token length: {}", stored != null ? stored.length() : 0);
+        log.info("🔍 Tokens equal: {}", refreshToken != null && refreshToken.equals(stored));
+
+        if (stored == null) {
+            log.warn("⚠️ No refresh token found in Redis for userId: {}, key: {}", userId, key);
+        }
+        if (refreshToken == null) {
+            log.warn("⚠️ Request refresh token is null for userId: {}", userId);
+        }
+
         return refreshToken != null && refreshToken.equals(stored);
     }
 

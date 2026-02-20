@@ -338,8 +338,8 @@ class HybridValidationService(
                     try {
                         userServiceClient.existsUser(userId)
                     } catch (e: Exception) {
-                        log.warn("⚠️ [HTTP] 사용자 존재 확인 실패, fallback - userId: {}", userId)
-                        userId > 0 // fallback
+                        log.error("❌ [HTTP] 사용자 존재 확인 실패 - userId: {}", userId, e)
+                        throw PaymentValidationException("사용자 정보 확인 서비스 장애: ${e.message}")
                     }
                 }
                 val sessionValid = async {
@@ -347,8 +347,8 @@ class HybridValidationService(
                         try {
                             storeValidationClient.isValidSession(sessionId)
                         } catch (e: Exception) {
-                            log.warn("⚠️ [HTTP] 세션 검증 실패, fallback - sessionId: {}", sessionId)
-                            true // fallback: 세션이 있으면 유효하다고 가정
+                            log.error("❌ [HTTP] 세션 검증 실패 - sessionId: {}", sessionId, e)
+                            throw PaymentValidationException("세션 검증 서비스 장애: ${e.message}")
                         }
                     } else {
                         false
@@ -359,8 +359,8 @@ class HybridValidationService(
                         try {
                             storeValidationClient.getGoodsPrice(goodsId) != null
                         } catch (e: Exception) {
-                            log.warn("⚠️ [HTTP] 굿즈 존재 확인 실패, fallback - goodsId: {}", goodsId)
-                            true // fallback: 굿즈가 있으면 존재한다고 가정
+                            log.error("❌ [HTTP] 굿즈 존재 확인 실패 - goodsId: {}", goodsId, e)
+                            throw PaymentValidationException("상품 정보 확인 서비스 장애: ${e.message}")
                         }
                     } else {
                         false
@@ -494,8 +494,10 @@ class HybridValidationService(
                                 orderId, validationResponse.failureReason)
                     }
                 } catch (e: Exception) {
-                    log.warn("⚠️ [보조 검증] Store API 호출 실패하지만 기본 검증 성공으로 결제 진행 - orderId: {}, error: {}",
-                            orderId, e.message)
+                    // Store API 검증은 보조 검증이다.
+                    // 주 검증(주문 금액 일치)이 이미 성공했으면 외부 장애로 결제를 차단하지 않는다.
+                    log.warn("⚠️ [보조 검증] Store API 검증 실패하지만 기본 검증 성공으로 결제 진행 - orderId: {}, error: {}",
+                        orderId, e.message)
                 }
             } else if (hasGoods) {
                 log.info("🔍 [보조 검증] Mixed 주문이지만 lineItem 정보 없음 - 기본 검증만으로 충분")

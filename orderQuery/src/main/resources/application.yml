@@ -10,8 +10,8 @@ spring:
         enabled: ${REDIS_SSL_ENABLED:true}
       repositories:
         enabled: false
-  autoconfigure:
-    exclude: org.springframework.boot.autoconfigure.jdbc.DataSourceTransactionManagerAutoConfiguration
+  # autoconfigure:
+    # exclude: org.springframework.boot.autoconfigure.jdbc.DataSourceTransactionManagerAutoConfiguration
   profiles:
     default: local
   kafka:

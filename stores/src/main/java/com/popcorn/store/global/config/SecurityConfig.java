@@ -2,6 +2,7 @@ package com.popcorn.store.global.config;
 
 import java.util.List;
 
+import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.Configuration;
 import org.springframework.http.HttpMethod;
@@ -22,15 +23,12 @@ import com.popcorn.common.security.JwtAuthenticationFilter;
 @EnableWebSecurity
 public class SecurityConfig {
 
-    private final HeaderAuthenticationFilter headerAuthenticationFilter;
-
-    public SecurityConfig(HeaderAuthenticationFilter headerAuthenticationFilter) {
-        this.headerAuthenticationFilter = headerAuthenticationFilter;
-    }
+    @Autowired(required = false)
+    private HeaderAuthenticationFilter headerAuthenticationFilter;
 
     @Bean
     public SecurityFilterChain securityFilterChain(HttpSecurity http) throws Exception {
-        return http
+        HttpSecurity httpSecurity = http
             .csrf(csrf -> csrf.disable())
             .sessionManagement(session -> session.sessionCreationPolicy(SessionCreationPolicy.STATELESS))
             .formLogin(form -> form.disable())
@@ -42,9 +40,14 @@ public class SecurityConfig {
                 .requestMatchers("/api/stores/v1/goods/*/price", "/api/stores/v1/sessions/*/price").authenticated() // 🔐 가격 조회 API 인증 필요
                 .requestMatchers("/api/stores/v1/owner/**").authenticated()
                 .anyRequest().permitAll()
-            )
-            .addFilterBefore(headerAuthenticationFilter, UsernamePasswordAuthenticationFilter.class)
-            .build();
+            );
+
+        // Only add the filter if it's available
+        if (headerAuthenticationFilter != null) {
+            httpSecurity.addFilterBefore(headerAuthenticationFilter, UsernamePasswordAuthenticationFilter.class);
+        }
+
+        return httpSecurity.build();
     }
 
     @Bean
@@ -61,9 +64,13 @@ public class SecurityConfig {
 
     @Bean
     public FilterRegistrationBean<JwtAuthenticationFilter> jwtAuthenticationFilterRegistration(
-            JwtAuthenticationFilter filter) {
-        FilterRegistrationBean<JwtAuthenticationFilter> registration = new FilterRegistrationBean<>(filter);
-        registration.setEnabled(false);
-        return registration;
+            @Autowired(required = false) JwtAuthenticationFilter filter) {
+        if (filter != null) {
+            FilterRegistrationBean<JwtAuthenticationFilter> registration = new FilterRegistrationBean<>(filter);
+            registration.setEnabled(false);
+            return registration;
+        }
+        // Return empty registration if filter is not available
+        return new FilterRegistrationBean<>();
     }
 }

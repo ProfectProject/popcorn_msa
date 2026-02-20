@@ -44,7 +44,8 @@ data class CouponDetailResponse(
                 validUntil = coupon.validUntil,
                 targetType = coupon.targetType,
                 status = coupon.status,
-                createdAt = coupon.createdAt!!,
+                // Auditing 필드(createdAt)가 null인 레거시/이관 데이터에서도 NPE 없이 응답하도록 보정.
+                createdAt = coupon.createdAt ?: coupon.updatedAt ?: coupon.validFrom,
                 updatedAt = coupon.updatedAt
             )
         }

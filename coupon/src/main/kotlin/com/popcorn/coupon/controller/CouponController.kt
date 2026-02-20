@@ -1,6 +1,7 @@
 package com.popcorn.coupon.controller
 
 import com.popcorn.coupon.dto.request.*
+import com.popcorn.coupon.domain.entity.CouponStatus
 import com.popcorn.coupon.dto.response.*
 import com.popcorn.coupon.service.core.CouponCommandService
 import com.popcorn.coupon.service.core.CouponQueryService
@@ -388,6 +389,62 @@ class CouponController(
         return runBlocking {
             val adminId = getCurrentUserId()
             val coupon = couponCommandService.deactivateCoupon(couponId, adminId)
+            ResponseEntity.ok(CouponDetailResponse.from(coupon))
+        }
+    }
+
+    /**
+     * 쿠폰 상태 변경 (관리자 전용)
+     */
+    @PatchMapping("/{couponId}/status")
+    @PreAuthorize("hasAnyRole('MANAGER', 'OWNER')")
+    @Operation(
+        summary = "쿠폰 상태 변경",
+        description = """
+            쿠폰의 상태를 변경합니다.
+
+            **변경 가능한 상태:**
+            - DRAFT: 초안 상태 (아직 활성화되지 않음)
+            - ACTIVE: 활성화 상태 (발급 가능)
+            - INACTIVE: 비활성화 상태 (발급 중단)
+            - EXPIRED: 만료 상태 (사용 불가)
+
+            **상태 전환 규칙:**
+            - DRAFT → ACTIVE: 활성화
+            - ACTIVE → INACTIVE: 비활성화
+            - ACTIVE → EXPIRED: 강제 만료
+            - INACTIVE → ACTIVE: 재활성화
+
+            **권한:**
+            - 매장 관리자(MANAGER) 또는 사업자(OWNER) 권한 필요
+        """
+    )
+    @ApiResponses(
+        ApiResponse(responseCode = "200", description = "쿠폰 상태 변경 성공",
+            content = [Content(schema = Schema(implementation = CouponDetailResponse::class))]),
+        ApiResponse(responseCode = "400", description = "잘못된 상태 전환 요청"),
+        ApiResponse(responseCode = "401", description = "인증되지 않은 사용자"),
+        ApiResponse(responseCode = "403", description = "권한 없음 (관리자 권한 필요)"),
+        ApiResponse(responseCode = "404", description = "쿠폰을 찾을 수 없음"),
+        ApiResponse(responseCode = "500", description = "서버 내부 오류")
+    )
+    fun updateCouponStatus(
+        @PathVariable
+        @Parameter(description = "상태를 변경할 쿠폰 ID", required = true, example = "9")
+        couponId: Long,
+        @Valid @RequestBody
+        @Parameter(description = "쿠폰 상태 변경 요청", required = true)
+        request: CouponStatusUpdateRequest
+    ): ResponseEntity<CouponDetailResponse> {
+        logger.info { "🔄 쿠폰 상태 변경: couponId=$couponId, status=${request.status}" }
+
+        return runBlocking {
+            val adminId = getCurrentUserId()
+            val coupon = when (request.status) {
+                CouponStatus.ACTIVE -> couponCommandService.activateCoupon(couponId, adminId)
+                CouponStatus.INACTIVE -> couponCommandService.deactivateCoupon(couponId, adminId)
+                else -> throw IllegalArgumentException("지원하지 않는 상태 변경입니다: ${request.status}")
+            }
             ResponseEntity.ok(CouponDetailResponse.from(coupon))
         }
     }

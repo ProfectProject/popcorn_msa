@@ -9,6 +9,6 @@ import lombok.*;
 @AllArgsConstructor
 public class OrderItemPageDto {
 
-    private final List<OrderItemDto> items;
+    private final List<OrderItemDto> orders;
     private final PageInfoDto pageInfo;
 }

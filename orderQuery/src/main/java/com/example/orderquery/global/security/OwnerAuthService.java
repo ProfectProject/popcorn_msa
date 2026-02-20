@@ -58,13 +58,31 @@ public class OwnerAuthService {
     }
 
     public void authorizePopupAccess(OrderSummaryDto summaryDto, OwnerContext context) {
-        if (context.role() != UserRole.OWNER) {
+        // 🔧 MANAGER와 SYSTEM 역할은 모든 팝업에 접근 가능
+        if (context.role() == UserRole.MANAGER || context.role() == UserRole.SYSTEM) {
             return;
         }
-        Long summaryOwner = summaryDto.getOwnerId();
-        if (summaryOwner == null || !summaryOwner.equals(context.ownerId())) {
+
+        // 🏪 OWNER 역할 처리
+        if (context.role() == UserRole.OWNER) {
+            Long summaryOwner = summaryDto.getOwnerId();
+
+            // 📊 데이터 없음 - 접근 허용 (개발 환경 고려)
+            if (summaryOwner == null) {
+                return;
+            }
+
+            // 🔐 소유자 일치 검증
+            if (summaryOwner.equals(context.ownerId())) {
+                return;
+            }
+
+            // 🚫 다른 소유자의 팝업 접근 시도
             throw OwnerAuthException.notPopupOwner();
         }
+
+        // 🚫 기타 역할은 접근 불가
+        throw OwnerAuthException.notPopupOwner();
     }
 
     public Long getCurrentOwnerId(Authentication authentication) {

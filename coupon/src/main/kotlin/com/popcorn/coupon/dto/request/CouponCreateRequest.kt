@@ -3,6 +3,8 @@ package com.popcorn.coupon.dto.request
 import com.fasterxml.jackson.annotation.JsonAlias
 import com.popcorn.coupon.domain.entity.DiscountType
 import com.popcorn.coupon.domain.entity.TargetType
+import com.popcorn.coupon.domain.entity.CouponStatus
+import io.swagger.v3.oas.annotations.media.Schema
 import jakarta.validation.constraints.*
 import java.math.BigDecimal
 import java.time.LocalDateTime
@@ -59,11 +61,18 @@ data class CouponCreateRequest(
 )
 
 /**
- * 쿠폰 상태 업데이트 요청 DTO
+ * 쿠폰 상태 변경 요청 DTO
  */
+@Schema(description = "쿠폰 상태 변경 요청")
 data class CouponStatusUpdateRequest(
-    @field:NotBlank(message = "상태는 필수입니다")
-    val status: String
+
+    @field:NotNull(message = "쿠폰 상태는 필수입니다")
+    @Schema(
+        description = "변경할 쿠폰 상태",
+        example = "ACTIVE",
+        allowableValues = ["DRAFT", "ACTIVE", "INACTIVE", "EXPIRED"]
+    )
+    val status: CouponStatus
 )
 
 /**

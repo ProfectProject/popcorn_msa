@@ -180,9 +180,10 @@ public class KafkaConfig {
     public NewTopic orderEventsTopic() {
         return TopicBuilder.name("order-events")
                 .partitions(12)
-                .replicas(1)
+                .replicas(3)  // ✅ 3브로커 환경에서 안정성 보장
                 .config(TopicConfig.RETENTION_MS_CONFIG, "86400000") // 1일
                 .config(TopicConfig.COMPRESSION_TYPE_CONFIG, "snappy")
+                .config(TopicConfig.MIN_IN_SYNC_REPLICAS_CONFIG, "2")  // 최소 2개 동기화
                 .build();
     }
 
@@ -190,9 +191,10 @@ public class KafkaConfig {
     public NewTopic orderRequestsTopic() {
         return TopicBuilder.name("order-requests")
                 .partitions(12)
-                .replicas(1)
+                .replicas(3)  // ✅ 안정성 보장
                 .config(TopicConfig.RETENTION_MS_CONFIG, "86400000")
                 .config(TopicConfig.COMPRESSION_TYPE_CONFIG, "snappy")
+                .config(TopicConfig.MIN_IN_SYNC_REPLICAS_CONFIG, "2")
                 .build();
     }
 
@@ -200,9 +202,10 @@ public class KafkaConfig {
     public NewTopic paymentEventsTopic() {
         return TopicBuilder.name("payment-events")
                 .partitions(6)
-                .replicas(1)
+                .replicas(3)  // ✅ 결제 이벤트 안정성 중요
                 .config(TopicConfig.RETENTION_MS_CONFIG, "86400000")
                 .config(TopicConfig.COMPRESSION_TYPE_CONFIG, "snappy")
+                .config(TopicConfig.MIN_IN_SYNC_REPLICAS_CONFIG, "2")
                 .build();
     }
 
@@ -210,9 +213,10 @@ public class KafkaConfig {
     public NewTopic paymentRequestsTopic() {
         return TopicBuilder.name("payment-requests")
                 .partitions(6)
-                .replicas(1)
+                .replicas(3)  // ✅ 결제 요청 안정성 중요
                 .config(TopicConfig.RETENTION_MS_CONFIG, "86400000")
                 .config(TopicConfig.COMPRESSION_TYPE_CONFIG, "snappy")
+                .config(TopicConfig.MIN_IN_SYNC_REPLICAS_CONFIG, "2")
                 .build();
     }
 
@@ -220,9 +224,10 @@ public class KafkaConfig {
     public NewTopic storeEventsTopic() {
         return TopicBuilder.name("store-events")
                 .partitions(12)
-                .replicas(1)
+                .replicas(3)  // ✅ 재고 이벤트 안정성 보장
                 .config(TopicConfig.RETENTION_MS_CONFIG, "86400000")
                 .config(TopicConfig.COMPRESSION_TYPE_CONFIG, "snappy")
+                .config(TopicConfig.MIN_IN_SYNC_REPLICAS_CONFIG, "2")
                 .build();
     }
 
@@ -230,9 +235,10 @@ public class KafkaConfig {
     public NewTopic storeRequestsTopic() {
         return TopicBuilder.name("store-requests")
                 .partitions(12)
-                .replicas(1)
+                .replicas(3)  // ✅ 재고 요청 안정성 보장
                 .config(TopicConfig.RETENTION_MS_CONFIG, "86400000")
                 .config(TopicConfig.COMPRESSION_TYPE_CONFIG, "snappy")
+                .config(TopicConfig.MIN_IN_SYNC_REPLICAS_CONFIG, "2")
                 .build();
     }
 
@@ -240,9 +246,10 @@ public class KafkaConfig {
     public NewTopic checkinEventsTopic() {
         return TopicBuilder.name("checkin-events")
                 .partitions(3)
-                .replicas(1)
+                .replicas(3)  // ✅ 체크인 이벤트 안정성 보장
                 .config(TopicConfig.RETENTION_MS_CONFIG, "86400000")
                 .config(TopicConfig.COMPRESSION_TYPE_CONFIG, "snappy")
+                .config(TopicConfig.MIN_IN_SYNC_REPLICAS_CONFIG, "2")
                 .build();
     }
 
@@ -250,9 +257,10 @@ public class KafkaConfig {
     public NewTopic checkinRequestsTopic() {
         return TopicBuilder.name("checkin-requests")
                 .partitions(3)
-                .replicas(1)
+                .replicas(3)  // ✅ 체크인 요청 안정성 보장
                 .config(TopicConfig.RETENTION_MS_CONFIG, "86400000")
                 .config(TopicConfig.COMPRESSION_TYPE_CONFIG, "snappy")
+                .config(TopicConfig.MIN_IN_SYNC_REPLICAS_CONFIG, "2")
                 .build();
     }
 }

@@ -2,12 +2,12 @@ name: Unified CI/CD Pipeline
 
 on:
   push:
-    branches: [main, develop-kafka]
+    branches: [main, develop, develop-kafka]
   pull_request:
     branches: ['**']
 
 permissions:
-  contents: read
+  contents: write
   id-token: write
 
 jobs:
@@ -288,7 +288,7 @@ jobs:
           echo "sha8=$SHA8" >> $GITHUB_OUTPUT
           
           # 알림용 디스플레이 태그 결정
-          if [[ "${{ github.ref_name }}" == "main" ]]; then
+          if [[ "${{ github.ref_name }}" == "develop-kafka" ]]; then
             echo "display_tag=latest" >> $GITHUB_OUTPUT
           elif [[ "${{ github.ref_name }}" == "develop" ]]; then
             echo "display_tag=dev-latest" >> $GITHUB_OUTPUT
@@ -297,14 +297,47 @@ jobs:
             echo "display_tag=${{ github.ref_name }}" >> $GITHUB_OUTPUT
           fi
 
-      # 1-1. 자동으로 다음 버전 계산 (커밋 메시지 분석)
-      - name: Bump version and push tag
-        id: tag_version
-        if: github.ref_name == 'main'
-        uses: mathieudutour/github-tag-action@v6.2
-        with:
-          github_token: ${{ secrets.GITHUB_TOKEN }}
-          default_bump: patch # 기본적으로 Patch 숫자(마지막 숫자) 증가
+      # 1-1. 프로덕션 브랜치(develop-kafka)용 SemVer 태그 보장
+      # 매트릭스 병렬 실행 충돌을 피하기 위해 "이미 있으면 재사용, 없으면 생성 시도" 방식으로 처리
+      - name: Ensure semver tag
+        id: semver
+        if: github.ref_name == 'develop-kafka'
+        shell: bash
+        run: |
+          set -euo pipefail
+          git fetch --tags --force
+          SEMVER_REGEX='^v[0-9]+\.[0-9]+\.[0-9]+$'
+
+          EXISTING_TAG="$(git tag --points-at HEAD | grep -E "${SEMVER_REGEX}" | head -n 1 || true)"
+          if [[ -n "${EXISTING_TAG}" ]]; then
+            echo "tag=${EXISTING_TAG}" >> "$GITHUB_OUTPUT"
+            exit 0
+          fi
+
+          LAST_TAG="$(git tag -l 'v*' --sort=-v:refname | grep -E "${SEMVER_REGEX}" | head -n 1 || true)"
+          if [[ -z "${LAST_TAG}" ]]; then
+            NEXT_TAG="v1.0.0"
+          else
+            VERSION="${LAST_TAG#v}"
+            MAJOR="${VERSION%%.*}"
+            REST="${VERSION#*.}"
+            MINOR="${REST%%.*}"
+            PATCH="${VERSION##*.}"
+            NEXT_PATCH=$((PATCH + 1))
+            NEXT_TAG="v${MAJOR}.${MINOR}.${NEXT_PATCH}"
+          fi
+
+          # 다른 매트릭스 잡이 먼저 푸시할 수 있으므로, 실패 시 태그 재조회 후 재사용
+          git tag "${NEXT_TAG}" "${GITHUB_SHA}" || true
+          git push origin "refs/tags/${NEXT_TAG}" || true
+          git fetch --tags --force
+
+          RESOLVED_TAG="$(git tag --points-at HEAD | grep -E "${SEMVER_REGEX}" | head -n 1 || true)"
+          if [[ -z "${RESOLVED_TAG}" ]]; then
+            echo "SemVer tag resolution failed for HEAD=${GITHUB_SHA}"
+            exit 1
+          fi
+          echo "tag=${RESOLVED_TAG}" >> "$GITHUB_OUTPUT"
 
       - name: Docker metadata
         id: meta
@@ -313,15 +346,13 @@ jobs:
           images: ${{ steps.ecr.outputs.registry }}/${{ steps.vars.outputs.ecr_repo }}
           tags: |
             # Production 전략 (main 전용)
-            type=raw,value=${{ steps.tag_version.outputs.new_tag }},enable=${{ github.ref_name == 'main' }}
-            type=raw,value=latest,enable=${{ github.ref_name == 'main' }}
+            type=raw,value=${{ steps.build_meta.outputs.sha8 }},enable=${{ github.ref_name == 'develop-kafka' }}
+            type=raw,value=${{ steps.semver.outputs.tag }},enable=${{ github.ref_name == 'develop-kafka' }}
+            type=raw,value=latest,enable=${{ github.ref_name == 'develop-kafka' }}
             
-            # Development 전략 (develop 및 ci-tag 전용)
-            type=raw,value=dev-${{ steps.build_meta.outputs.sha8 }},enable=${{ github.ref_name == 'develop-kafka' }}
-            type=raw,value=dev-latest,enable=${{ github.ref_name == 'develop-kafka' }}
-            
-            # 공통: Semantic Versioning
-            type=semver,pattern={{version}}
+            # Development 전략 (develop 전용)
+            type=raw,value=dev-${{ steps.build_meta.outputs.sha8 }},enable=${{ github.ref_name == 'develop' }}
+            type=raw,value=dev-latest,enable=${{ github.ref_name == 'develop' }}
           flavor: |
             latest=false
 
@@ -354,7 +385,7 @@ jobs:
             - 👤 Author: `${{ github.actor }}`
             - Service: ${{ matrix.service }}
             - Repo: ${{ steps.vars.outputs.ecr_repo }}
-            - Image: ${{ steps.ecr.outputs.registry }}/${{ steps.vars.outputs.ecr_repo }}:dev-latest
+            - Image: ${{ steps.ecr.outputs.registry }}/${{ steps.vars.outputs.ecr_repo }}:${{ steps.build_meta.outputs.display_tag }}
             - Run: #${{ github.run_number }}
             - Commit: ${{ github.sha }}
 

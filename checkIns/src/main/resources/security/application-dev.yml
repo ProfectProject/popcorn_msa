@@ -14,8 +14,8 @@ spring:
   datasource:
     url: jdbc:postgresql://${DB_HOST:localhost}:${DB_PORT:5430}/${DB_NAME:popcorn_db}
     driver-class-name: org.postgresql.Driver
-    username: ${QR_DB_USERNAME}
-    password: ${QR_DB_PASSWORD}
+    username: ${QR_USERNAME}
+    password: ${QR_PASSWORD}
     hikari:
       maximum-pool-size: 3
       minimum-idle: 1
@@ -43,8 +43,8 @@ spring:
     validate-on-migrate: false
     out-of-order: true
     url: jdbc:postgresql://${DB_HOST:localhost}:${DB_PORT:5430}/${DB_NAME:popcorn_db}
-    user: ${QR_DB_MIGRATION_USERNAME:${QR_FLYWAY_USERNAME:${QR_DB_USERNAME}}}
-    password: ${QR_DB_MIGRATION_PASSWORD:${QR_FLYWAY_PASSWORD:${QR_DB_PASSWORD}}}
+    user: ${QR_FLYWAY_USERNAME}
+    password: ${QR_FLYWAY_PASSWORD}
     schemas: checkIns
     default-schema: checkIns
 

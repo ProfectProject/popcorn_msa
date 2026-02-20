@@ -41,16 +41,28 @@ spring:
       connection-timeout-ms: 10000
   datasource:
     url: jdbc:postgresql://${DB_HOST:localhost}:${DB_PORT:5432}/${DB_NAME:popcorn_db}
-    username: ${QR_DB_USERNAME}
-    password: ${QR_DB_PASSWORD}
+    username: ${QR_USERNAME}
+    password: ${QR_PASSWORD}
     driver-class-name: org.postgresql.Driver
     hikari:
+      # === 연결 풀 크기 설정 ===
       maximum-pool-size: 20
-      minimum-idle: 5
-      connection-timeout: 20000
-      validation-timeout: 3000
-      idle-timeout: 300000
-      max-lifetime: 1200000
+      minimum-idle: 8
+
+      # === 연결 타임아웃 설정 (ms) ===
+      connection-timeout: 20000          # 20초 - 연결 획득 대기 시간
+      validation-timeout: 5000           # 5초 - 연결 검증 타임아웃
+      idle-timeout: 600000              # 10분 - 유휴 연결 타임아웃 (5분→10분)
+      max-lifetime: 1800000             # 30분 - 최대 연결 수명 (20분→30분)
+
+      # === 연결 품질 및 안정성 개선 ===
+      leak-detection-threshold: 60000   # 60초 - 연결 누수 감지
+      keepalive-time: 30000             # 30초 - 연결 활성 상태 확인
+      initialization-fail-timeout: 1    # 빠른 실패 처리
+
+      # === PostgreSQL 최적화 ===
+      connection-test-query: SELECT 1   # 연결 테스트 쿼리
+      register-mbeans: true             # JMX 모니터링 활성화
 
   jpa:
     open-in-view: false
@@ -109,7 +121,7 @@ spring:
     out-of-order: true
     placeholders:
       QR_MIGRATOR_PASSWORD: ${QR_FLYWAY_PASSWORD}
-      QR_APP_PASSWORD: ${QR_DB_PASSWORD}
+      QR_APP_PASSWORD: ${QR_PASSWORD}
 
 # 인증 설정
 passport:

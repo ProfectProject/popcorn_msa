@@ -5,6 +5,17 @@ spring:
   application:
     name: checkIns-test
 
+  # Kafka 테스트 설정
+  kafka:
+    bootstrap-servers: localhost:9092
+    consumer:
+      group-id: checkin-test-group
+      auto-offset-reset: earliest
+      enable-auto-commit: false
+    producer:
+      acks: all
+      retries: 1
+
   datasource:
     url: jdbc:h2:mem:testdb;MODE=PostgreSQL;DATABASE_TO_LOWER=TRUE;DEFAULT_NULL_ORDERING=HIGH
     username: sa
@@ -31,3 +42,21 @@ logging:
     org.springframework.web: WARN
     org.springframework.boot.web: WARN
     org.hibernate.SQL: WARN
+
+# 인증 설정 (테스트용)
+passport:
+  secret: test-secret-key-for-unit-testing-only
+  ttl-seconds: 60
+
+# Kafka 이벤트 설정 (테스트용)
+kafka:
+  enabled: true
+  bootstrap-servers: localhost:9092
+  consumer:
+    group-id: checkin-service-test-group
+    concurrency: 1
+    auto-offset-reset: earliest
+    enable-auto-commit: false
+  producer:
+    acks: all
+    retries: 1

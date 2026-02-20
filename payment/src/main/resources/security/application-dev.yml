@@ -19,8 +19,8 @@ spring:
   # 데이터베이스 설정 (개발 환경)
   datasource:
     url: jdbc:postgresql://${DB_HOST:localhost}:${DB_PORT:5432}/${DB_NAME:popcorn_db}
-    username: ${PAYMENT_DB_USERNAME:payment_app}
-    password: ${PAYMENT_DB_PASSWORD:payment123}
+    username: ${PAYMENT_USERNAME:payment_app}
+    password: ${PAYMENT_PASSWORD:payment123}
     driver-class-name: org.postgresql.Driver
     hikari:
       maximum-pool-size: 3
@@ -78,8 +78,8 @@ spring:
   # Flyway 설정 (개발 환경)
   flyway:
     enabled: true
-    user: ${PAYMENT_DB_MIGRATION_USERNAME:${PAYMENT_FLYWAY_USERNAME:${PAYMENT_DB_USERNAME}}}
-    password: ${PAYMENT_DB_MIGRATION_PASSWORD:${PAYMENT_FLYWAY_PASSWORD:${PAYMENT_DB_PASSWORD}}}
+    user: ${PAYMENT_FLYWAY_USERNAME:payment_migrator}
+    password: ${PAYMENT_FLYWAY_PASSWORD:payment321}
     default-schema: payment
     schemas: payment
     locations: classpath:db/migration
