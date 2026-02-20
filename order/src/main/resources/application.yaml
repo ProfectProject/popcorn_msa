@@ -62,6 +62,8 @@ spring:
     redis:
       host: ${REDIS_HOST:localhost}
       port: ${REDIS_PORT:6379}
+      ssl:
+        enabled: ${REDIS_SSL_ENABLED:true}
       password: ${REDIS_PASSWORD:}
       timeout: 2000ms
       database: 0  # 테스트용 별도 데이터베이스

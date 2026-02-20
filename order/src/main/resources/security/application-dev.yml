@@ -72,6 +72,8 @@ spring:
     redis:
       host: ${REDIS_HOST:localhost}
       port: ${REDIS_PORT:6379}
+      ssl:
+        enabled: ${REDIS_SSL_ENABLED:true}
       timeout: 10000ms  # 3초 → 10초 (타임아웃 대폭 증가)
       command-timeout: 10000ms  # 명령 실행 타임아웃
       lettuce:

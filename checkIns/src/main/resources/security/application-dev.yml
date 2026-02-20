@@ -53,6 +53,8 @@ spring:
     redis:
       host: ${REDIS_HOST:localhost}
       port: ${REDIS_PORT:6379}
+      ssl:
+        enabled: ${REDIS_SSL_ENABLED:true}
       password: ${REDIS_PASSWORD:}
       database: 1  # CheckIns 서비스 전용 DB
       timeout: 10000ms

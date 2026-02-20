@@ -6,6 +6,8 @@ spring:
     redis:
       host: ${SPRING_DATA_REDIS_HOST:${SPRING_REDIS_HOST:${REDIS_HOST:localhost}}}
       port: ${SPRING_DATA_REDIS_PORT:${SPRING_REDIS_PORT:${REDIS_PORT:6379}}}
+      ssl:
+        enabled: ${REDIS_SSL_ENABLED:true}
       repositories:
         enabled: false
   # autoconfigure:

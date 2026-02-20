@@ -6,6 +6,10 @@ spring:
       - optional:file:gateway/.env[.properties]
   application:
     name: gateway
+  data:
+    redis:
+      ssl:
+        enabled: ${REDIS_SSL_ENABLED:true}
   cloud:
     gateway:
       server:
