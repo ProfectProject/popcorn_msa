@@ -15,10 +15,10 @@ import java.util.List;
 @Configuration
 public class OpenApiConfig {
 
-    @Bean
     @Value("${app.gateway.url:${APP_GATEWAY_URL:https://api.goormpopcorn.shop}}")
     private String gatewayUrl;
 
+    @Bean
     public OpenAPI openAPI() {
         return new OpenAPI()
             .servers(List.of(new Server().url(gatewayUrl).description("배포된 게이트웨이")))
