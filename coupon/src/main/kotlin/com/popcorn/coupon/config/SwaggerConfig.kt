@@ -15,23 +15,14 @@ import org.springframework.context.annotation.Configuration
 @Configuration
 class SwaggerConfig {
 
-    @Value("\${gateway.url:http://localhost:8080}")
+    @Value("\${app.gateway.url:\${APP_GATEWAY_URL:https://api.goormpopcorn.shop}}")
     private lateinit var gatewayUrl: String
 
     @Bean
     fun openAPI(): OpenAPI {
         return OpenAPI()
             .info(apiInfo())
-            .servers(
-                listOf(
-                    Server()
-                        .url(gatewayUrl)
-                        .description("로컬 게이트웨이"),
-                    Server()
-                        .url("https://api.popcorn.com")
-                        .description("운영 서버")
-                )
-            )
+            .servers(listOf(Server().url(gatewayUrl).description("배포된 게이트웨이")))
             .components(
                 Components().addSecuritySchemes(
                     "Bearer Authentication",
