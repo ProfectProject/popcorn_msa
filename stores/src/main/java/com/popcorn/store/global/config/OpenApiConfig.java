@@ -1,6 +1,7 @@
 package com.popcorn.store.global.config;
 
 import org.springdoc.core.models.GroupedOpenApi;
+import org.springframework.beans.factory.annotation.Value;
 import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.Configuration;
 
@@ -15,9 +16,12 @@ import java.util.List;
 public class OpenApiConfig {
 
     @Bean
+    @Value("${app.gateway.url:${APP_GATEWAY_URL:https://api.goormpopcorn.shop}}")
+    private String gatewayUrl;
+
     public OpenAPI openAPI() {
         return new OpenAPI()
-            .servers(List.of(new Server().url("http://localhost:8080")))
+            .servers(List.of(new Server().url(gatewayUrl).description("배포된 게이트웨이")))
             .components(new Components()
                 .addSecuritySchemes("BearerAuth",
                     new SecurityScheme()

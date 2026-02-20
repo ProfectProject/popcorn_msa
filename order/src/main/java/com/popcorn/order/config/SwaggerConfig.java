@@ -22,7 +22,7 @@ public class SwaggerConfig {
     @Value("${spring.application.name}")
     private String applicationName;
 
-    @Value("${gateway.url:http://localhost:8080}")
+    @Value("${app.gateway.url:${APP_GATEWAY_URL:https://api.goormpopcorn.shop}}")
     private String gatewayUrl;
 
     @Bean
@@ -31,10 +31,7 @@ public class SwaggerConfig {
                 .info(apiInfo())
                 .addServersItem(new Server()
                         .url(gatewayUrl)
-                        .description("로컬 게이트웨이"))
-                .addServersItem(new Server()
-                        .url("https://api.popcorn.com")
-                        .description("운영 서버"))
+                        .description("배포된 게이트웨이"))
                 .components(new Components()
                         .addSecuritySchemes("bearer-token",
                                 new SecurityScheme()

@@ -17,13 +17,13 @@ public class OpenApiConfig {
     @Value("${app.version:0.0.1-SNAPSHOT}")
     private String appVersion;
 
-    @Value("${gateway.url:http://localhost:8080}")
+    @Value("${app.gateway.url:${APP_GATEWAY_URL:https://api.goormpopcorn.shop}}")
     private String gatewayUrl;
 
     @Bean
     public OpenAPI customOpenAPI() {
         return new OpenAPI()
-                .servers(List.of(new Server().url(gatewayUrl)))
+                .servers(List.of(new Server().url(gatewayUrl).description("배포된 게이트웨이")))
                 .info(new Info()
                         .title("QRCheckIn Swagger")
                         .description("QR 코드 및 체크인 관리 API")
