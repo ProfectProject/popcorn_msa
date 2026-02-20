@@ -27,6 +27,8 @@ spring:
     redis:
       host: ${REDIS_HOST}
       port: ${REDIS_PORT}
+      ssl:
+        enabled: ${REDIS_SSL_ENABLED:true}
       password: ${REDIS_PASSWORD}
       timeout: 2000ms  # Redis Stream 안정성 위해 기본 타임아웃 복구
       database: 0  # Payment, Order 서비스와 동일한 database 0 사용

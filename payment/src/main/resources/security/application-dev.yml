@@ -64,6 +64,8 @@ spring:
     redis:
       host: ${REDIS_HOST:localhost}
       port: ${REDIS_PORT:6379}
+      ssl:
+        enabled: ${REDIS_SSL_ENABLED:true}
       password: ${REDIS_PASSWORD:}
       timeout: 3000ms
       database: 0  # Order, Stores 서비스와 동일한 database 0 사용
