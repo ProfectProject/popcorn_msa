@@ -22,6 +22,17 @@ spring:
           preferred_enum_jdbc_type: VARCHAR
         default_schema: store
 
+  data:
+    redis:
+      host: ${REDIS_HOST}
+      port: ${REDIS_PORT:6379}
+      password: ${REDIS_PASSWORD}
+      ssl:
+        enabled: ${REDIS_SSL_ENABLED:true}
+      timeout: 2s
+      connect-timeout: 1s
+
+
   flyway:
     url: jdbc:postgresql://${DB_HOST}:${DB_PORT}/${DB_NAME}
     user: ${STORE_FLYWAY_USERNAME}
