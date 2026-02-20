@@ -95,3 +95,7 @@ popcorn:
       replicas: ${KAFKA_TOPIC_REPLICAS}
     partitions:
       storeEvents: ${STORE_EVENTS_PARTITIONS}
+
+store:
+  cors:
+    allowed-origin-patterns: https://api.goormpopcorn.shop
