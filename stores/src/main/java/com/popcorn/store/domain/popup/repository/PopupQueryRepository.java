@@ -117,7 +117,7 @@ public interface PopupQueryRepository extends Repository<Popup, UUID> {
 			SELECT p.popup_id
 			  FROM popups p
 			 WHERE p.deleted_at IS NULL
-			   AND p.status IN ('ACTIVE', 'OPEN')
+			   AND p.status IN ('OPEN')
 			   AND p.event_end_at > CURRENT_TIMESTAMP
 			 ORDER BY p.created_at DESC, p.updated_at DESC
 			 LIMIT :limit
