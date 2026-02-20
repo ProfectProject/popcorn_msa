@@ -407,7 +407,7 @@ jobs:
   update-gitops-values:
     name: Update GitOps values (single commit)
     needs: [detect-changes, docker-build-push-ecr]
-    if: github.event_name == 'push' && needs.detect-changes.outputs.has_changes == 'true'
+    if: github.event_name == 'push' && needs.detect-changes.outputs.has_changes == 'true' && (github.ref_name == 'develop' || github.ref_name == 'develop-kafka')
     runs-on: ubuntu-latest
 
     permissions:
@@ -416,18 +416,41 @@ jobs:
     env:
       GITOPS_REPO: ProfectProject/popcorn_deploy
       GITOPS_BRANCH: main
-      VALUES_FILE: helm/popcorn-umbrella/values-prod.yaml
     
     
     steps:
-      - name: Set IMAGE_TAG (dev-<sha8>)
+      - name: Checkout source repository (for tag resolution)
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Set IMAGE_TAG and VALUES_FILE by branch
         id: gitops_tag
         shell: bash
         run: |
           set -euo pipefail
           SHA8="${GITHUB_SHA::8}"
-          echo "IMAGE_TAG=dev-${SHA8}" >> "$GITHUB_ENV"
-          echo "Using IMAGE_TAG=dev-${SHA8}"
+          if [[ "${GITHUB_REF_NAME}" == "develop" ]]; then
+            echo "IMAGE_TAG=dev-${SHA8}" >> "$GITHUB_ENV"
+            echo "VALUES_FILE=helm/popcorn-umbrella/values-dev.yaml" >> "$GITHUB_ENV"
+            echo "Using IMAGE_TAG=dev-${SHA8}"
+            echo "Using VALUES_FILE=helm/popcorn-umbrella/values-dev.yaml"
+          elif [[ "${GITHUB_REF_NAME}" == "develop-kafka" ]]; then
+            git fetch --tags --force
+            SEMVER_REGEX='^v[0-9]+\.[0-9]+\.[0-9]+$'
+            RESOLVED_TAG="$(git tag --points-at "${GITHUB_SHA}" | grep -E "${SEMVER_REGEX}" | head -n 1 || true)"
+            if [[ -z "${RESOLVED_TAG}" ]]; then
+              echo "SemVer tag not found on commit ${GITHUB_SHA}"
+              exit 1
+            fi
+            echo "IMAGE_TAG=${RESOLVED_TAG}" >> "$GITHUB_ENV"
+            echo "VALUES_FILE=helm/popcorn-umbrella/values-prod.yaml" >> "$GITHUB_ENV"
+            echo "Using IMAGE_TAG=${RESOLVED_TAG}"
+            echo "Using VALUES_FILE=helm/popcorn-umbrella/values-prod.yaml"
+          else
+            echo "Unsupported branch for GitOps update: ${GITHUB_REF_NAME}"
+            exit 1
+          fi
           
       - name: Install tools (jq, yq)
         shell: bash
@@ -450,7 +473,7 @@ jobs:
           cd gitops
           git checkout "${GITOPS_BRANCH}"
 
-      - name: Update values-prod.yaml for changed services only
+      - name: Update GitOps values for changed services only
         shell: bash
         run: |
           set -euo pipefail
@@ -461,7 +484,7 @@ jobs:
 
           cd gitops
 
-          # 변경된 서비스 목록을 순회하면서 values-dev.yaml의 service.image.tag만 갱신
+          # 변경된 서비스 목록을 순회하면서 선택된 values 파일의 service.image.tag만 갱신
           # services_json 예: ["users","order","gateway"]
           echo "${SERVICES_JSON}" | jq -r '.[]' | while read -r svc; do
             case "$svc" in
