@@ -1,14 +1,19 @@
 package com.popcorn.common.config;
 
+import java.time.Duration;
+
 import org.springframework.beans.factory.annotation.Qualifier;
+import org.springframework.boot.autoconfigure.data.redis.RedisProperties;
 import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.Configuration;
 import org.springframework.data.redis.connection.RedisConnectionFactory;
+import org.springframework.data.redis.connection.RedisPassword;
+import org.springframework.data.redis.connection.RedisStandaloneConfiguration;
+import org.springframework.data.redis.connection.lettuce.LettuceClientConfiguration;
 import org.springframework.data.redis.connection.lettuce.LettuceConnectionFactory;
 import org.springframework.data.redis.core.RedisTemplate;
 import org.springframework.data.redis.serializer.GenericJackson2JsonRedisSerializer;
 import org.springframework.data.redis.serializer.StringRedisSerializer;
-import org.springframework.boot.autoconfigure.data.redis.RedisProperties;
 
 import com.fasterxml.jackson.databind.ObjectMapper;
 
@@ -26,9 +31,28 @@ public class RedisConfig {
      */
     @Bean
     public RedisConnectionFactory redisConnectionFactory(RedisProperties redisProperties) {
+        RedisStandaloneConfiguration standaloneConfig = new RedisStandaloneConfiguration();
+        standaloneConfig.setHostName(redisProperties.getHost());
+        standaloneConfig.setPort(redisProperties.getPort());
+        String password = redisProperties.getPassword();
+        if (password != null && !password.isBlank()) {
+            standaloneConfig.setPassword(RedisPassword.of(password));
+        }
+
+        LettuceClientConfiguration.LettuceClientConfigurationBuilder builder =
+            LettuceClientConfiguration.builder();
+        RedisProperties.Ssl ssl = redisProperties.getSsl();
+        if (ssl != null && ssl.isEnabled()) {
+            builder.useSsl();
+        }
+        if (redisProperties.getTimeout() != null) {
+            builder.commandTimeout(redisProperties.getTimeout());
+            builder.shutdownTimeout(Duration.ofMillis(Math.max(0, redisProperties.getTimeout().toMillis())));
+        }
+
         LettuceConnectionFactory factory = new LettuceConnectionFactory(
-            redisProperties.getHost(),
-            redisProperties.getPort()
+            standaloneConfig,
+            builder.build()
         );
 
         // 연결 검증 활성화
@@ -47,7 +71,7 @@ public class RedisConfig {
     @Bean
     public RedisTemplate<String, Object> redisTemplate(
         RedisConnectionFactory connectionFactory,
-        @Qualifier("redisObjectMapper") ObjectMapper redisObjectMapper  // ✅ 별도 Bean 주입
+        @Qualifier("redisObjectMapper") ObjectMapper redisObjectMapper
     ) {
         RedisTemplate<String, Object> template = new RedisTemplate<>();
         template.setConnectionFactory(connectionFactory);
