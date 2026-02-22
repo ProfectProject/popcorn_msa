@@ -2,16 +2,17 @@ package com.popcorn.order.kafka.consumer;
 
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.kafka.annotation.KafkaListener;
-import org.springframework.kafka.support.KafkaHeaders;
-import org.springframework.messaging.handler.annotation.Header;
 import org.springframework.stereotype.Component;
-import org.springframework.kafka.support.Acknowledgment;
 
 @Slf4j
 @Component
 public class TestTopicConsumer {
 
-    @KafkaListener(topics = "test-topic")
+    @KafkaListener(
+            topics = "${kafka.test-topic.name:test-topic}",
+            groupId = "${kafka.test-topic.group-id:order-test-topic-cg}",
+            autoStartup = "${kafka.test-topic.enabled:false}"
+    )
     public void listen(String message) {
         try {
             log.info("메시지 수신: {}", message);
@@ -24,4 +25,3 @@ public class TestTopicConsumer {
         }
     }
 }
-
