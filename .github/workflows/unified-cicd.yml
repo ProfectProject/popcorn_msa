@@ -43,6 +43,8 @@ jobs:
               - 'gateway/**'
             checkIns:
               - 'checkIns/**'
+            coupon:
+              - 'coupon/**'
             common-lib:
               - 'common-lib/**'
             build-config:
@@ -78,9 +80,12 @@ jobs:
           if [[ "${{ steps.filter.outputs.checkIns }}" == "true" ]]; then
             services+=("checkIns")
           fi
+          if [[ "${{ steps.filter.outputs.coupon }}" == "true" ]]; then
+            services+=("coupon")
+          fi
 
           if [[ "${{ steps.filter.outputs.common-lib }}" == "true" ]] || [[ "${{ steps.filter.outputs.build-config }}" == "true" ]]; then
-            services=("users" "stores" "order" "orderQuery" "payment" "gateway" "checkIns")
+            services=("users" "stores" "order" "orderQuery" "payment" "gateway" "checkIns" "coupon")
           fi
           if [[ ${#services[@]} -eq 0 ]]; then
             echo 'has_changes=false' >> "$GITHUB_OUTPUT"
@@ -254,6 +259,10 @@ jobs:
             echo "ecr_repo=goorm-popcorn-checkin" >> $GITHUB_OUTPUT
             echo "task_def_file=checkIns/goorm-popcorn-dev-checkin-service.json" >> $GITHUB_OUTPUT
             echo "container_name=checkin-service" >> $GITHUB_OUTPUT
+          elif [ "${{ matrix.service }}" == "coupon" ]; then
+            echo "ecr_repo=goorm-popcorn-coupon" >> $GITHUB_OUTPUT
+            echo "task_def_file=coupon/goorm-popcorn-dev-coupon-service.json" >> $GITHUB_OUTPUT
+            echo "container_name=coupon-service" >> $GITHUB_OUTPUT
           else
             echo "ecr_repo=goorm-popcorn-${{ matrix.service }}" >> $GITHUB_OUTPUT
             echo "task_def_file=${{ matrix.service }}/goorm-popcorn-dev-${{ matrix.service }}.json" >> $GITHUB_OUTPUT
@@ -495,6 +504,7 @@ jobs:
               payment)    key="payment" ;;
               gateway)    key="gateway" ;;
               checkIns)   key="checkIns" ;;
+              coupon)     key="coupon" ;;
               *)
                 echo "Unknown service key: $svc"
                 exit 1
