@@ -42,7 +42,7 @@ public class StoreKafkaConfig {
     @Value("${popcorn.kafka.topics.storeRequests:store-requests}")
     private String storeRequestsTopic;
 
-    @Value("${popcorn.kafka.partitions.storeRequests:6}")
+    @Value("${popcorn.kafka.partitions.storeRequests:12}")
     private int storeRequestsPartitions;
 
     @Value("${popcorn.kafka.topic.replicas:1}")

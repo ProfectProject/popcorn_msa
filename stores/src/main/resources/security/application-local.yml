@@ -123,6 +123,7 @@ popcorn:
       replicas: ${KAFKA_TOPIC_REPLICAS:1}
     partitions:
       storeEvents: ${STORE_EVENTS_PARTITIONS:12}
+      storeRequests: ${STORE_REQUESTS_PARTITIONS:12}
 
 management:
   endpoints:
