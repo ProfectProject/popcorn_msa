@@ -3,11 +3,12 @@ package com.popcorn.store.config;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import com.fasterxml.jackson.datatype.jsr310.JavaTimeModule;
 import io.lettuce.core.ClientOptions;
+import io.lettuce.core.SocketOptions;
 import io.lettuce.core.resource.ClientResources;
 import io.lettuce.core.resource.DefaultClientResources;
 import lombok.extern.slf4j.Slf4j;
+import org.springframework.boot.autoconfigure.data.redis.RedisProperties;
 import org.springframework.beans.factory.annotation.Qualifier;
-import org.springframework.beans.factory.annotation.Value;
 import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.Configuration;
 import org.springframework.context.annotation.Primary;
@@ -19,8 +20,10 @@ import org.springframework.data.redis.core.RedisTemplate;
 import org.springframework.data.redis.core.StringRedisTemplate;
 import org.springframework.data.redis.serializer.GenericJackson2JsonRedisSerializer;
 import org.springframework.data.redis.serializer.StringRedisSerializer;
+import org.springframework.util.StringUtils;
 
 import java.time.Duration;
+import java.util.Optional;
 
 /**
  * 🚀 극한 성능 최적화된 Redis 설정
@@ -33,17 +36,7 @@ import java.time.Duration;
 @Slf4j
 public class OptimizedRedisConfig {
 
-    @Value("${spring.data.redis.host:localhost}")
-    private String redisHost;
-
-    @Value("${spring.data.redis.port:6379}")
-    private int redisPort;
-
-    @Value("${spring.data.redis.password:}")
-    private String redisPassword;
-
-    @Value("${spring.data.redis.database:0}")
-    private int redisDatabase;
+    // no direct fields necessary; configuration values are resolved via RedisProperties and defaults
 
     @Bean(destroyMethod = "shutdown")
     public ClientResources lettuceClientResources() {
@@ -59,10 +52,19 @@ public class OptimizedRedisConfig {
     }
 
     @Bean
-    public LettuceConnectionFactory redisConnectionFactory(ClientResources clientResources) {
+    public LettuceConnectionFactory redisConnectionFactory(ClientResources clientResources,
+                                                          RedisProperties redisProperties) {
         // 🚀 성능 최적화된 클라이언트 옵션
+        Duration connectTimeout = Optional.ofNullable(redisProperties.getConnectTimeout())
+                .orElse(Duration.ofSeconds(1));
+
+        SocketOptions socketOptions = SocketOptions.builder()
+                .connectTimeout(connectTimeout)
+                .build();
+
         ClientOptions clientOptions = ClientOptions.builder()
                 .autoReconnect(true)
+                .socketOptions(socketOptions)
                 .pingBeforeActivateConnection(false)  // 연결 활성화 전 ping 비활성화 (성능 향상)
                 .build();
 
@@ -79,25 +81,50 @@ public class OptimizedRedisConfig {
         poolConfig.setTestOnReturn(false);    // 성능 향상을 위해 비활성화
         poolConfig.setTestWhileIdle(true);    // 유휴 중에만 검사
 
-        LettucePoolingClientConfiguration clientConfig = LettucePoolingClientConfiguration.builder()
-                .poolConfig(poolConfig)
-                .clientOptions(clientOptions)
-                .clientResources(clientResources)
-                .commandTimeout(Duration.ofMillis(2000))  // 명령 타임아웃
-                .build();
+        Duration commandTimeout = Optional.ofNullable(redisProperties.getTimeout())
+                .orElse(Duration.ofSeconds(2));
+
+        LettucePoolingClientConfiguration.LettucePoolingClientConfigurationBuilder builder =
+                LettucePoolingClientConfiguration.builder()
+                        .poolConfig(poolConfig)
+                        .clientOptions(clientOptions)
+                        .clientResources(clientResources)
+                        .commandTimeout(commandTimeout);
+
+        boolean sslEnabled = Optional.ofNullable(redisProperties.getSsl())
+                .map(RedisProperties.Ssl::isEnabled)
+                .orElse(false);
+
+        if (sslEnabled) {
+            builder.useSsl();
+        }
+
+        LettucePoolingClientConfiguration clientConfig = builder.build();
 
         // Redis 서버 설정
-        RedisStandaloneConfiguration serverConfig = new RedisStandaloneConfiguration(redisHost, redisPort);
-        if (redisPassword != null && !redisPassword.trim().isEmpty()) {
-            serverConfig.setPassword(redisPassword);
+        RedisStandaloneConfiguration serverConfig = new RedisStandaloneConfiguration();
+        String host = redisProperties.getHost();
+        if (!StringUtils.hasText(host)) {
+            host = "localhost";
         }
-        serverConfig.setDatabase(redisDatabase);
+        serverConfig.setHostName(host);
+        serverConfig.setPort(redisProperties.getPort());
+        serverConfig.setDatabase(redisProperties.getDatabase());
+        String password = redisProperties.getPassword();
+        if (StringUtils.hasText(password)) {
+            serverConfig.setPassword(password);
+        }
+        String username = redisProperties.getUsername();
+        if (StringUtils.hasText(username)) {
+            serverConfig.setUsername(username);
+        }
+        serverConfig.setSsl(sslEnabled);
 
         LettuceConnectionFactory factory = new LettuceConnectionFactory(serverConfig, clientConfig);
         factory.setValidateConnection(false);  // 🚀 연결 검증 비활성화로 성능 향상
 
         log.info("🚀 극한 성능 최적화된 Redis 연결 팩토리 생성 완료 - host: {}, port: {}, database: {}",
-                 redisHost, redisPort, redisDatabase);
+                 serverConfig.getHostName(), serverConfig.getPort(), serverConfig.getDatabase());
 
         return factory;
     }
