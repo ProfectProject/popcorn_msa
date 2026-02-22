@@ -94,6 +94,9 @@ public class SecurityConfig {
         configuration.setAllowedOriginPatterns(Arrays.asList(
             "http://localhost:*",     // 로컬 개발 서버
             "http://127.0.0.1:*",     // 로컬호스트
+            "https://api.goormpopcorn.shop",
+            "https://goormpopcorn.shop",
+            "https://www.goormpopcorn.shop",
             "https://*.vercel.app",   // Vercel 배포
             "https://*.netlify.app"   // Netlify 배포
         ));
