@@ -25,7 +25,10 @@ public class PaymentEventConsumer {
     private final OrderCommandService orderCommandService;
     private final StoreRequestsProducer storeRequestsProducer;
 
-    @KafkaListener(topics = "payment-events", groupId = "order-payment-cg")
+    @KafkaListener(
+            topics = "payment-events",
+            groupId = "${kafka.consumer.groups.payment:order-payment-cg}"
+    )
     public void storeReserveConsumer(String kafkaMessage){
         log.info("🔔 카프카 메세지 수신 - PaymentEventConsumer: {}", kafkaMessage);
 

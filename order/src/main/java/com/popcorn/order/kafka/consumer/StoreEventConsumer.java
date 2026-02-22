@@ -24,7 +24,10 @@ import lombok.extern.slf4j.Slf4j;
 public class StoreEventConsumer {
     private final OrderCommandService orderCommandService;
 
-    @KafkaListener(topics = "store-events", groupId = "order-reservation-cg")
+    @KafkaListener(
+            topics = "store-events",
+            groupId = "${kafka.consumer.groups.store-reservation:order-reservation-cg}"
+    )
     public void storeReserveConsumer(String kafkaMessage){
         log.info("카프카 메세지-StoreEventConsumer:{}",kafkaMessage);
 

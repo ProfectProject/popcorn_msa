@@ -139,6 +139,36 @@ jwt:
   expiration: 3600000
   refresh-expiration-ms: 1209600000
 
+# Kafka 설정 (공통 KafkaConfig 사용)
+kafka:
+  enabled: true
+  bootstrap-servers: ${KAFKA_BOOTSTRAP_SERVERS}
+  consumer:
+    group-id: order-service-group
+    concurrency: 3
+    max-poll-records: 500
+    session-timeout-ms: 30000
+    heartbeat-interval-ms: 10000
+    auto-offset-reset: earliest
+    enable-auto-commit: false
+    groups:
+      store-reservation: order-reservation-cg
+      payment: order-payment-cg
+  producer:
+    acks: all
+    retries: 2147483647
+    enable-idempotence: true
+    max-in-flight-requests-per-connection: 5
+    compression-type: snappy
+    batch-size: 16384
+    linger-ms: 5
+    request-timeout-ms: 30000
+    delivery-timeout-ms: 120000
+  test-topic:
+    enabled: false
+    name: test-topic
+    group-id: order-test-topic-cg
+
 springdoc:
   api-docs:
     enabled: true
