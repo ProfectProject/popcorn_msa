@@ -76,7 +76,6 @@ public class OptimizedRedisConfig {
         poolConfig.setMinIdle(15);      // 최소 유휴 연결
         poolConfig.setMaxWait(Duration.ofMillis(500));  // 최대 대기 시간
         poolConfig.setTimeBetweenEvictionRuns(Duration.ofMinutes(1));  // 유휴 연결 정리 주기
-        poolConfig.setMinEvictableIdleTime(Duration.ofMinutes(5));     // 최소 유휴 시간
         poolConfig.setTestOnBorrow(false);    // 성능 향상을 위해 비활성화
         poolConfig.setTestOnReturn(false);    // 성능 향상을 위해 비활성화
         poolConfig.setTestWhileIdle(true);    // 유휴 중에만 검사
@@ -118,7 +117,6 @@ public class OptimizedRedisConfig {
         if (StringUtils.hasText(username)) {
             serverConfig.setUsername(username);
         }
-        serverConfig.setSsl(sslEnabled);
 
         LettuceConnectionFactory factory = new LettuceConnectionFactory(serverConfig, clientConfig);
         factory.setValidateConnection(false);  // 🚀 연결 검증 비활성화로 성능 향상
