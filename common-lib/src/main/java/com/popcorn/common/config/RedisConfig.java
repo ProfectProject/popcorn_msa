@@ -13,6 +13,7 @@ import org.springframework.data.redis.connection.lettuce.LettuceConnectionFactor
 import org.springframework.data.redis.core.RedisTemplate;
 import org.springframework.data.redis.serializer.GenericJackson2JsonRedisSerializer;
 import org.springframework.data.redis.serializer.StringRedisSerializer;
+import org.springframework.util.StringUtils;
 
 @Configuration
 public class RedisConfig {
@@ -20,22 +21,38 @@ public class RedisConfig {
     @Bean
     public RedisConnectionFactory redisConnectionFactory(RedisProperties redisProperties) {
 
-        // 1) host/port/password 세팅
+        // 1) host/port/database/credentials
         RedisStandaloneConfiguration conf =
                 new RedisStandaloneConfiguration(redisProperties.getHost(), redisProperties.getPort());
+        conf.setDatabase(redisProperties.getDatabase());
 
-        if (redisProperties.getPassword() != null && !redisProperties.getPassword().isEmpty()) {
+        if (StringUtils.hasText(redisProperties.getUsername())) {
+            conf.setUsername(redisProperties.getUsername());
+        }
+
+        if (StringUtils.hasText(redisProperties.getPassword())) {
             conf.setPassword(RedisPassword.of(redisProperties.getPassword()));
         }
 
-        // 2) SSL/TLS 적용 (ElastiCache "전송 중 암호화 필수" 대응)
-        LettuceClientConfiguration clientConfig = LettuceClientConfiguration.builder()
-                .useSsl()
-                .build();
+        // 2) client options from spring.data.redis.*
+        LettuceClientConfiguration.LettuceClientConfigurationBuilder clientBuilder =
+                LettuceClientConfiguration.builder();
+
+        if (redisProperties.getTimeout() != null) {
+            clientBuilder.commandTimeout(redisProperties.getTimeout());
+        }
+        if (redisProperties.getLettuce() != null && redisProperties.getLettuce().getShutdownTimeout() != null) {
+            clientBuilder.shutdownTimeout(redisProperties.getLettuce().getShutdownTimeout());
+        }
+        if (redisProperties.getSsl() != null && redisProperties.getSsl().isEnabled()) {
+            clientBuilder.useSsl();
+        }
+
+        LettuceClientConfiguration clientConfig = clientBuilder.build();
 
         LettuceConnectionFactory factory = new LettuceConnectionFactory(conf, clientConfig);
 
-        // 기존 옵션 유지
+        // keep previous factory options
         factory.setValidateConnection(true);
         factory.setShareNativeConnection(true);
 
