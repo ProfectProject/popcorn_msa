@@ -390,7 +390,7 @@ jobs:
           DISCORD_WEBHOOK: ${{ secrets.DISCORD_WEBHOOK }}
         with:
           args: |
-            ✅ Deploy SUCCESS by.yeon
+            ✅ Deploy SUCCESS
             - 👤 Author: `${{ github.actor }}`
             - Service: ${{ matrix.service }}
             - Repo: ${{ steps.vars.outputs.ecr_repo }}
@@ -405,7 +405,7 @@ jobs:
           DISCORD_WEBHOOK: ${{ secrets.DISCORD_WEBHOOK }}
         with:
           args: |
-            ❌ Deploy FAILED by.yeon
+            ❌ Deploy FAILED
             - 👤 Author: `${{ github.actor }}`
             - Service: ${{ matrix.service }}
             - Repo: ${{ steps.vars.outputs.ecr_repo }}
