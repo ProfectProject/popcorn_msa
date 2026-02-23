@@ -94,17 +94,18 @@ class OrderEventListener(
         logger.info { "🎟️ 주문 생성 이벤트 처리: orderId=${event.orderId}, userCouponId=${event.userCouponId}" }
 
         try {
+            val orderId = event.orderId?.toLongOrNull()
             // 쿠폰이 포함된 주문인 경우 쿠폰 사용 처리
-            if (event.userCouponId != null && event.expectedDiscountAmount != null) {
+            if (event.userCouponId != null && event.expectedDiscountAmount != null && orderId != null && event.userId != null && event.totalAmount != null) {
                 couponCommandService.useCoupon(
                     userId = event.userId,
                     userCouponId = event.userCouponId,
-                    orderId = event.orderId,
+                    orderId = orderId,
                     orderAmount = event.totalAmount
                 )
                 logger.info { "✅ 주문 쿠폰 예약 완료: orderId=${event.orderId}, userCouponId=${event.userCouponId}" }
             } else {
-                logger.debug { "ℹ️ 쿠폰이 없는 주문: orderId=${event.orderId}" }
+                logger.debug { "ℹ️ 쿠폰 처리 대상이 아닌 주문 이벤트: orderId=${event.orderId}" }
             }
 
         } catch (e: Exception) {
@@ -120,11 +121,12 @@ class OrderEventListener(
         logger.info { "🔄 주문 취소 이벤트 처리: orderId=${event.orderId}, userCouponId=${event.userCouponId}" }
 
         try {
+            val orderId = event.orderId?.toLongOrNull()
             // 쿠폰이 사용된 주문인 경우 쿠폰 예약 해제
-            if (event.userCouponId != null) {
+            if (event.userCouponId != null && orderId != null) {
                 couponCommandService.cancelCouponUsage(
                     userCouponId = event.userCouponId,
-                    orderId = event.orderId
+                    orderId = orderId
                 )
                 logger.info { "✅ 주문 취소 쿠폰 해제 완료: orderId=${event.orderId}, userCouponId=${event.userCouponId}" }
             }
