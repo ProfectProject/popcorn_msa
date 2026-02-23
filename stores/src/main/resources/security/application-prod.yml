@@ -92,9 +92,10 @@ popcorn:
     topics:
       storeEvents: store-events
     topic:
-      replicas: ${KAFKA_TOPIC_REPLICAS}
+      replicas: ${KAFKA_TOPIC_REPLICAS:3}
     partitions:
       storeEvents: ${STORE_EVENTS_PARTITIONS}
+      storeRequests: ${STORE_REQUESTS_PARTITIONS:12}
 
 store:
   cors:

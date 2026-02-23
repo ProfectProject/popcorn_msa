@@ -117,3 +117,4 @@ popcorn:
       replicas: ${KAFKA_TOPIC_REPLICAS}
     partitions:
       storeEvents: ${STORE_EVENTS_PARTITIONS}
+      storeRequests: ${STORE_REQUESTS_PARTITIONS}

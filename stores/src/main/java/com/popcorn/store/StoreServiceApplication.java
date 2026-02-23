@@ -10,6 +10,7 @@ import com.popcorn.common.config.DataSourceConfig;
 import com.popcorn.common.config.JdbcTemplateConfig;
 
 @SpringBootApplication
+@ComponentScan(basePackages = {"com.popcorn.store", "com.popcorn.common"})
 @EnableScheduling
 public class StoreServiceApplication {
 
