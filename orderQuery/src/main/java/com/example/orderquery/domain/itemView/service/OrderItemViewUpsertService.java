@@ -47,12 +47,11 @@ public class OrderItemViewUpsertService {
                     orderId, popupId);
             return;
         }
-
+        Long resolvedUserId = userId != null ? userId : 0L;
         if (userId == null) {
-            log.warn("Order item view creation skipped: missing userId (orderId={}, popupId={})",
-                    orderId, popupId);
-            return;
+            log.warn("Order item view userId missing - fallback to 0 (orderId={}, popupId={})", orderId, popupId);
         }
+
 
         UUID resolvedStoreId = resolveStoreId(storeId, popupId);
         if (resolvedStoreId == null) {
@@ -90,7 +89,7 @@ public class OrderItemViewUpsertService {
                     .id(id)
                     .orderId(orderId)
                     .storeId(resolvedStoreId)
-                    .userId(userId)
+                    .userId(resolvedUserId)
                     .orderNo(orderNo)
                     .orderStatus(statusToUse)
                     .orderedAt(effectiveOrderedAt)

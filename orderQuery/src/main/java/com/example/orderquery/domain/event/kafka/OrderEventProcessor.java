@@ -86,7 +86,7 @@ public class OrderEventProcessor {
         }
 
         UUID storeId = parseUUID(payload, "storeId", "store_id");
-        Long userId = parseLong(payload, "userId", "user_id");
+        Long userId = parseLong(payload, "userId", "user_id", "customerId", "customer_id", "memberId", "member_id");
         String orderNo = getString(payload, "orderNo", "order_no");
         LocalDateTime orderedAt = parseLocalDateTime(payload, "orderedAt", "createdAt", "timestamp", "occurredAt");
         OrderStatus status = parseOrderStatus(payload, "orderStatus", "status");
