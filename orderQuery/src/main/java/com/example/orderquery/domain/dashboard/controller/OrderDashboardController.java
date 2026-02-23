@@ -39,6 +39,7 @@ import java.util.UUID;
 @Slf4j
 @Tag(name = "📊 Order Dashboard", description = "주문 대시보드 - 관리자/매니저 전용 조회 API")
 @SecurityRequirement(name = "bearerAuth")
+@PreAuthorize("hasAnyRole('MANAGER', 'OWNER', 'ADMIN')")
 public class OrderDashboardController extends BaseController {
 
     private final OrderDashboardService orderDashboardService;
