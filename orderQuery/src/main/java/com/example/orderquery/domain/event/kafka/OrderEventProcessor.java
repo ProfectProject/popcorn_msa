@@ -93,11 +93,9 @@ public class OrderEventProcessor {
         List<OrderLine> lines = parseLines(payload);
         boolean hasReservation = detectReservation(payload, lines, getString(payload, "orderType", "order_type"));
         boolean hasGoods = detectGoods(payload, lines, getString(payload, "orderType", "order_type"));
-
         boolean applied = orderSummaryDeltaService.applyOrderCreated(eventId, orderId, popupId, hasReservation, hasGoods, eventTime);
         if (!applied) {
-            log.debug("ORDER_CREATED skipped: event already applied or summary missing (orderId={}, popupId={})", orderId, popupId);
-            return;
+            log.debug("ORDER_CREATED summary update skipped: event already applied or summary missing (orderId={}, popupId={})", orderId, popupId);
         }
 
         orderItemViewUpsertService.createFromOrder(storeId, popupId, orderId, userId, orderNo, orderedAt, status,
@@ -112,11 +110,20 @@ public class OrderEventProcessor {
             return;
         }
 
+        UUID storeId = parseUUID(payload, "storeId", "store_id");
+        Long userId = parseLong(payload, "userId", "user_id", "customerId", "customer_id", "memberId", "member_id");
+        String orderNo = getString(payload, "orderNo", "order_no");
+        LocalDateTime orderedAt = parseLocalDateTime(payload, "orderedAt", "createdAt", "timestamp", "occurredAt");
+        OrderStatus status = parseOrderStatus(payload, "orderStatus", "status");
+
         List<OrderLine> lines = parseLines(payload);
         boolean hasReservation = detectReservation(payload, lines, getString(payload, "orderType", "order_type"));
         boolean hasGoods = detectGoods(payload, lines, getString(payload, "orderType", "order_type"));
 
         orderSummaryDeltaService.applyOrderPaid(eventId, orderId, popupId, hasReservation, hasGoods, eventTime);
+
+        orderItemViewUpsertService.createFromOrder(storeId, popupId, orderId, userId, orderNo, orderedAt, status,
+                mapToItemLines(lines));
     }
 
     private void handleOrderStatusUpdated(Map<String, Object> payload) {
