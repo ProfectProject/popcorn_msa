@@ -32,7 +32,7 @@ public class PopupDetailCacheManager {
 
     private static final Logger log = LoggerFactory.getLogger(PopupDetailCacheManager.class);
 
-    private static final String POPUP_DETAIL_KEY_FORMAT = "popup:%s:detail";
+    private static final String POPUP_DETAIL_KEY_FORMAT = "popup:%s:detail:v2";
     private static final String POPUP_METRICS_KEY = "popup:cache:metrics";
 
     private final RedisTemplate<String, Object> redisTemplate;
@@ -143,8 +143,8 @@ public class PopupDetailCacheManager {
         log.info("🧹 [캐시 정리] 만료된 캐시 정리 시작");
 
         try {
-            // popup:*:detail 패턴의 키들 중 TTL이 없는 것들 정리
-            var keys = redisTemplate.keys("popup:*:detail");
+            // popup:*:detail:v2 패턴의 키들 중 TTL이 없는 것들 정리
+            var keys = redisTemplate.keys("popup:*:detail:v2");
             int cleanedCount = 0;
 
             if (keys != null) {

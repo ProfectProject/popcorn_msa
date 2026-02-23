@@ -2,14 +2,16 @@ package com.popcorn.store.domain.popup.service;
 
 import java.time.LocalDateTime;
 import java.time.temporal.ChronoUnit;
+import java.time.Duration;
 import java.util.List;
 import java.util.UUID;
 
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
+import org.springframework.data.redis.core.RedisTemplate;
 import org.springframework.stereotype.Service;
 
-import com.popcorn.common.annotation.RedisCacheResult;
+import com.fasterxml.jackson.databind.ObjectMapper;
 import com.popcorn.store.domain.popup.dto.query.PopupDetailQuery;
 import com.popcorn.store.domain.popup.dto.query.response.PopupDetailResponse;
 import com.popcorn.store.domain.popup.dto.query.response.PopupScheduleListResponse;
@@ -28,16 +30,27 @@ import lombok.RequiredArgsConstructor;
 public class PopupDetailCacheService {
 
     private static final Logger log = LoggerFactory.getLogger(PopupDetailCacheService.class);
+    private static final String POPUP_DETAIL_CACHE_KEY_FORMAT = "popup:%s:detail:v2";
 
     private final PopupQueryService popupQueryService;
+    private final RedisTemplate<String, Object> redisTemplate;
+    private final ObjectMapper objectMapper;
 
     /**
      * 📊 지능적 TTL을 가진 팝업 상세 캐시
      */
     public PopupDetailResponse getPopupDetailCached(PopupDetailQuery query) {
         UUID popupId = query.getPopupId();
+        if (popupId == null) {
+            return null;
+        }
 
-        // 1. DB에서 조회
+        PopupDetailResponse cached = getCachedPopupDetail(popupId);
+        if (cached != null) {
+            return cached;
+        }
+
+        // 1. 캐시 미스 시 DB 조회
         PopupDetailResponse response = popupQueryService.getPopupDetail(query);
         if (response == null) {
             return null;
@@ -47,7 +60,34 @@ public class PopupDetailCacheService {
         int intelligentTtl = calculateIntelligentTtl(response);
 
         // 3. 수동으로 캐시 저장 (동적 TTL 적용)
-        return cacheWithIntelligentTtl(response, intelligentTtl);
+        cacheWithIntelligentTtl(response, intelligentTtl);
+
+        // 최초 조회에서는 DB에서 받은 값을 그대로 반환하여 중복 DB fallback을 줄인다.
+        return response;
+    }
+
+    private PopupDetailResponse getCachedPopupDetail(UUID popupId) {
+        String key = buildCacheKey(popupId);
+
+        try {
+            Object cached = redisTemplate.opsForValue().get(key);
+            if (cached == null) {
+                return null;
+            }
+
+            log.debug("✅ [캐시 히트] popupId={}, key={}", popupId, key);
+            if (cached instanceof String jsonString) {
+                return objectMapper.readValue(jsonString, PopupDetailResponse.class);
+            }
+            return objectMapper.convertValue(cached, PopupDetailResponse.class);
+        } catch (Exception e) {
+            log.warn("⚠️ [캐시 조회 실패] popupId={}, key={}, error={}", popupId, key, e.getMessage());
+            return null;
+        }
+    }
+
+    public String buildCacheKey(UUID popupId) {
+        return String.format(POPUP_DETAIL_CACHE_KEY_FORMAT, popupId);
     }
 
     /**
@@ -99,18 +139,23 @@ public class PopupDetailCacheService {
     /**
      * 🎯 동적 TTL로 캐시 저장
      */
-    @RedisCacheResult(
-        cacheName = "popup",
-        keyExpression = "#response.id + ':detail:v2'",
-        condition = "#ttlSeconds > 0"
-    )
-    private PopupDetailResponse cacheWithIntelligentTtl(PopupDetailResponse response, int ttlSeconds) {
+    private void cacheWithIntelligentTtl(PopupDetailResponse response, int ttlSeconds) {
+        if (ttlSeconds <= 0) {
+            return;
+        }
+
+        String key = buildCacheKey(response.getId());
+
         // remainingCapacity는 실시간성이 필요한 값이라 캐시에서 제외
         PopupDetailResponse cachedResponse = stripRemainingCapacity(response);
 
-        log.debug("💾 [캐시 저장] popupId={}, ttl={}초", response.getId(), ttlSeconds);
-
-        return cachedResponse;
+        try {
+            String jsonValue = objectMapper.writeValueAsString(cachedResponse);
+            redisTemplate.opsForValue().set(key, jsonValue, Duration.ofSeconds(ttlSeconds));
+            log.debug("💾 [캐시 저장] popupId={}, ttl={}초, key={}", response.getId(), ttlSeconds, key);
+        } catch (Exception e) {
+            log.warn("⚠️ [캐시 저장 실패] popupId={}, key={}, error={}", response.getId(), key, e.getMessage());
+        }
     }
 
     /**

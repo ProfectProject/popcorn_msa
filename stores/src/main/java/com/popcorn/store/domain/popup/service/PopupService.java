@@ -99,6 +99,9 @@ public class PopupService {
 			if (item == null || item.getId() == null) {
 				continue;
 			}
+			if (item.getRemainingCapacity() != null) {
+				remainingBySchedule.put(item.getId(), item.getRemainingCapacity());
+			}
 			Integer remaining = getRemainingCapacityFromRedis(item.getId());
 			if (remaining != null) {
 				remainingBySchedule.put(item.getId(), remaining);
