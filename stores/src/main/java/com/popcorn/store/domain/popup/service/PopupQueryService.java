@@ -29,15 +29,12 @@ public class PopupQueryService {
 
 	private final PopupQueryRepository popupQueryRepository;
 	private final PopupScheduleQueryRepository popupScheduleQueryRepository;
+	private final PopupListCacheService popupListCacheService;
 
 	private static final int DEFAULT_PAGE = 1;
 	private static final int DEFAULT_SIZE = 20;
 	private static final int MAX_SIZE = 100;
 
-	@Cacheable(
-			value = "popupList",
-			key = "#query.regionId + '_' + #query.category + '_' + #query.keyword + '_' + #query.storeId + '_' + #query.page + '_' + #query.size + '_' + #query.withTotal"
-	)
 	public PopupListResponse getPopups(PopupListQuery query) {
 		Long regionId = query.getRegionId();
 		PopupCategory category = query.getCategory();
@@ -53,6 +50,25 @@ public class PopupQueryService {
 
 		String categoryValue = category == null ? null : category.name();
 
+		// ⚡ 캐시 우선 조회 (인기 목록 또는 일반 캐시)
+		String cacheKey = popupListCacheService.generateCacheKey(
+				regionId, categoryValue, keyword, storeId, page, size);
+
+		// 필터링이 없는 첫 페이지는 인기 목록 캐시 사용
+		if (isPopularListQuery(regionId, categoryValue, keyword, storeId, normalizedPage)) {
+			PopupListResponse cachedPopular = popupListCacheService.getPopularPopupList();
+			if (cachedPopular != null) {
+				return cachedPopular;
+			}
+		}
+
+		// 일반 캐시 조회
+		PopupListResponse cached = popupListCacheService.getCachedPopupList(cacheKey);
+		if (cached != null) {
+			return cached;
+		}
+
+		// ⚡ 캐시 미스 시 데이터베이스 조회
 		long total = withTotal
 				? popupQueryRepository.countPopups(regionId, categoryValue, keyword, storeId)
 				: -1L;
@@ -74,12 +90,30 @@ public class PopupQueryService {
 						.build())
 				.toList();
 
-		return PopupListResponse.builder()
+		PopupListResponse response = PopupListResponse.builder()
 				.items(items)
 				.page(normalizedPage)
 				.size(normalizedSize)
 				.total(total)
 				.build();
+
+		// ⚡ 결과를 캐시에 저장
+		if (isPopularListQuery(regionId, categoryValue, keyword, storeId, normalizedPage)) {
+			popupListCacheService.cachePopularPopupList(response);
+		} else {
+			popupListCacheService.cachePopupList(cacheKey, response);
+		}
+
+		return response;
+	}
+
+	/**
+	 * 인기 목록 쿼리인지 판단 (필터링이 없는 첫 페이지)
+	 */
+	private boolean isPopularListQuery(Long regionId, String category, String keyword,
+										UUID storeId, int page) {
+		return regionId == null && category == null && keyword == null &&
+			   storeId == null && page == 1;
 	}
 
 	public PopupDetailResponse getPopupDetail(PopupDetailQuery query) {

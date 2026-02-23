@@ -23,16 +23,21 @@ public interface PopupQueryRepository extends Repository<Popup, UUID> {
 			       p.reservation_open_at AS reservationOpenAt,
 			       p.address_road AS addressRoad,
 			       p.address_detail AS addressDetail,
-			       MIN(ps.start_at) AS eventStartAt,
-			       MAX(ps.end_at) AS eventEndAt
+			       COALESCE(sched.eventStartAt, p.reservation_open_at) AS eventStartAt,
+			       COALESCE(sched.eventEndAt, p.reservation_open_at) AS eventEndAt
 			  FROM popups p
-			  LEFT JOIN popup_schedules ps ON ps.popup_id = p.popup_id AND ps.deleted_at IS NULL
+			  LEFT JOIN (
+			      SELECT ps.popup_id,
+			             MIN(ps.start_at) AS eventStartAt,
+			             MAX(ps.end_at) AS eventEndAt
+			        FROM popup_schedules ps
+			       WHERE ps.deleted_at IS NULL
+			       GROUP BY ps.popup_id
+			  ) sched ON sched.popup_id = p.popup_id
 			 WHERE p.deleted_at IS NULL
-			   AND (:category IS NULL OR CAST(p.category AS VARCHAR) = :category)
-			   AND (:keyword IS NULL OR UPPER(p.title) LIKE UPPER(CONCAT('%', :keyword, '%')) OR UPPER(p.description) LIKE UPPER(CONCAT('%', :keyword, '%')))
+			   AND (:category IS NULL OR p.category = :category)
+			   AND (:keyword IS NULL OR p.title ILIKE CONCAT('%', :keyword, '%') OR p.description ILIKE CONCAT('%', :keyword, '%'))
 			   AND (:storeId IS NULL OR p.store_id = :storeId)
-			 GROUP BY p.popup_id, p.store_id, p.title, p.description, p.category, p.status,
-			          p.reservation_open_at, p.address_road, p.address_detail
 			 ORDER BY p.created_at DESC
 			 LIMIT :limit OFFSET :offset
 			""", nativeQuery = true)
@@ -47,8 +52,8 @@ public interface PopupQueryRepository extends Repository<Popup, UUID> {
 			SELECT COUNT(1)
 			  FROM popups p
 			 WHERE p.deleted_at IS NULL
-			   AND (:category IS NULL OR CAST(p.category AS VARCHAR) = :category)
-			   AND (:keyword IS NULL OR UPPER(p.title) LIKE UPPER(CONCAT('%', :keyword, '%')) OR UPPER(p.description) LIKE UPPER(CONCAT('%', :keyword, '%')))
+			   AND (:category IS NULL OR p.category = :category)
+			   AND (:keyword IS NULL OR p.title ILIKE CONCAT('%', :keyword, '%') OR p.description ILIKE CONCAT('%', :keyword, '%'))
 			   AND (:storeId IS NULL OR p.store_id = :storeId)
 			""", nativeQuery = true)
 	long countPopups(@Param("regionId") Long regionId,
@@ -66,14 +71,20 @@ public interface PopupQueryRepository extends Repository<Popup, UUID> {
 			       p.reservation_open_at AS reservationOpenAt,
 			       p.address_road AS addressRoad,
 			       p.address_detail AS addressDetail,
-			       MIN(ps.start_at) AS eventStartAt,
-			       MAX(ps.end_at) AS eventEndAt
+			       COALESCE(sched.eventStartAt, p.reservation_open_at) AS eventStartAt,
+			       COALESCE(sched.eventEndAt, p.reservation_open_at) AS eventEndAt
 			  FROM popups p
-			  LEFT JOIN popup_schedules ps ON ps.popup_id = p.popup_id AND ps.deleted_at IS NULL
+			  LEFT JOIN (
+			      SELECT ps.popup_id,
+			             MIN(ps.start_at) AS eventStartAt,
+			             MAX(ps.end_at) AS eventEndAt
+			        FROM popup_schedules ps
+			       WHERE ps.deleted_at IS NULL
+			         AND ps.popup_id = :popupId
+			       GROUP BY ps.popup_id
+			  ) sched ON sched.popup_id = p.popup_id
 			 WHERE p.deleted_at IS NULL
 			   AND p.popup_id = :popupId
-			 GROUP BY p.popup_id, p.store_id, p.title, p.description, p.category, p.status,
-			          p.reservation_open_at, p.address_road, p.address_detail
 			""", nativeQuery = true)
 	Optional<PopupListView> findPopupDetail(@Param("popupId") UUID popupId);
 
@@ -87,14 +98,19 @@ public interface PopupQueryRepository extends Repository<Popup, UUID> {
 			       p.reservation_open_at AS reservationOpenAt,
 			       p.address_road AS addressRoad,
 			       p.address_detail AS addressDetail,
-			       MIN(ps.start_at) AS eventStartAt,
-			       MAX(ps.end_at) AS eventEndAt
+			       COALESCE(sched.eventStartAt, p.reservation_open_at) AS eventStartAt,
+			       COALESCE(sched.eventEndAt, p.reservation_open_at) AS eventEndAt
 			  FROM popups p
-			  LEFT JOIN popup_schedules ps ON ps.popup_id = p.popup_id AND ps.deleted_at IS NULL
+			  LEFT JOIN (
+			      SELECT ps.popup_id,
+			             MIN(ps.start_at) AS eventStartAt,
+			             MAX(ps.end_at) AS eventEndAt
+			        FROM popup_schedules ps
+			       WHERE ps.deleted_at IS NULL
+			       GROUP BY ps.popup_id
+			  ) sched ON sched.popup_id = p.popup_id
 			 WHERE p.deleted_at IS NULL
 			   AND p.status = :status
-			 GROUP BY p.popup_id, p.store_id, p.title, p.description, p.category, p.status,
-			          p.reservation_open_at, p.address_road, p.address_detail
 			 ORDER BY p.created_at DESC
 			 LIMIT :limit OFFSET :offset
 			""", nativeQuery = true)

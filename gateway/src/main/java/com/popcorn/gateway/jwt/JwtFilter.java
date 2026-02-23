@@ -117,6 +117,12 @@ public class JwtFilter implements GlobalFilter, Ordered{
             return chain.filter(exchange);
         }
 
+        // stores 공개 가격 조회 API는 JWT 없이 허용
+        if (HttpMethod.GET.equals(exchange.getRequest().getMethod()) && isPublicStorePricePath(path)) {
+            log.info("🔓 stores 공개 가격 조회 경로 통과: {}", path);
+            return chain.filter(exchange);
+        }
+
         // 결제 생성은 내부 호출/클라이언트 흐름 모두 허용 (POST /api/pay/v1/payments)
         if (HttpMethod.POST.equals(exchange.getRequest().getMethod())
                 && "/api/pay/v1/payments".equals(path)) {
@@ -232,6 +238,11 @@ public class JwtFilter implements GlobalFilter, Ordered{
     }
     private boolean isDocumentationRequest(String path) {
         return path.contains("/v3/api-docs") || path.contains("/swagger-ui") || path.contains("/webjars");
+    }
+
+    private boolean isPublicStorePricePath(String path) {
+        return (path.startsWith("/api/stores/v1/sessions/") || path.startsWith("/api/stores/v1/goods/"))
+                && path.endsWith("/price");
     }
 
     private static String sha256(String input) {
