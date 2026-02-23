@@ -13,9 +13,11 @@ import org.springframework.stereotype.Component;
 import com.popcorn.order.entity.OutboxEvent;
 import com.popcorn.order.repository.OutboxEventRepository;
 import lombok.RequiredArgsConstructor;
+import lombok.extern.slf4j.Slf4j;
 
 @Component
 @RequiredArgsConstructor
+@Slf4j
 public class PaymentRequestsProducer {
         private static final String PAYMENT_REQUESTS_TOPIC = "payment-requests";
         private static final String AGGREGATE_TYPE_ORDER = "ORDER";
@@ -71,6 +73,13 @@ public class PaymentRequestsProducer {
                 Map.of("producer", "order-service")
         );
         outboxEventRepository.save(outboxEvent);
+        log.info(
+                "[OUTBOX_SAVE] topic={}, aggregateType={}, aggregateId={}, eventType={}, outboxEventId={}",
+                PAYMENT_REQUESTS_TOPIC,
+                AGGREGATE_TYPE_ORDER,
+                order.getId(),
+                eventType,
+                outboxEvent.getEventId()
+        );
     }
 }
-

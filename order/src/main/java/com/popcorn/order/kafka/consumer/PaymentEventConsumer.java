@@ -6,6 +6,8 @@ import java.util.Objects;
 import java.util.UUID;
 
 import org.springframework.kafka.annotation.KafkaListener;
+import org.springframework.kafka.support.KafkaHeaders;
+import org.springframework.messaging.handler.annotation.Header;
 import org.springframework.stereotype.Service;
 
 import com.fasterxml.jackson.core.JsonProcessingException;
@@ -29,8 +31,15 @@ public class PaymentEventConsumer {
             topics = "payment-events",
             groupId = "${kafka.consumer.groups.payment:order-payment-cg}"
     )
-    public void storeReserveConsumer(String kafkaMessage){
-        log.info("🔔 카프카 메세지 수신 - PaymentEventConsumer: {}", kafkaMessage);
+    public void storeReserveConsumer(
+            String kafkaMessage,
+            @Header(KafkaHeaders.RECEIVED_TOPIC) String topic,
+            @Header(KafkaHeaders.RECEIVED_PARTITION) int partition,
+            @Header(KafkaHeaders.OFFSET) long offset,
+            @Header(value = KafkaHeaders.RECEIVED_KEY, required = false) String key
+    ){
+        log.info("[KAFKA_CONSUME] topic={}, partition={}, offset={}, key={}", topic, partition, offset, key);
+        log.info("PaymentEventConsumer payload={}", kafkaMessage);
 
         Map<String, Object> map = new HashMap<>();
         ObjectMapper mapper = new ObjectMapper();
