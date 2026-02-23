@@ -12,6 +12,9 @@ spring:
   config:
     activate:
       on-profile: prod
+  main:
+    banner-mode: "off"
+    log-startup-info: false
   data:
     redis:
       host: ${REDIS_HOST}
