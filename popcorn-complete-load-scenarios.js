@@ -85,6 +85,9 @@ const POPUP_LIST_COOLDOWN_MS = parseInt(__ENV.POPUP_LIST_COOLDOWN_MS || "5000", 
 const POPUP_DETAIL_TIMEOUT = __ENV.POPUP_DETAIL_TIMEOUT || "6s";
 const POPUP_DETAIL_RETRY_COUNT = parseInt(__ENV.POPUP_DETAIL_RETRY_COUNT || "0", 10);
 const POPUP_DETAIL_COOLDOWN_MS = parseInt(__ENV.POPUP_DETAIL_COOLDOWN_MS || "3000", 10);
+const POPUP_DETAIL_CIRCUIT_FAILURE_THRESHOLD = parseInt(__ENV.POPUP_DETAIL_CIRCUIT_FAILURE_THRESHOLD || "2", 10);
+const POPUP_DETAIL_CIRCUIT_RECOVERY_TIMEOUT = parseInt(__ENV.POPUP_DETAIL_CIRCUIT_RECOVERY_TIMEOUT || "15000", 10);
+const POPUP_DETAIL_FAILURE_LOG_INTERVAL_MS = parseInt(__ENV.POPUP_DETAIL_FAILURE_LOG_INTERVAL_MS || "5000", 10);
 
 // 서킷 브레이커 설정
 const CIRCUIT_FAILURE_THRESHOLD = parseInt(__ENV.CIRCUIT_FAILURE_THRESHOLD || "10", 10);
@@ -155,18 +158,21 @@ const TOKEN_REFRESH_MARGIN = 5 * 60 * 1000; // 5분 전 갱신
 
 // ===== 서킷 브레이커 관리 =====
 class CircuitBreaker {
-  constructor(name) {
+  constructor(name, failureThreshold = CIRCUIT_FAILURE_THRESHOLD, recoveryTimeout = CIRCUIT_RECOVERY_TIMEOUT, successThreshold = CIRCUIT_SUCCESS_THRESHOLD) {
     this.name = name;
     this.state = 'CLOSED'; // CLOSED, OPEN, HALF_OPEN
     this.failureCount = 0;
     this.successCount = 0;
     this.lastFailureTime = 0;
+    this.failureThreshold = failureThreshold;
+    this.recoveryTimeout = recoveryTimeout;
+    this.successThreshold = successThreshold;
   }
 
   canExecute() {
     if (this.state === 'CLOSED') return true;
     if (this.state === 'OPEN') {
-      if (Date.now() - this.lastFailureTime > CIRCUIT_RECOVERY_TIMEOUT) {
+      if (Date.now() - this.lastFailureTime > this.recoveryTimeout) {
         this.state = 'HALF_OPEN';
         this.successCount = 0;
         console.log(`🔄 서킷 브레이커 ${this.name}: HALF_OPEN 상태로 전환`);
@@ -180,7 +186,7 @@ class CircuitBreaker {
   onSuccess() {
     if (this.state === 'HALF_OPEN') {
       this.successCount++;
-      if (this.successCount >= CIRCUIT_SUCCESS_THRESHOLD) {
+      if (this.successCount >= this.successThreshold) {
         this.state = 'CLOSED';
         this.failureCount = 0;
         console.log(`✅ 서킷 브레이커 ${this.name}: CLOSED 상태로 복구`);
@@ -197,7 +203,7 @@ class CircuitBreaker {
     if (this.state === 'HALF_OPEN') {
       this.state = 'OPEN';
       console.log(`⚡ 서킷 브레이커 ${this.name}: OPEN 상태로 전환 (HALF_OPEN 실패)`);
-    } else if (this.failureCount >= CIRCUIT_FAILURE_THRESHOLD) {
+    } else if (this.failureCount >= this.failureThreshold) {
       this.state = 'OPEN';
       console.log(`⚡ 서킷 브레이커 ${this.name}: OPEN 상태로 전환 (실패 ${this.failureCount}회)`);
     }
@@ -207,7 +213,7 @@ class CircuitBreaker {
 // API별 서킷 브레이커 인스턴스
 const circuitBreakers = {
   popup_list: new CircuitBreaker('popup_list'),
-  popup_detail: new CircuitBreaker('popup_detail'),
+  popup_detail: new CircuitBreaker('popup_detail', POPUP_DETAIL_CIRCUIT_FAILURE_THRESHOLD, POPUP_DETAIL_CIRCUIT_RECOVERY_TIMEOUT),
   order_create: new CircuitBreaker('order_create'),
   stock_reserve: new CircuitBreaker('stock_reserve'),
   payment_request: new CircuitBreaker('payment_request'),
@@ -218,6 +224,15 @@ const circuitBreakers = {
 let currentLoadFactor = 1.0;
 let totalRequests = 0;
 let failedRequests = 0;
+const lastFailureLogAt = {};
+
+function shouldLogFailure(apiName, intervalMs) {
+  const now = Date.now();
+  const last = lastFailureLogAt[apiName] || 0;
+  if (now - last < intervalMs) return false;
+  lastFailureLogAt[apiName] = now;
+  return true;
+}
 
 // ===== HELPER FUNCTIONS =====
 function headers() {
@@ -361,7 +376,10 @@ function retryApiCallWithCircuitBreaker(apiName, apiCall, circuitBreakerName, ma
     }
   }
 
-  console.log(`💥 ${apiName} 최종 실패 (${maxRetries + 1}회 시도)`);
+  const isPopupDetail = apiName.includes("popup_detail(");
+  if (!isPopupDetail || shouldLogFailure("popup_detail", POPUP_DETAIL_FAILURE_LOG_INTERVAL_MS)) {
+    console.log(`💥 ${apiName} 최종 실패 (${maxRetries + 1}회 시도)`);
+  }
   checkAndAdjustLoad();
   return null;
 }
