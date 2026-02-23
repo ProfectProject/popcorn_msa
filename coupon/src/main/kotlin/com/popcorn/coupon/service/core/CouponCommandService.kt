@@ -463,6 +463,7 @@ class CouponCommandService(
         }
 
         val history = CouponHistory(
+            couponId = couponId,
             userCouponId = userCouponId,
             userId = userId,
             action = action,

@@ -9,7 +9,6 @@ import com.popcorn.coupon.service.core.CouponCommandService
 import kotlinx.coroutines.runBlocking
 import mu.KotlinLogging
 import org.springframework.kafka.annotation.KafkaListener
-import org.springframework.kafka.support.Acknowledgment
 import org.springframework.kafka.support.KafkaHeaders
 import org.springframework.messaging.handler.annotation.Header
 import org.springframework.messaging.handler.annotation.Payload
@@ -37,8 +36,7 @@ class OrderEventListener(
         @Payload message: String,
         @Header(KafkaHeaders.RECEIVED_TOPIC) topic: String,
         @Header(KafkaHeaders.RECEIVED_PARTITION) partition: Int,
-        @Header(KafkaHeaders.OFFSET) offset: Long,
-        ack: Acknowledgment
+        @Header(KafkaHeaders.OFFSET) offset: Long
     ) {
         try {
             logger.info { "📥 주문 생성 이벤트 수신: topic=$topic, partition=$partition, offset=$offset" }
@@ -51,13 +49,11 @@ class OrderEventListener(
                 processOrderCreatedEvent(event)
             }
 
-            ack.acknowledge()
             logger.debug { "✅ 주문 이벤트 처리 완료: offset=$offset" }
 
         } catch (e: Exception) {
             logger.error(e) { "❌ 주문 이벤트 처리 실패: offset=$offset, message=$message" }
             // DLQ로 전송하거나 재시도 로직 구현 가능
-            ack.acknowledge() // 일단 ack하여 무한 재시도 방지
         }
     }
 
@@ -73,8 +69,7 @@ class OrderEventListener(
     fun handleOrderCancelledEvent(
         @Payload message: String,
         @Header(KafkaHeaders.RECEIVED_TOPIC) topic: String,
-        @Header(KafkaHeaders.OFFSET) offset: Long,
-        ack: Acknowledgment
+        @Header(KafkaHeaders.OFFSET) offset: Long
     ) {
         try {
             logger.info { "📥 주문 취소 이벤트 수신: offset=$offset" }
@@ -87,11 +82,8 @@ class OrderEventListener(
                 processOrderCancelledEvent(event)
             }
 
-            ack.acknowledge()
-
         } catch (e: Exception) {
             logger.error(e) { "❌ 주문 취소 이벤트 처리 실패: offset=$offset, message=$message" }
-            ack.acknowledge()
         }
     }
 

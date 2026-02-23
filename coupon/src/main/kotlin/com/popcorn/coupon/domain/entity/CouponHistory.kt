@@ -16,6 +16,9 @@ data class CouponHistory(
     val id: Long? = null,
 
     // 기본 정보
+    @Column(name = "coupon_id", nullable = false)
+    val couponId: Long,
+
     @Column(name = "user_coupon_id", nullable = false)
     val userCouponId: Long,
 
@@ -54,8 +57,9 @@ data class CouponHistory(
 
 ) : BaseEntity() {
     companion object {
-        fun issued(userCouponId: Long, userId: Long, context: JsonNode? = null): CouponHistory {
+        fun issued(couponId: Long, userCouponId: Long, userId: Long, context: JsonNode? = null): CouponHistory {
             return CouponHistory(
+                couponId = couponId,
                 userCouponId = userCouponId,
                 userId = userId,
                 action = CouponAction.ISSUED,
@@ -64,6 +68,7 @@ data class CouponHistory(
         }
 
         fun reserved(
+            couponId: Long,
             userCouponId: Long,
             userId: Long,
             orderId: Long,
@@ -71,6 +76,7 @@ data class CouponHistory(
             context: JsonNode? = null
         ): CouponHistory {
             return CouponHistory(
+                couponId = couponId,
                 userCouponId = userCouponId,
                 userId = userId,
                 orderId = orderId,
@@ -81,6 +87,7 @@ data class CouponHistory(
         }
 
         fun used(
+            couponId: Long,
             userCouponId: Long,
             userId: Long,
             orderId: Long,
@@ -88,6 +95,7 @@ data class CouponHistory(
             context: JsonNode? = null
         ): CouponHistory {
             return CouponHistory(
+                couponId = couponId,
                 userCouponId = userCouponId,
                 userId = userId,
                 orderId = orderId,
@@ -98,6 +106,7 @@ data class CouponHistory(
         }
 
         fun cancelled(
+            couponId: Long,
             userCouponId: Long,
             userId: Long,
             orderId: Long? = null,
@@ -107,6 +116,7 @@ data class CouponHistory(
             context: JsonNode? = null
         ): CouponHistory {
             return CouponHistory(
+                couponId = couponId,
                 userCouponId = userCouponId,
                 userId = userId,
                 orderId = orderId,
@@ -118,8 +128,9 @@ data class CouponHistory(
             )
         }
 
-        fun expired(userCouponId: Long, userId: Long, context: JsonNode? = null): CouponHistory {
+        fun expired(couponId: Long, userCouponId: Long, userId: Long, context: JsonNode? = null): CouponHistory {
             return CouponHistory(
+                couponId = couponId,
                 userCouponId = userCouponId,
                 userId = userId,
                 action = CouponAction.EXPIRED,
@@ -128,6 +139,7 @@ data class CouponHistory(
         }
 
         fun restored(
+            couponId: Long,
             userCouponId: Long,
             userId: Long,
             orderId: Long? = null,
@@ -135,6 +147,7 @@ data class CouponHistory(
             context: JsonNode? = null
         ): CouponHistory {
             return CouponHistory(
+                couponId = couponId,
                 userCouponId = userCouponId,
                 userId = userId,
                 orderId = orderId,
