@@ -43,6 +43,8 @@ public class KafkaListener {
                 log.debug("⚠️ [KafkaListener] 빈 메시지 수신, 파싱 없이 무시");
                 return;
             }
+            log.info("🧾 [KafkaListener] ORDER_CREATED rawMessag - rawMessage={}",
+                    rawMessage);
             Map<String, Object> envelope = objectMapper.readValue(rawMessage,
                     new TypeReference<>() {});
             String eventType = asString(envelope.get("eventType"));
@@ -51,6 +53,8 @@ public class KafkaListener {
                         orderEventsTopic, eventType);
                 return;
             }
+            log.info("🧾 [KafkaListener] ORDER_CREATED 이벤트 수신 - topic={}, eventId={}",
+                    orderEventsTopic, envelope.get("eventId"));
 
             OrderCreatedEvent storeEvent = buildOrderCreatedEvent(envelope);
             log.info("🧾 [KafkaListener] ORDER_CREATED 처리 시작 - orderId={}, eventId={}, popupId={}",
