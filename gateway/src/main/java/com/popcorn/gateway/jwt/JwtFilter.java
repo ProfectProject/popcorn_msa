@@ -42,6 +42,9 @@ public class JwtFilter implements GlobalFilter, Ordered{
             "/api/pay/v1/payments/health",
             "/api/stores/v1/popups",
 
+            // Order Query 서비스 경로들
+            "/api/orderquery",
+
             // Swagger/OpenAPI 관련 경로 (전체) - 포괄적 설정
             "/v3/api-docs",           // 모든 서비스 OpenAPI 문서
             "/swagger-ui",            // Swagger UI 리소스
@@ -225,9 +228,18 @@ public class JwtFilter implements GlobalFilter, Ordered{
     }
 
     private Mono<Void> forwardWithPassport(ServerWebExchange exchange, GatewayFilterChain chain, String passportJson) {
-        ServerHttpRequest mutated = exchange.getRequest().mutate()
-                .header("X-Passport", passportJson) // 다운스트림으로 passport 전달
-                .build();
+        // Authorization 헤더 유지 - 다운스트림 서비스의 JWT 인증을 위해 필요
+        String authHeader = exchange.getRequest().getHeaders().getFirst("Authorization");
+
+        ServerHttpRequest.Builder mutatedBuilder = exchange.getRequest().mutate()
+                .header("X-Passport", passportJson); // 다운스트림으로 passport 전달
+
+        // Authorization 헤더가 있으면 함께 전달
+        if (authHeader != null) {
+            mutatedBuilder.header("Authorization", authHeader);
+        }
+
+        ServerHttpRequest mutated = mutatedBuilder.build();
         return chain.filter(exchange.mutate().request(mutated).build());
     }
     private Mono<Void> onError(ServerWebExchange exchange, String err, HttpStatus status) {
