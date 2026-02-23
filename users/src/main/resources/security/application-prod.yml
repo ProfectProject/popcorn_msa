@@ -59,8 +59,8 @@ spring:
           batch_size: 20              # 배치 쿼리 최적화
           fetch_size: 50              # 페치 크기 최적화
         cache:
-          use_second_level_cache: true  # 2차 캐시 활성화
-          use_query_cache: true         # 쿼리 캐시 활성화
+          use_second_level_cache: false  # RegionFactory 미구성 환경에서는 비활성화
+          use_query_cache: false
         connection:
           provider_disables_autocommit: true  # AutoCommit 비활성화로 성능 향상
         order_inserts: true               # INSERT 순서 최적화
