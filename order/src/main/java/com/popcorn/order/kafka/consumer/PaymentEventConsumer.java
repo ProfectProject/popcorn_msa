@@ -1,6 +1,5 @@
 package com.popcorn.order.kafka.consumer;
 
-import java.util.HashMap;
 import java.time.Duration;
 import java.time.LocalDateTime;
 import java.util.Map;
@@ -8,16 +7,14 @@ import java.util.Objects;
 import java.util.UUID;
 
 import org.springframework.kafka.annotation.KafkaListener;
+import org.springframework.kafka.support.Acknowledgment;
 import org.springframework.kafka.support.KafkaHeaders;
 import org.springframework.messaging.handler.annotation.Header;
+import org.springframework.messaging.handler.annotation.Payload;
 import org.springframework.stereotype.Service;
 
-import com.fasterxml.jackson.core.JsonProcessingException;
-import com.fasterxml.jackson.core.type.TypeReference;
-import com.fasterxml.jackson.databind.ObjectMapper;
 import com.popcorn.order.dto.payment.PaymentUrlResponse;
 import com.popcorn.order.entity.OrderStatus;
-import com.popcorn.order.kafka.producer.StoreRequestsProducer;
 import com.popcorn.order.service.cache.OrderCacheService;
 import com.popcorn.order.service.core.OrderCommandService;
 
@@ -29,7 +26,6 @@ import lombok.extern.slf4j.Slf4j;
 @RequiredArgsConstructor
 public class PaymentEventConsumer {
     private final OrderCommandService orderCommandService;
-    private final StoreRequestsProducer storeRequestsProducer;
     private final OrderCacheService orderCacheService;
 
     @KafkaListener(
@@ -37,56 +33,49 @@ public class PaymentEventConsumer {
             groupId = "${kafka.consumer.groups.payment:order-payment-cg}"
     )
     public void storeReserveConsumer(
-            String kafkaMessage,
+            @Payload Map<String, Object> payload,
             @Header(KafkaHeaders.RECEIVED_TOPIC) String topic,
             @Header(KafkaHeaders.RECEIVED_PARTITION) int partition,
             @Header(KafkaHeaders.OFFSET) long offset,
-            @Header(value = KafkaHeaders.RECEIVED_KEY, required = false) String key
-    ){
-        log.info("[KAFKA_CONSUME] topic={}, partition={}, offset={}, key={}", topic, partition, offset, key);
-        log.info("PaymentEventConsumer payload={}", kafkaMessage);
-
-        Map<String, Object> map = new HashMap<>();
-        ObjectMapper mapper = new ObjectMapper();
+            @Header(value = KafkaHeaders.RECEIVED_KEY, required = false) String key,
+            Acknowledgment acknowledgment
+    ) {
         try {
-            map = parseKafkaMessage(kafkaMessage, mapper);
-            log.info("🔍 파싱된 메시지 맵: {}", map);
-        } catch (JsonProcessingException e) {
-            log.error("❌ JSON 파싱 실패: {}", e.getMessage(), e);
-            return;
-        }
+            log.info("[KAFKA_CONSUME] topic={}, partition={}, offset={}, key={}", topic, partition, offset, key);
+            log.info("PaymentEventConsumer payload={}", payload);
 
-        Map<String, Object> eventData = unwrapPayloadIfNeeded(map);
-        String eventType = normalizeEventType(eventData);
-        String orderIdRaw = Objects.toString(eventData.get("orderId"), null);
+            Map<String, Object> eventData = unwrapPayloadIfNeeded(payload);
+            String eventType = normalizeEventType(eventData);
+            String orderIdRaw = stringOf(eventData, "orderId", "order_id");
 
-        log.info("📋 추출된 값들 - orderId: '{}' (null={}), eventType: '{}' (null={})",
-                orderIdRaw, orderIdRaw == null, eventType, eventType == null);
+            log.info("추출된 값들 - orderId='{}', eventType='{}'", orderIdRaw, eventType);
 
-        if (orderIdRaw == null || orderIdRaw.isBlank()) {
-            log.warn("⚠️ Kafka 메시지에서 orderId가 null 또는 비어있음 - eventType: {}, 전체 맵: {}", eventType, eventData);
-            return;
-        }
+            if (orderIdRaw == null || orderIdRaw.isBlank()) {
+                log.warn("Kafka 메시지에서 orderId 누락 - eventType={}, payload={}", eventType, eventData);
+                acknowledgment.acknowledge();
+                return;
+            }
 
-        UUID orderId;
-        try {
-            orderId = UUID.fromString(orderIdRaw);
-            log.info("✅ orderId UUID 파싱 성공: {}", orderId);
-        } catch (IllegalArgumentException e) {
-            log.error("❌ orderId UUID 파싱 실패: '{}' - error: {}", orderIdRaw, e.getMessage());
-            return;
-        }
+            UUID orderId;
+            try {
+                orderId = UUID.fromString(orderIdRaw);
+            } catch (IllegalArgumentException e) {
+                log.warn("Kafka 메시지 orderId UUID 파싱 실패 - orderIdRaw={}, payload={}", orderIdRaw, eventData);
+                acknowledgment.acknowledge();
+                return;
+            }
 
-        if (eventType == null || eventType.isBlank()) {
-            log.warn("⚠️ eventType 누락 메시지 무시 - orderId: {}, payload: {}", orderId, eventData);
-            return;
-        }
+            if (eventType == null || eventType.isBlank()) {
+                log.warn("eventType 누락 메시지 무시 - orderId={}, payload={}", orderId, eventData);
+                acknowledgment.acknowledge();
+                return;
+            }
 
-        switch (eventType) {
+            switch (eventType) {
                 case "PAYMENT_CREATED":
                 case "PAYMENT_URL_CREATED":
                     if (!canApplyPaymentCreated(orderId)) {
-                        log.info("ℹ️ {} 이벤트 무시 - orderId: {}, status: {}", eventType, orderId,
+                        log.info("{} 이벤트 무시 - orderId={}, status={}", eventType, orderId,
                                 orderCommandService.getOrderStatus(orderId));
                         break;
                     }
@@ -98,41 +87,24 @@ public class PaymentEventConsumer {
                     break;
                 case "PAYMENT_APPROVED":
                     if (!canApplyPaymentApproved(orderId)) {
-                        log.info("ℹ️ PAYMENT_APPROVED 이벤트 무시 - orderId: {}, status: {}", orderId,
+                        log.info("PAYMENT_APPROVED 이벤트 무시 - orderId={}, status={}", orderId,
                                 orderCommandService.getOrderStatus(orderId));
                         break;
                     }
-                    String paymentId = Objects.toString(eventData.get("paymentId"), null);
+                    String paymentId = stringOf(eventData, "paymentId", "payment_id");
                     orderCommandService.updateOrderStatus(orderId, OrderStatus.PAID.name(),
                             "결제 승인 이벤트 수신", paymentId);
-                    
-                    /*// 1-2. 멱등성 키 무효화 (주문 생성 중복 방지 키 해제)
-                    try {
-                        var order = orderRepository.findById(orderId).orElse(null);
-                        if (order != null && order.getCustomerId() != null && order.getPopupId() != null) {
-                            String idempotencyKey = "order:create:" + order.getCustomerId() + ":" + order.getPopupId();
-                            orderIdempotencyService.invalidateKey(idempotencyKey, "결제 승인 완료");
-                            log.info("🔑 [ORDER] 멱등성 키 무효화 완료 - orderId: {}, key: {}", orderId, idempotencyKey);
-                        }
-                    } catch (Exception idempEx) {
-                        log.warn("⚠️ [ORDER] 멱등성 키 무효화 실패 - orderId: {}, error: {}", orderId, idempEx.getMessage());
-                    }*/
-
                     orderCommandService.requestStockDeduction(orderId);
                     orderCommandService.requestScheduleConfirmation(orderId);
                     break;
                 case "PAYMENT_FAILED":
                 case "PAYMENT_USER_CANCELLED":
-                    String reason = Objects.toString(eventData.get("reason"), null);
                     orderCommandService.updateOrderStatus(orderId, OrderStatus.CANCELLED.name(),
                             "결제 실패/취소 이벤트 수신");
-                    orderCommandService.cancelStockReservationsForOrder(orderId); // 재고 예약 취소
-                    orderCommandService.cancelScheduleReservationsCfororder(orderId); // 스케줄 예약 취소
+                    orderCommandService.cancelStockReservationsForOrder(orderId);
+                    orderCommandService.cancelScheduleReservationsCfororder(orderId);
                     break;
                 case "PAYMENT_CANCEL_SUCCEEDED":
-                    /*orderCommandService.updateOrderStatus(orderId, OrderStatus.CANCELLED.name(),
-                            "결제 취소 성공 이벤트 수신");*/
-                    // 재고 예약 해제 발행 --> 비즈니스 로직 없음 바로 발행
                     orderCommandService.releaseScheduleReservationsForOrder(orderId);
                     orderCommandService.realeaseGoodsReservationsForOrder(orderId);
                     break;
@@ -140,7 +112,14 @@ public class PaymentEventConsumer {
                     log.error("Payment cancel failed for orderId={}, payload={}", orderId, eventData);
                     break;
                 default:
-                    log.info("Unhandled store eventType: {}", eventType);
+                    log.info("Unhandled payment eventType: {}", eventType);
+            }
+
+            acknowledgment.acknowledge();
+        } catch (Exception e) {
+            log.error("[KAFKA_CONSUME_FAIL] topic={}, partition={}, offset={}, error={}",
+                    topic, partition, offset, e.getMessage(), e);
+            throw e;
         }
     }
 
@@ -166,34 +145,13 @@ public class PaymentEventConsumer {
         };
     }
 
-    private Map<String, Object> parseKafkaMessage(String kafkaMessage, ObjectMapper mapper) throws JsonProcessingException {
-        String trimmed = kafkaMessage == null ? "" : kafkaMessage.trim();
-        if (trimmed.isEmpty()) {
-            return new HashMap<>();
-        }
-
-        // 일부 프로듀서가 JSON 문자열을 한번 더 감싸서 보내므로 2단계 파싱 처리.
-        if (trimmed.startsWith("\"") && trimmed.endsWith("\"")) {
-            String unwrapped = mapper.readValue(trimmed, String.class);
-            return mapper.readValue(unwrapped, new TypeReference<Map<String, Object>>() {});
-        }
-
-        return mapper.readValue(trimmed, new TypeReference<Map<String, Object>>() {});
-    }
-
     private String normalizeEventType(Map<String, Object> map) {
-        String eventType = Objects.toString(map.get("eventType"), null);
+        String eventType = stringOf(map, "eventType", "event_type");
         if (eventType != null && !eventType.isBlank()) {
             return eventType;
         }
 
-        String snakeCaseEventType = Objects.toString(map.get("event_type"), null);
-        if (snakeCaseEventType != null && !snakeCaseEventType.isBlank()) {
-            return snakeCaseEventType;
-        }
-
-        // eventType 없이 actionType만 오는 내부 메시지를 보정.
-        String actionType = Objects.toString(map.get("actionType"), null);
+        String actionType = stringOf(map, "actionType");
         if ("CONFIRM".equalsIgnoreCase(actionType)) {
             return "PAYMENT_APPROVED";
         }
@@ -203,21 +161,21 @@ public class PaymentEventConsumer {
 
     @SuppressWarnings("unchecked")
     private Map<String, Object> unwrapPayloadIfNeeded(Map<String, Object> parsed) {
-        Object payload = parsed.get("payload");
-        if (payload instanceof Map<?, ?> payloadMap) {
+        Object nestedPayload = parsed.get("payload");
+        if (nestedPayload instanceof Map<?, ?> payloadMap) {
             try {
                 return (Map<String, Object>) payloadMap;
             } catch (ClassCastException ignored) {
-                // fall through and use original map
+                return parsed;
             }
         }
         return parsed;
     }
 
     private void cachePaymentUrl(UUID orderId, Map<String, Object> eventData) {
-        String paymentUrl = Objects.toString(eventData.get("paymentUrl"), null);
+        String paymentUrl = stringOf(eventData, "paymentUrl", "payment_url");
         if (paymentUrl == null || paymentUrl.isBlank()) {
-            log.warn("⚠️ PAYMENT_URL_CREATED 이벤트에 paymentUrl 누락 - orderId={}", orderId);
+            log.warn("PAYMENT_URL_CREATED 이벤트에 paymentUrl 누락 - orderId={}", orderId);
             return;
         }
 
@@ -231,16 +189,16 @@ public class PaymentEventConsumer {
                 .paymentUrl(paymentUrl)
                 .token(token)
                 .orderId(orderId)
-                .orderNo(Objects.toString(eventData.get("orderNo"), null))
+                .orderNo(stringOf(eventData, "orderNo", "order_no"))
                 .amount(amount)
-                .paymentMethod(Objects.toString(eventData.get("paymentMethod"), null))
+                .paymentMethod(stringOf(eventData, "paymentMethod", "payment_method"))
                 .createdAt(createdAt)
                 .expiresAt(expiresAt)
                 .expiresInMinutes((int) remainingMinutes)
                 .build();
 
         orderCacheService.storePaymentUrl(orderId, response);
-        log.info("✅ PAYMENT_URL_CREATED 캐시 저장 완료 - orderId={}, expiresAt={}", orderId, expiresAt);
+        log.info("PAYMENT_URL_CREATED 캐시 저장 완료 - orderId={}, expiresAt={}", orderId, expiresAt);
     }
 
     private LocalDateTime parseDateTime(Object raw, LocalDateTime fallback) {
@@ -281,5 +239,15 @@ public class PaymentEventConsumer {
         String tokenPart = paymentUrl.substring(idx + "token=".length());
         int ampIndex = tokenPart.indexOf('&');
         return ampIndex > 0 ? tokenPart.substring(0, ampIndex) : tokenPart;
+    }
+
+    private String stringOf(Map<String, Object> source, String... keys) {
+        for (String key : keys) {
+            String value = Objects.toString(source.get(key), null);
+            if (value != null && !value.isBlank()) {
+                return value;
+            }
+        }
+        return null;
     }
 }
