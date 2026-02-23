@@ -101,6 +101,11 @@ interface UserCouponRepository : JpaRepository<UserCoupon, Long> {
     fun countByStatus(status: UserCouponStatus): Long
 
     /**
+     * 사용자별 상태별 개수 조회
+     */
+    fun countByUserIdAndStatus(userId: Long, status: UserCouponStatus): Long
+
+    /**
      * 쿠폰별 발급 개수 조회
      */
     fun countByCouponId(couponId: Long): Long

@@ -149,11 +149,7 @@ class CouponQueryService(
      * 사용자별 상태별 쿠폰 개수 조회
      */
     suspend fun getUserCouponCountByStatus(userId: Long, status: UserCouponStatus): Long = withContext(Dispatchers.IO) {
-        userCouponRepository.findByUserIdAndStatus(
-            userId,
-            status,
-            org.springframework.data.domain.PageRequest.of(0, Int.MAX_VALUE)
-        ).totalElements
+        userCouponRepository.countByUserIdAndStatus(userId, status)
     }
 
     /**
@@ -167,11 +163,16 @@ class CouponQueryService(
         logger.info { "🛒 주문 적용 가능한 쿠폰 조회: userId=$userId, orderAmount=$orderAmount" }
 
         val availableUserCoupons = userCouponRepository.findAvailableCouponsByUserId(userId)
+        if (availableUserCoupons.isEmpty()) {
+            return@withContext emptyList()
+        }
+
+        val couponMap = loadCouponMap(availableUserCoupons.map { it.couponId })
         val applicableCoupons = mutableListOf<ApplicableCouponInfo>()
 
         for (userCoupon in availableUserCoupons) {
             try {
-                val coupon = getCouponById(userCoupon.couponId)
+                val coupon = couponMap[userCoupon.couponId] ?: continue
 
                 // 쿠폰 적용 가능 여부 확인
                 if (isCouponApplicableToOrder(coupon, orderAmount, targetTypes)) {
@@ -196,6 +197,13 @@ class CouponQueryService(
 
         // 할인 금액 내림차순 정렬
         applicableCoupons.sortedByDescending { it.discountAmount }
+    }
+
+    /**
+     * 쿠폰 ID 목록을 한 번에 조회 (N+1 방지)
+     */
+    suspend fun getCouponsByIds(couponIds: Collection<Long>): Map<Long, Coupon> = withContext(Dispatchers.IO) {
+        loadCouponMap(couponIds)
     }
 
     /**
@@ -291,6 +299,15 @@ class CouponQueryService(
                 }
             }
         }
+    }
+
+    private fun loadCouponMap(couponIds: Collection<Long>): Map<Long, Coupon> {
+        if (couponIds.isEmpty()) {
+            return emptyMap()
+        }
+        return couponRepository.findAllById(couponIds.toSet())
+            .filter { it.id != null }
+            .associateBy { it.id!! }
     }
 
     /**

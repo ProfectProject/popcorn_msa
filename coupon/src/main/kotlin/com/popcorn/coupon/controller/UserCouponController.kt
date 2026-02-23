@@ -87,7 +87,8 @@ class UserCouponController(
         logger.info { "👤 내 쿠폰 목록 조회: userId=$userId, page=$page, size=$size, status=$status" }
 
         return runBlocking {
-            val pageable = PageRequest.of(page, size, Sort.by(Sort.Direction.DESC, "createdAt"))
+            val limitedSize = size.coerceIn(1, 100)
+            val pageable = PageRequest.of(page, limitedSize, Sort.by(Sort.Direction.DESC, "createdAt"))
 
             val userCouponsPage = if (status != null) {
                 val userCouponStatus = com.popcorn.coupon.domain.entity.UserCouponStatus.valueOf(status.uppercase())
@@ -96,11 +97,11 @@ class UserCouponController(
                 couponQueryService.getUserCoupons(userId, pageable)
             }
 
-            // 각 사용자 쿠폰에 대해 쿠폰 정보도 함께 조회
-            val responses = mutableListOf<UserCouponResponse>()
-            for (userCoupon in userCouponsPage.content) {
-                val coupon = couponQueryService.getCouponById(userCoupon.couponId)
-                responses.add(UserCouponResponse.from(userCoupon, coupon))
+            // 배치 조회로 N+1 쿼리 방지
+            val couponMap = couponQueryService.getCouponsByIds(userCouponsPage.content.map { it.couponId })
+            val responses = userCouponsPage.content.mapNotNull { userCoupon ->
+                val coupon = couponMap[userCoupon.couponId] ?: return@mapNotNull null
+                UserCouponResponse.from(userCoupon, coupon)
             }
 
             val listResponse = UserCouponListResponse(
@@ -129,11 +130,10 @@ class UserCouponController(
 
         return runBlocking {
             val availableUserCoupons = couponQueryService.getAvailableUserCoupons(userId)
-            val responses = mutableListOf<UserCouponResponse>()
-
-            for (userCoupon in availableUserCoupons) {
-                val coupon = couponQueryService.getCouponById(userCoupon.couponId)
-                responses.add(UserCouponResponse.from(userCoupon, coupon))
+            val couponMap = couponQueryService.getCouponsByIds(availableUserCoupons.map { it.couponId })
+            val responses = availableUserCoupons.mapNotNull { userCoupon ->
+                val coupon = couponMap[userCoupon.couponId] ?: return@mapNotNull null
+                UserCouponResponse.from(userCoupon, coupon)
             }
 
             ResponseEntity.ok(responses)

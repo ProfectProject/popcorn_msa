@@ -38,7 +38,7 @@ import java.util.UUID;
 @Validated
 @Slf4j
 @Tag(name = "📊 Order Dashboard", description = "주문 대시보드 - 관리자/매니저 전용 조회 API")
-@SecurityRequirement(name = "bearer-token")
+@SecurityRequirement(name = "bearerAuth")
 public class OrderDashboardController extends BaseController {
 
     private final OrderDashboardService orderDashboardService;
