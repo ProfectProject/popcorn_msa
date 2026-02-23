@@ -200,38 +200,26 @@ public class OrderCommandController {
             Authentication authentication,
             HttpServletRequest httpRequest) {
 
-        // 📡 요청 정보 상세 로깅
-        String clientIp = getClientIp(httpRequest);
-        String userAgent = httpRequest.getHeader("User-Agent");
         String requestId = UUID.randomUUID().toString().substring(0, 8);
 
-        log.info("🚀 [REQ-{}] 주문 생성 요청 시작", requestId);
-        log.info("🌐 [REQ-{}] 클라이언트 정보 - IP: {}, User-Agent: {}", requestId, clientIp, userAgent);
-        log.info("🔐 [REQ-{}] 인증 정보 - 인증됨: {}, 사용자: {}",
-                requestId, authentication != null, authentication != null ? authentication.getName() : "익명");
-        log.info("📝 [REQ-{}] 받은 요청 데이터: {}", requestId, request);
+        log.info("🚀 [REQ-{}] 주문 생성 요청 시작 - popupId={}, type={}, itemCount={}",
+                requestId, request.getPopupId(), request.getOrderType(), request.getItems() == null ? 0 : request.getItems().size());
 
         // JWT에서 사용자 ID 추출 (보안상 요청 본문이 아닌 토큰에서 추출)
         Long userId = principal != null ? principal.userId() : extractUserIdFromAuthentication(authentication);
 
-        log.info("👤 [REQ-{}] 사용자 ID 추출 완료: {}", requestId, userId);
-        log.info("📄 [REQ-{}] 요청 데이터 - 팝업ID: {}, 주문타입: {}, 아이템 수: {}",
-                requestId, request.getPopupId(), request.getOrderType(), request.getItems().size());
-
-        // 요청 본문 상세 로깅 (민감 정보 제외)
-        log.info("📝 [REQ-{}] 요청 본문: {}", requestId, request);
+        log.debug("👤 [REQ-{}] userId={}, authName={}, clientIp={}",
+                requestId, userId, authentication != null ? authentication.getName() : "anonymous", getClientIp(httpRequest));
+        log.debug("📝 [REQ-{}] requestBody={}", requestId, request);
 
         long startTime = System.currentTimeMillis();
 
         try {
             validateOrderRequest(request);
-            log.info("🔄 [REQ-{}] 1단계: Request → Command 변환 시작", requestId);
             // 1. Request를 Command 객체로 변환 (JWT에서 추출한 userId 포함)
             // Command 패턴: 요청을 객체로 캡슐화하여 처리
             CreateOrderCommand command = CreateOrderCommand.fromRequest(request, userId);
-            log.info("✅ [REQ-{}] Command 객체 생성 완료", requestId);
 
-            log.info("🔄 [REQ-{}] 2단계: 주문 생성 서비스 호출 시작", requestId);
             // 2. CQRS Command 서비스 호출
             // 실제 비즈니스 로직은 Service 계층에서 처리
             OrderCreateResponse response = orderCommandService.createOrder(command);
@@ -241,14 +229,11 @@ public class OrderCommandController {
             log.info("🎉 [REQ-{}] 주문 생성 성공! 주문번호: {}, 주문ID: {}, 처리시간: {}ms",
                     requestId, response.getOrderNo(), response.getOrderId(), processingTime);
 
-            log.info("🔄 [REQ-{}] 3단계: 성공 응답 생성", requestId);
             // 3. 성공 응답 생성
             BaseResponse<OrderCreateResponse> baseResponse = BaseResponse.from(
                     OrderResponseCode.ORDER_CREATED, response);
 
-            log.info("📤 [REQ-{}] 응답 전송 - 상태: {}, 크기: {} bytes",
-                    requestId, OrderResponseCode.ORDER_CREATED.getHttpStatus(),
-                    baseResponse.toString().length());
+            log.debug("📤 [REQ-{}] status={}", requestId, OrderResponseCode.ORDER_CREATED.getHttpStatus());
 
             return ResponseEntity.status(OrderResponseCode.ORDER_CREATED.getHttpStatus())
                     .body(baseResponse);
@@ -285,8 +270,7 @@ public class OrderCommandController {
             BaseResponse<OrderCreateResponse> errorResponse = BaseResponse.from(
                     OrderResponseCode.INVALID_ORDER_REQUEST, null);
 
-            log.info("📤 [REQ-{}] 잘못된 요청 응답 전송 - 상태: {}",
-                    requestId, OrderResponseCode.INVALID_ORDER_REQUEST.getHttpStatus());
+            log.debug("📤 [REQ-{}] status={}", requestId, OrderResponseCode.INVALID_ORDER_REQUEST.getHttpStatus());
 
             return ResponseEntity.status(OrderResponseCode.INVALID_ORDER_REQUEST.getHttpStatus())
                     .body(errorResponse);
@@ -323,8 +307,7 @@ public class OrderCommandController {
             BaseResponse<OrderCreateResponse> errorResponse = BaseResponse.from(
                     OrderResponseCode.ORDER_CREATION_FAILED, null);
 
-            log.info("📤 [REQ-{}] 서버 오류 응답 전송 - 상태: {}",
-                    requestId, OrderResponseCode.ORDER_CREATION_FAILED.getHttpStatus());
+            log.debug("📤 [REQ-{}] status={}", requestId, OrderResponseCode.ORDER_CREATION_FAILED.getHttpStatus());
 
             return ResponseEntity.status(OrderResponseCode.ORDER_CREATION_FAILED.getHttpStatus())
                     .body(errorResponse);
