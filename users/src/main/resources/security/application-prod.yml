@@ -1,6 +1,13 @@
 server:
   port: 8082
   shutdown: immediate
+  tomcat:
+    threads:
+      max: 200                 # 최대 스레드 수
+      min-spare: 10           # 최소 유지 스레드
+    connection-timeout: 20000  # 연결 타임아웃
+    max-connections: 8192      # 최대 동시 연결수
+    accept-count: 100          # 대기열 크기
 spring:
   config:
     activate:
@@ -14,14 +21,26 @@ spring:
         enabled: ${REDIS_SSL_ENABLED:true}
       repositories:
         enabled: false
+      lettuce:
+        pool:
+          max-active: 16         # Redis 연결 풀 크기
+          max-idle: 8           # 최대 idle 연결
+          min-idle: 2           # 최소 idle 연결
+          max-wait: 5000        # 최대 대기 시간 5초
+        shutdown-timeout: 100ms
+      timeout: 3000ms            # 개별 명령 타임아웃
   datasource:
     url: jdbc:postgresql://${DB_HOST}:${DB_PORT}/${DB_NAME}
     username: ${USER_AUTH_USERNAME}
     password: ${USER_AUTH_PASSWORD}
     driver-class-name: org.postgresql.Driver
     hikari:
-      maximum-pool-size: 3
-      minimum-idle: 1
+      maximum-pool-size: 20        # 동시 연결 수 대폭 증가
+      minimum-idle: 5              # 최소 idle 연결 확보
+      connection-timeout: 20000    # 연결 대기 시간 20초
+      idle-timeout: 600000         # idle 타임아웃 10분
+      max-lifetime: 1800000        # 연결 최대 생명주기 30분
+      leak-detection-threshold: 60000 # 연결 누수 감지 60초
 
   jpa:
     open-in-view: false
@@ -32,6 +51,17 @@ spring:
         default_schema: user_auth
         type:
           preferred_enum_jdbc_type: NAMED_ENUM
+        # 성능 최적화 설정
+        jdbc:
+          batch_size: 20              # 배치 쿼리 최적화
+          fetch_size: 50              # 페치 크기 최적화
+        cache:
+          use_second_level_cache: true  # 2차 캐시 활성화
+          use_query_cache: true         # 쿼리 캐시 활성화
+        connection:
+          provider_disables_autocommit: true  # AutoCommit 비활성화로 성능 향상
+        order_inserts: true               # INSERT 순서 최적화
+        order_updates: true               # UPDATE 순서 최적화
 
   cache:
     type: simple
@@ -54,15 +84,24 @@ jwt:
   secret: ${JWT_SECRET}
   expiration: 3600000
   refresh-expiration-ms: 1209600000
+  # JWT 성능 최적화
+  algorithm: HS256                 # 빠른 HMAC 알고리즘 명시
+  issuer: popcorn-auth            # 발급자 명시
+  cache-enabled: true             # JWT 캐싱 활성화
 passport:
   secret: ${PASSPORT_SECRET}
   ttl-seconds: 60
 
 logging:
   level:
-    root: INFO
-    com.popcorn.users: INFO
-    com.popcorn.common: INFO
+    root: WARN                           # 프로덕션에서 WARNING 이상만
+    com.popcorn.users: INFO             # 애플리케이션 로그는 INFO 유지
+    com.popcorn.common: INFO            # 공통 모듈 INFO 유지
+    com.zaxxer.hikari: WARN             # HikariCP 로그 최소화
+    org.springframework.security: WARN   # Spring Security 로그 최소화
+    org.hibernate: WARN                 # Hibernate 로그 최소화
+  pattern:
+    console: "%d{HH:mm:ss.SSS} %-5level [%thread] %logger{36} - %msg%n"  # 간결한 로그 패턴
 app:
   gateway:
     url: ${GATEWAY_SERVICE_URL}
