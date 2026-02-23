@@ -503,7 +503,27 @@ jobs:
             esac
 
             echo "Updating .${key}.image.tag -> ${IMAGE_TAG}"
-            yq -i ".${key}.image.tag = \"${IMAGE_TAG}\"" "${VALUES_FILE}"
+            echo "Current ${key} tag before update:"
+            yq ".${key}.image.tag" "${VALUES_FILE}" || echo "Key not found, checking alternatives..."
+
+            # Try multiple possible paths for orderQuery
+            if [[ "$svc" == "orderQuery" ]]; then
+              # Try different key variations
+              if yq -e ".orderQuery" "${VALUES_FILE}" >/dev/null 2>&1; then
+                yq -i ".orderQuery.image.tag = \"${IMAGE_TAG}\"" "${VALUES_FILE}"
+              elif yq -e ".[\"order-query\"]" "${VALUES_FILE}" >/dev/null 2>&1; then
+                yq -i ".[\"order-query\"].image.tag = \"${IMAGE_TAG}\"" "${VALUES_FILE}"
+              elif yq -e ".orderquery" "${VALUES_FILE}" >/dev/null 2>&1; then
+                yq -i ".orderquery.image.tag = \"${IMAGE_TAG}\"" "${VALUES_FILE}"
+              else
+                echo "❌ ERROR: orderQuery key not found in values file!"
+                echo "Available keys:"
+                yq 'keys' "${VALUES_FILE}"
+                exit 1
+              fi
+            else
+              yq -i ".${key}.image.tag = \"${IMAGE_TAG}\"" "${VALUES_FILE}"
+            fi
           done
 
           echo "---- diff ----"
