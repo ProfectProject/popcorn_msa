@@ -37,18 +37,19 @@ class PaymentDlqListener(
         concurrency = "1" // DLQ는 단일 스레드로 순차 처리
     )
     fun handlePaymentEventsDlq(
-        @Payload dlqMessage: Map<String, Any>,
+        @Payload rawDlqMessage: Any,
         @Header(KafkaHeaders.RECEIVED_TOPIC) topic: String,
         @Header(KafkaHeaders.RECEIVED_PARTITION) partition: Int,
         @Header(KafkaHeaders.OFFSET) offset: Long,
         acknowledgment: Acknowledgment
     ) {
         try {
+            val dlqMessage = toMap(rawDlqMessage) ?: emptyMap()
             val originalTopic = dlqMessage["originalTopic"] as? String
             val originalPartition = dlqMessage["partition"] as? Int
             val originalOffset = dlqMessage["offset"] as? Long
-            val eventType = dlqMessage[EventConstants.MetadataKeys.EVENT_TYPE] as? String
-            val eventId = dlqMessage[EventConstants.MetadataKeys.EVENT_ID] as? String
+            val eventType = stringOf(dlqMessage, EventConstants.MetadataKeys.EVENT_TYPE, "event_type")
+            val eventId = stringOf(dlqMessage, EventConstants.MetadataKeys.EVENT_ID, "event_id")
             val errorInfo = dlqMessage["error"] as? Map<String, Any>
             val timestamp = dlqMessage[EventConstants.MetadataKeys.TIMESTAMP] as? Long
             val retryAttempt = dlqMessage["retryAttempt"] as? Int ?: 0
@@ -92,15 +93,16 @@ class PaymentDlqListener(
         concurrency = "1"
     )
     fun handlePaymentRequestsDlq(
-        @Payload dlqMessage: Map<String, Any>,
+        @Payload rawDlqMessage: Any,
         @Header(KafkaHeaders.RECEIVED_TOPIC) topic: String,
         @Header(KafkaHeaders.RECEIVED_PARTITION) partition: Int,
         @Header(KafkaHeaders.OFFSET) offset: Long,
         acknowledgment: Acknowledgment
     ) {
         try {
-            val eventType = dlqMessage[EventConstants.MetadataKeys.EVENT_TYPE] as? String
-            val eventId = dlqMessage[EventConstants.MetadataKeys.EVENT_ID] as? String
+            val dlqMessage = toMap(rawDlqMessage) ?: emptyMap()
+            val eventType = stringOf(dlqMessage, EventConstants.MetadataKeys.EVENT_TYPE, "event_type")
+            val eventId = stringOf(dlqMessage, EventConstants.MetadataKeys.EVENT_ID, "event_id")
             val errorInfo = dlqMessage["error"] as? Map<String, Any>
 
             log.error("🚨 [DLQ] Payment Requests DLQ 메시지 수신 - " +
@@ -129,12 +131,13 @@ class PaymentDlqListener(
         concurrency = "1"
     )
     fun handleOrderRequestsDlq(
-        @Payload dlqMessage: Map<String, Any>,
+        @Payload rawDlqMessage: Any,
         acknowledgment: Acknowledgment
     ) {
         try {
-            val eventType = dlqMessage[EventConstants.MetadataKeys.EVENT_TYPE] as? String
-            val eventId = dlqMessage[EventConstants.MetadataKeys.EVENT_ID] as? String
+            val dlqMessage = toMap(rawDlqMessage) ?: emptyMap()
+            val eventType = stringOf(dlqMessage, EventConstants.MetadataKeys.EVENT_TYPE, "event_type")
+            val eventId = stringOf(dlqMessage, EventConstants.MetadataKeys.EVENT_ID, "event_id")
 
             log.warn("⚠️ [DLQ] Order Requests DLQ 메시지 수신 - eventType={} eventId={}", eventType, eventId)
 
@@ -157,11 +160,11 @@ class PaymentDlqListener(
      * - 데이터 정합성 체크
      */
     private fun handleCriticalPaymentFailure(dlqMessage: Map<String, Any>) {
-        val eventType = dlqMessage[EventConstants.MetadataKeys.EVENT_TYPE] as? String
-        val eventId = dlqMessage[EventConstants.MetadataKeys.EVENT_ID] as? String
-        val originalMessage = dlqMessage["originalMessage"] as? Map<String, Any>
-        val paymentId = originalMessage?.get("paymentId") as? String
-        val orderId = originalMessage?.get("orderId") as? String
+        val eventType = stringOf(dlqMessage, EventConstants.MetadataKeys.EVENT_TYPE, "event_type")
+        val eventId = stringOf(dlqMessage, EventConstants.MetadataKeys.EVENT_ID, "event_id")
+        val originalMessage = toMap(dlqMessage["originalMessage"])
+        val paymentId = stringOf(originalMessage ?: emptyMap(), "paymentId", "payment_id")
+        val orderId = stringOf(originalMessage ?: emptyMap(), "orderId", "order_id")
 
         log.error("🆘 [DLQ-CRITICAL] 중요 결제 이벤트 처리 실패 - " +
                 "eventType={} eventId={} paymentId={} orderId={}",
@@ -181,9 +184,9 @@ class PaymentDlqListener(
      * 중요한 결제 요청 실패 처리
      */
     private fun handleCriticalRequestFailure(dlqMessage: Map<String, Any>) {
-        val eventType = dlqMessage[EventConstants.MetadataKeys.EVENT_TYPE] as? String
-        val originalMessage = dlqMessage["originalMessage"] as? Map<String, Any>
-        val orderId = originalMessage?.get("orderId") as? String
+        val eventType = stringOf(dlqMessage, EventConstants.MetadataKeys.EVENT_TYPE, "event_type")
+        val originalMessage = toMap(dlqMessage["originalMessage"])
+        val orderId = stringOf(originalMessage ?: emptyMap(), "orderId", "order_id")
 
         log.error("🆘 [DLQ-CRITICAL] 중요 결제 요청 실패 - eventType={} orderId={}", eventType, orderId)
 
@@ -199,8 +202,8 @@ class PaymentDlqListener(
      * 일반 DLQ 메시지 처리
      */
     private fun handleGeneralDlqMessage(dlqMessage: Map<String, Any>) {
-        val eventType = dlqMessage[EventConstants.MetadataKeys.EVENT_TYPE] as? String
-        val eventId = dlqMessage[EventConstants.MetadataKeys.EVENT_ID] as? String
+        val eventType = stringOf(dlqMessage, EventConstants.MetadataKeys.EVENT_TYPE, "event_type")
+        val eventId = stringOf(dlqMessage, EventConstants.MetadataKeys.EVENT_ID, "event_id")
 
         log.warn("📊 [DLQ-GENERAL] 일반 DLQ 메시지 처리: eventType={} eventId={}", eventType, eventId)
 
@@ -213,5 +216,37 @@ class PaymentDlqListener(
      */
     private fun completeDlqProcessing() {
         metricsService.recordDlqMessageCompleted()
+    }
+
+    private fun toMap(raw: Any?): Map<String, Any>? {
+        return when (raw) {
+            null -> null
+            is Map<*, *> -> raw.entries
+                .mapNotNull { entry ->
+                    val key = entry.key as? String ?: return@mapNotNull null
+                    val value = entry.value ?: return@mapNotNull null
+                    key to value
+                }
+                .toMap()
+            is String -> runCatching {
+                @Suppress("UNCHECKED_CAST")
+                objectMapper.readValue(raw.trim(), Map::class.java) as Map<String, Any>
+            }.getOrNull()
+            else -> runCatching {
+                @Suppress("UNCHECKED_CAST")
+                objectMapper.convertValue(raw, Map::class.java) as Map<String, Any>
+            }.getOrNull()
+        }
+    }
+
+    private fun stringOf(source: Map<String, Any>, vararg keys: String): String? {
+        for (key in keys) {
+            val value = source[key] ?: continue
+            val normalized = value.toString().trim().trim('"')
+            if (normalized.isNotBlank() && !normalized.equals("null", ignoreCase = true)) {
+                return normalized
+            }
+        }
+        return null
     }
 }

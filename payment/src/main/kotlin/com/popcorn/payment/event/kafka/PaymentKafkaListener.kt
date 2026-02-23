@@ -49,7 +49,7 @@ class PaymentKafkaListener(
         groupId = EventConstants.ConsumerGroups.PAYMENT_SERVICE_GROUP
     )
     fun handlePaymentEvents(
-        @Payload eventData: Map<String, Any>,
+        @Payload rawEventData: Any,
         @Header(KafkaHeaders.RECEIVED_TOPIC) topic: String,
         @Header(KafkaHeaders.RECEIVED_PARTITION) partition: Int,
         @Header(KafkaHeaders.OFFSET) offset: Long,
@@ -57,8 +57,15 @@ class PaymentKafkaListener(
         acknowledgment: Acknowledgment
     ) {
         val startTime = System.currentTimeMillis()
-        val eventType = eventData[EventConstants.MetadataKeys.EVENT_TYPE] as? String
-        val eventId = eventData[EventConstants.MetadataKeys.EVENT_ID] as? String
+        val eventData = normalizeEventData(rawEventData)
+        if (eventData == null) {
+            log.warn("⚠️ [PAYMENT] Payment 이벤트 파싱 실패 - topic: {}, partition: {}, offset: {}, payloadType: {}",
+                topic, partition, offset, rawEventData::class.java.name)
+            acknowledgment.acknowledge()
+            return
+        }
+        val eventType = stringOf(eventData, EventConstants.MetadataKeys.EVENT_TYPE, "event_type")
+        val eventId = stringOf(eventData, EventConstants.MetadataKeys.EVENT_ID, "event_id")
         try {
             log.info("🔔 [PAYMENT] Kafka 이벤트 수신 - topic: {}, partition: {}, offset: {}, key: {}, eventType: {}, eventId: {}",
                 topic, partition, offset, key, eventType, eventId)
@@ -114,7 +121,7 @@ class PaymentKafkaListener(
         groupId = EventConstants.ConsumerGroups.PAYMENT_SERVICE_GROUP
     )
     fun handlePaymentRequests(
-        @Payload eventData: Map<String, Any>,
+        @Payload rawEventData: Any,
         @Header(KafkaHeaders.RECEIVED_TOPIC) topic: String,
         @Header(KafkaHeaders.RECEIVED_PARTITION) partition: Int,
         @Header(KafkaHeaders.OFFSET) offset: Long,
@@ -122,8 +129,15 @@ class PaymentKafkaListener(
         acknowledgment: Acknowledgment
     ) {
         val startTime = System.currentTimeMillis()
-        val eventType = eventData[EventConstants.MetadataKeys.EVENT_TYPE] as? String
-        val eventId = eventData[EventConstants.MetadataKeys.EVENT_ID] as? String
+        val eventData = normalizeEventData(rawEventData)
+        if (eventData == null) {
+            log.warn("⚠️ [PAYMENT] Payment 요청 파싱 실패 - topic: {}, partition: {}, offset: {}, payloadType: {}",
+                topic, partition, offset, rawEventData::class.java.name)
+            acknowledgment.acknowledge()
+            return
+        }
+        val eventType = stringOf(eventData, EventConstants.MetadataKeys.EVENT_TYPE, "event_type")
+        val eventId = stringOf(eventData, EventConstants.MetadataKeys.EVENT_ID, "event_id")
         try {
             log.info("📥 [PAYMENT] Payment 요청 수신 - topic: {}, partition: {}, offset: {}, key: {}, eventType: {}, eventId: {}",
                 topic, partition, offset, key, eventType, eventId)
@@ -174,7 +188,7 @@ class PaymentKafkaListener(
         groupId = EventConstants.ConsumerGroups.PAYMENT_SERVICE_GROUP
     )
     fun handleOrderRequests(
-        @Payload eventData: Map<String, Any>,
+        @Payload rawEventData: Any,
         @Header(KafkaHeaders.RECEIVED_TOPIC) topic: String,
         @Header(KafkaHeaders.RECEIVED_PARTITION) partition: Int,
         @Header(KafkaHeaders.OFFSET) offset: Long,
@@ -182,8 +196,15 @@ class PaymentKafkaListener(
         acknowledgment: Acknowledgment
     ) {
         val startTime = System.currentTimeMillis()
-        val eventType = eventData[EventConstants.MetadataKeys.EVENT_TYPE] as? String
-        val eventId = eventData[EventConstants.MetadataKeys.EVENT_ID] as? String
+        val eventData = normalizeEventData(rawEventData)
+        if (eventData == null) {
+            log.warn("⚠️ [PAYMENT] Order 요청 파싱 실패 - topic: {}, partition: {}, offset: {}, payloadType: {}",
+                topic, partition, offset, rawEventData::class.java.name)
+            acknowledgment.acknowledge()
+            return
+        }
+        val eventType = stringOf(eventData, EventConstants.MetadataKeys.EVENT_TYPE, "event_type")
+        val eventId = stringOf(eventData, EventConstants.MetadataKeys.EVENT_ID, "event_id")
         try {
             log.info("📞 [PAYMENT] Order 요청 수신 - topic: {}, partition: {}, offset: {}, key: {}, eventType: {}, eventId: {}",
                 topic, partition, offset, key, eventType, eventId)
@@ -298,13 +319,17 @@ class PaymentKafkaListener(
      */
     private fun handlePaymentApproved(eventData: Map<String, Any>) {
         try {
-            val paymentId = eventData["paymentId"] as? String ?: return
-            val orderId = eventData["orderId"] as? String ?: return
-            val orderNo = eventData["orderNo"] as? String
-            val customerId = eventData["customerId"] as? String
-            val amount = eventData["amount"] as? String
-            val hasReservation = toBoolean(eventData["hasReservation"])
-            val hasGoods = toBoolean(eventData["hasGoods"])
+            val paymentId = stringOf(eventData, "paymentId", "payment_id") ?: return
+            val orderId = stringOf(eventData, "orderId", "order_id") ?: return
+            val orderNo = stringOf(eventData, "orderNo", "order_no")
+            val customerId = stringOf(eventData, "customerId", "customer_id", "userId", "user_id")
+            val amount = stringOf(eventData, "amount", "totalAmount", "total_amount")
+            val hasReservation = toBoolean(
+                eventData["hasReservation"] ?: eventData["has_reservation"]
+            )
+            val hasGoods = toBoolean(
+                eventData["hasGoods"] ?: eventData["has_goods"]
+            )
 
             log.info("💰 [PAYMENT] Kafka 경로 결제 승인 처리 - paymentId: {}, orderId: {}, amount: {}",
                 paymentId, orderId, amount)
@@ -351,9 +376,9 @@ class PaymentKafkaListener(
      */
     private fun handlePaymentFailed(eventData: Map<String, Any>) {
         try {
-            val paymentId = eventData["paymentId"] as? String ?: return
-            val orderId = eventData["orderId"] as? String ?: return
-            val reason = eventData["reason"] as? String ?: "Unknown failure"
+            val paymentId = stringOf(eventData, "paymentId", "payment_id") ?: return
+            val orderId = stringOf(eventData, "orderId", "order_id") ?: return
+            val reason = stringOf(eventData, "reason", "failureReason", "failure_reason") ?: "Unknown failure"
 
             log.warn("❌ [PAYMENT] Kafka 경로 결제 실패 처리 - paymentId: {}, orderId: {}, reason: {}",
                 paymentId, orderId, reason)
@@ -383,13 +408,12 @@ class PaymentKafkaListener(
      * 결제 취소 요청 이벤트 처리 (기존 Redis 로직과 동일)
      */
     private fun handlePaymentCancelRequested(eventData: Map<String, Any>) {
-        val orderIdRaw = eventData["orderId"]?.toString()?.trim()?.trim('"')
-        val paymentIdRaw = eventData["paymentId"]?.toString()?.trim()?.trim('"')
-        val reason = eventData["cancelReason"]?.toString()?.trim()?.trim('"')
-            ?: eventData["reason"]?.toString()?.trim()?.trim('"')
+        val orderIdRaw = stringOf(eventData, "orderId", "order_id")
+        val paymentIdRaw = stringOf(eventData, "paymentId", "payment_id")
+        val reason = stringOf(eventData, "cancelReason", "cancel_reason", "reason")
             ?: "주문 취소"
-        val orderNo = eventData["orderNo"]?.toString()?.trim()?.trim('"') ?: orderIdRaw
-        val customerIdRaw = eventData["customerId"]?.toString()?.trim()?.trim('"')
+        val orderNo = stringOf(eventData, "orderNo", "order_no") ?: orderIdRaw
+        val customerIdRaw = stringOf(eventData, "customerId", "customer_id", "userId", "user_id")
         val customerId = customerIdRaw?.toLongOrNull()
 
         if (paymentIdRaw.isNullOrBlank() && orderIdRaw.isNullOrBlank()) {
@@ -459,12 +483,12 @@ class PaymentKafkaListener(
      */
     private fun handlePaymentCreateRequested(eventData: Map<String, Any>) {
         try {
-            val orderIdRaw = eventData["orderId"]?.toString()?.trim()?.trim('"')
-            val orderNo = eventData["orderNo"]?.toString()?.trim()?.trim('"') ?: "ORDER-${System.currentTimeMillis()}"
-            val amountRaw = eventData["amount"]?.toString()?.trim()?.trim('"')
-            val paymentMethod = eventData["paymentMethod"]?.toString()?.trim()?.trim('"') ?: "CARD"
-            val customerIdRaw = eventData["customerId"]?.toString()?.trim()?.trim('"')
-            val orderName = eventData["orderName"]?.toString()?.trim()?.trim('"') ?: orderNo
+            val orderIdRaw = stringOf(eventData, "orderId", "order_id")
+            val orderNo = stringOf(eventData, "orderNo", "order_no") ?: "ORDER-${System.currentTimeMillis()}"
+            val amountRaw = stringOf(eventData, "amount", "totalAmount", "total_amount")
+            val paymentMethod = stringOf(eventData, "paymentMethod", "payment_method") ?: "CARD"
+            val customerIdRaw = stringOf(eventData, "customerId", "customer_id", "userId", "user_id")
+            val orderName = stringOf(eventData, "orderName", "order_name") ?: orderNo
 
             if (orderIdRaw.isNullOrBlank() || amountRaw.isNullOrBlank()) {
                 log.warn("⚠️ [PAYMENT] 결제 생성 요청 필수 데이터 누락 - eventData: {}", eventData)
@@ -639,7 +663,7 @@ class PaymentKafkaListener(
         groupId = EventConstants.ConsumerGroups.PAYMENT_SERVICE_GROUP
     )
     fun handleOrderEvents(
-        @Payload eventData: Map<String, Any>,
+        @Payload rawEventData: Any,
         @Header(KafkaHeaders.RECEIVED_TOPIC) topic: String,
         @Header(KafkaHeaders.RECEIVED_PARTITION) partition: Int,
         @Header(KafkaHeaders.OFFSET) offset: Long,
@@ -647,8 +671,15 @@ class PaymentKafkaListener(
         acknowledgment: Acknowledgment
     ) {
         val startTime = System.currentTimeMillis()
-        val eventType = eventData[EventConstants.MetadataKeys.EVENT_TYPE] as? String
-        val eventId = eventData[EventConstants.MetadataKeys.EVENT_ID] as? String
+        val eventData = normalizeEventData(rawEventData)
+        if (eventData == null) {
+            log.warn("⚠️ [PAYMENT] Order 이벤트 파싱 실패 - topic: {}, partition: {}, offset: {}, payloadType: {}",
+                topic, partition, offset, rawEventData::class.java.name)
+            acknowledgment.acknowledge()
+            return
+        }
+        val eventType = stringOf(eventData, EventConstants.MetadataKeys.EVENT_TYPE, "event_type")
+        val eventId = stringOf(eventData, EventConstants.MetadataKeys.EVENT_ID, "event_id")
         try {
             log.info("📦 [PAYMENT] Order 이벤트 수신 - topic: {}, partition: {}, offset: {}, key: {}, eventType: {}, eventId: {}",
                 topic, partition, offset, key, eventType, eventId)
@@ -720,12 +751,12 @@ class PaymentKafkaListener(
      * - 주문 생성 완료 시 결제 준비 작업 수행
      */
     private fun handleOrderCreated(eventData: Map<String, Any>) {
-        val orderId = eventData["orderId"]?.toString()
-        val orderNo = eventData["orderNo"]?.toString()
-        val userId = eventData["userId"]?.toString()
-        val totalAmount = eventData["totalAmount"] as? Int
-        val hasReservation = eventData["hasReservation"] as? Boolean ?: false
-        val hasGoods = eventData["hasGoods"] as? Boolean ?: false
+        val orderId = stringOf(eventData, "orderId", "order_id")
+        val orderNo = stringOf(eventData, "orderNo", "order_no")
+        val userId = stringOf(eventData, "userId", "user_id", "customerId", "customer_id")
+        val totalAmount = intOf(eventData, "totalAmount", "total_amount", "amount")
+        val hasReservation = toBoolean(eventData["hasReservation"] ?: eventData["has_reservation"]) ?: false
+        val hasGoods = toBoolean(eventData["hasGoods"] ?: eventData["has_goods"]) ?: false
 
         log.info("📦 [PAYMENT] 주문 생성 이벤트 수신 - orderId: {}, orderNo: {}, userId: {}, amount: {}원, reservation: {}, goods: {}",
             orderId, orderNo, userId, totalAmount, hasReservation, hasGoods)
@@ -762,10 +793,10 @@ class PaymentKafkaListener(
      * - 다른 서비스에서 결제 완료 상태로 변경했을 때 동기화
      */
     private fun handleOrderPaid(eventData: Map<String, Any>) {
-        val orderId = eventData["orderId"]?.toString()
-        val paymentId = eventData["paymentId"]?.toString()
-        val totalAmount = eventData["totalAmount"] as? Int
-        val paidAt = eventData["paidAt"]?.toString()
+        val orderId = stringOf(eventData, "orderId", "order_id")
+        val paymentId = stringOf(eventData, "paymentId", "payment_id")
+        val totalAmount = intOf(eventData, "totalAmount", "total_amount", "amount")
+        val paidAt = stringOf(eventData, "paidAt", "paid_at")
 
         log.info("💳 [PAYMENT] 주문 결제 완료 이벤트 수신 - orderId: {}, paymentId: {}, amount: {}원, paidAt: {}",
             orderId, paymentId, totalAmount, paidAt)
@@ -800,13 +831,13 @@ class PaymentKafkaListener(
      * - 주문 완전 완료 시 결제 관련 정리 작업
      */
     private fun handleOrderCompleted(eventData: Map<String, Any>) {
-        val orderId = eventData["orderId"]?.toString()
-        val popupId = eventData["popupId"]?.toString()
-        val storeId = eventData["storeId"]?.toString()
-        val totalAmount = eventData["totalAmount"] as? Int
-        val completedAt = eventData["completedAt"]?.toString()
-        val hasReservation = eventData["hasReservation"] as? Boolean ?: false
-        val hasGoods = eventData["hasGoods"] as? Boolean ?: false
+        val orderId = stringOf(eventData, "orderId", "order_id")
+        val popupId = stringOf(eventData, "popupId", "popup_id")
+        val storeId = stringOf(eventData, "storeId", "store_id")
+        val totalAmount = intOf(eventData, "totalAmount", "total_amount", "amount")
+        val completedAt = stringOf(eventData, "completedAt", "completed_at")
+        val hasReservation = toBoolean(eventData["hasReservation"] ?: eventData["has_reservation"]) ?: false
+        val hasGoods = toBoolean(eventData["hasGoods"] ?: eventData["has_goods"]) ?: false
 
         log.info("✅ [PAYMENT] 주문 완료 이벤트 수신 - orderId: {}, storeId: {}, amount: {}원, completedAt: {}",
             orderId, storeId, totalAmount, completedAt)
@@ -850,6 +881,62 @@ class PaymentKafkaListener(
         } catch (e: Exception) {
             log.error("🚨 [PAYMENT] ORDER_COMPLETED 처리 실패 - orderId: {}, error: {}", orderId, e.message, e)
         }
+    }
+
+    private fun normalizeEventData(rawEventData: Any?): Map<String, Any>? {
+        val baseMap = toEventMap(rawEventData) ?: return null
+        val payloadMap = toEventMap(baseMap["payload"]) ?: toEventMap(baseMap["data"])
+        return if (payloadMap != null) baseMap + payloadMap else baseMap
+    }
+
+    private fun toEventMap(raw: Any?): Map<String, Any>? {
+        return when (raw) {
+            null -> null
+            is Map<*, *> -> raw.entries
+                .mapNotNull { entry ->
+                    val key = entry.key as? String ?: return@mapNotNull null
+                    val value = entry.value ?: return@mapNotNull null
+                    key to value
+                }
+                .toMap()
+            is String -> parseJsonToMap(raw.trim().trim('"'))
+            else -> runCatching {
+                @Suppress("UNCHECKED_CAST")
+                objectMapper.convertValue(raw, Map::class.java) as Map<String, Any>
+            }.getOrNull()
+        }
+    }
+
+    private fun parseJsonToMap(payload: String): Map<String, Any>? {
+        if (payload.isBlank()) {
+            return null
+        }
+        return runCatching {
+            @Suppress("UNCHECKED_CAST")
+            objectMapper.readValue(payload, Map::class.java) as Map<String, Any>
+        }.getOrNull()
+    }
+
+    private fun stringOf(source: Map<String, Any>, vararg keys: String): String? {
+        for (key in keys) {
+            val value = source[key] ?: continue
+            val normalized = value.toString().trim().trim('"')
+            if (normalized.isNotBlank() && !normalized.equals("null", ignoreCase = true)) {
+                return normalized
+            }
+        }
+        return null
+    }
+
+    private fun intOf(source: Map<String, Any>, vararg keys: String): Int? {
+        for (key in keys) {
+            val value = source[key] ?: continue
+            when (value) {
+                is Number -> return value.toInt()
+                else -> value.toString().trim().toIntOrNull()?.let { return it }
+            }
+        }
+        return null
     }
 
 }

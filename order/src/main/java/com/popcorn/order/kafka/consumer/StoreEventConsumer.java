@@ -2,6 +2,7 @@ package com.popcorn.order.kafka.consumer;
 
 import java.util.HashMap;
 import java.util.Map;
+import java.util.Objects;
 import java.util.UUID;
 
 import org.springframework.kafka.annotation.KafkaListener;
@@ -38,21 +39,22 @@ public class StoreEventConsumer {
         log.info("[KAFKA_CONSUME] topic={}, partition={}, offset={}, key={}", topic, partition, offset, key);
         log.info("StoreEventConsumer payload={}", kafkaMessage);
 
-        Map<Object, Object> map = new HashMap<>();
+        Map<String, Object> map = new HashMap<>();
         ObjectMapper mapper = new ObjectMapper();
         try {
-            map = mapper.readValue(kafkaMessage, new TypeReference<Map<Object, Object>>() {
-            });
+            map = parseKafkaMessage(kafkaMessage, mapper);
         } catch (JsonProcessingException e) {
             log.error("[KAFKA_CONSUME_PARSE_FAIL] topic={}, partition={}, offset={}, error={}",
                     topic, partition, offset, e.getMessage(), e);
             return;
         }
 
-        log.info("카프카 orderId={} , eventType={}",(String)map.get("orderId"),(String)map.get("eventType"));
+        Map<String, Object> eventData = unwrapPayloadIfNeeded(map);
 
-        String eventType = (String)map.get("eventType");
-        String orderIdRaw = (String)map.get("orderId");
+        String eventType = normalizeEventType(eventData);
+        String orderIdRaw = Objects.toString(eventData.get("orderId"), null);
+
+        log.info("카프카 orderId={} , eventType={}", orderIdRaw, eventType);
 
         /*if (orderIdRaw  == null || orderIdRaw .isBlank()) {
             return null;
@@ -64,7 +66,14 @@ public class StoreEventConsumer {
             return;
         }
 
-        UUID orderId = UUID.fromString(orderIdRaw);
+        UUID orderId;
+        try {
+            orderId = UUID.fromString(orderIdRaw);
+        } catch (IllegalArgumentException e) {
+            log.warn("[KAFKA_CONSUME_SKIP] invalid orderId. topic={}, partition={}, offset={}, orderId={}",
+                    topic, partition, offset, orderIdRaw);
+            return;
+        }
         
 
         switch (eventType) {
@@ -86,7 +95,7 @@ public class StoreEventConsumer {
                     orderCommandService.updateOrderStatus(orderId, OrderStatus.REJECTED.name(),
                             "예약 실패 이벤트 수신");
 
-                    String reason = (String)map.get("reason");
+                    String reason = Objects.toString(eventData.get("reason"), null);
                     log.warn(" 재고 예약 실패 처리 - orderId: {}, reason: {}", orderId, reason);
 
                     orderCommandService.updateOrderStatus(orderId, OrderStatus.CANCELLED.name(),
@@ -113,5 +122,42 @@ public class StoreEventConsumer {
                 default:
                     log.info("Unhandled store eventType: {}", eventType);
         }
+    }
+
+    private Map<String, Object> parseKafkaMessage(String kafkaMessage, ObjectMapper mapper) throws JsonProcessingException {
+        String trimmed = kafkaMessage == null ? "" : kafkaMessage.trim();
+        if (trimmed.isEmpty()) {
+            return new HashMap<>();
+        }
+
+        // 일부 프로듀서/커넥터에서 JSON 문자열을 한 번 더 감싸서 보낼 수 있어 보정.
+        if (trimmed.startsWith("\"") && trimmed.endsWith("\"")) {
+            String unwrapped = mapper.readValue(trimmed, String.class);
+            return mapper.readValue(unwrapped, new TypeReference<Map<String, Object>>() {});
+        }
+
+        return mapper.readValue(trimmed, new TypeReference<Map<String, Object>>() {});
+    }
+
+    @SuppressWarnings("unchecked")
+    private Map<String, Object> unwrapPayloadIfNeeded(Map<String, Object> parsed) {
+        Object payload = parsed.get("payload");
+        if (payload instanceof Map<?, ?> payloadMap) {
+            try {
+                return (Map<String, Object>) payloadMap;
+            } catch (ClassCastException ignored) {
+                // fall through and use original map
+            }
+        }
+        return parsed;
+    }
+
+    private String normalizeEventType(Map<String, Object> eventData) {
+        String eventType = Objects.toString(eventData.get("eventType"), null);
+        if (eventType != null && !eventType.isBlank()) {
+            return eventType;
+        }
+        // snake_case 호환 fallback
+        return Objects.toString(eventData.get("event_type"), null);
     }
 }

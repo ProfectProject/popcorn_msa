@@ -29,9 +29,7 @@ public class SecurityConfig {
                 .formLogin(form -> form.disable())
                 .httpBasic(basic -> basic.disable())
                 .authorizeHttpRequests(auth -> auth
-                        .requestMatchers("/swagger-ui.html", "/swagger-ui/**", "/v3/api-docs/**", "/actuator/**").permitAll()
-                        .requestMatchers("/api/orderquery/v1/owner/**", "/api/orderquery/v1/dashboard/**").authenticated()
-                        .anyRequest().permitAll()
+                        .anyRequest().authenticated()
                 )
                 .addFilterBefore(headerAuthenticationFilter(), UsernamePasswordAuthenticationFilter.class)
                 .build();

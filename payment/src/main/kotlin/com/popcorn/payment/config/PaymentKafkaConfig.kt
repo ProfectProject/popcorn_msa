@@ -59,4 +59,14 @@ class PaymentKafkaConfig {
             .config(TopicConfig.COMPRESSION_TYPE_CONFIG, "snappy")
             .build()
     }
+
+    @Bean
+    fun orderRequestsDlqTopic(): NewTopic {
+        return TopicBuilder.name("order-requests-dlq")
+            .partitions(12)
+            .replicas(1)
+            .config(TopicConfig.RETENTION_MS_CONFIG, "2592000000") // 30일 보관
+            .config(TopicConfig.COMPRESSION_TYPE_CONFIG, "snappy")
+            .build()
+    }
 }
