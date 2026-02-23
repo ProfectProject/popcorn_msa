@@ -53,6 +53,8 @@ public class KafkaListener {
             }
 
             OrderCreatedEvent storeEvent = buildOrderCreatedEvent(envelope);
+            log.info("🧾 [KafkaListener] ORDER_CREATED 처리 시작 - orderId={}, eventId={}, popupId={}",
+                    storeEvent.getOrderId(), storeEvent.getEventId(), storeEvent.getPopupId());
             reservationService.reserveForOrderCreated(storeEvent);
             log.info("✅ [KafkaListener] ORDER_CREATED 전달 완료 - orderId={}, eventId={}",
                     storeEvent.getOrderId(), storeEvent.getEventId());
