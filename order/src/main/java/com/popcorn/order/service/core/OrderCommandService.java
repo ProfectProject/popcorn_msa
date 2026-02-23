@@ -16,6 +16,7 @@ import org.springframework.transaction.annotation.Transactional;
 import org.springframework.transaction.support.TransactionSynchronization;
 import org.springframework.transaction.support.TransactionSynchronizationManager;
 import org.springframework.transaction.support.TransactionTemplate;
+import org.springframework.web.util.UriComponentsBuilder;
 
 import com.popcorn.common.annotation.Idempotent;
 import com.popcorn.order.util.PerformanceLogger;
@@ -88,6 +89,8 @@ public class OrderCommandService {
 
     @org.springframework.beans.factory.annotation.Value("${frontend.base-url}")
     private String frontendBaseUrl;
+
+    private static final String FRONTEND_PAYMENT_PATH = "/auto-payment";
 
     @org.springframework.beans.factory.annotation.Value("${order.reservation.wait-timeout-ms:0}")
     private long reservationWaitTimeoutMs;
@@ -706,7 +709,11 @@ public class OrderCommandService {
 
             // 2단계: URL 생성 및 캐싱 (목표: 10ms)
             paymentTracker.markUrlGenerationStart();
-            String paymentUrl = String.format("%s/auto-payment?token=%s", frontendBaseUrl, paymentToken);
+            String paymentUrl = UriComponentsBuilder.fromUriString(frontendBaseUrl)
+                    .path(FRONTEND_PAYMENT_PATH)
+                    .queryParam("token", paymentToken)
+                    .build()
+                    .toUriString();
             paymentTracker.markUrlGenerationEnd(false); // URL은 항상 새로 생성
 
             // 3단계: 응답 생성 및 캐싱 (목표: 5ms)

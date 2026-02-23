@@ -19,6 +19,7 @@ import org.slf4j.LoggerFactory
 import org.springframework.beans.factory.annotation.Value
 import org.springframework.data.redis.core.StringRedisTemplate
 import org.springframework.stereotype.Service
+import org.springframework.web.util.UriComponentsBuilder
 import java.time.Duration
 import java.time.LocalDateTime
 import java.time.OffsetDateTime
@@ -46,6 +47,8 @@ class TossPaymentCoroutineService(
 
     @Value("\${frontend.base-url:\${FRONTEND_BASE_URL:http://localhost:3000}}")
     private lateinit var frontendBaseUrl: String
+
+    private val frontendPaymentPath: String = "/auto-payment"
 
     private val log = LoggerFactory.getLogger(TossPaymentCoroutineService::class.java)
 
@@ -99,8 +102,12 @@ class TossPaymentCoroutineService(
                 paymentMethod = "TOSS_PAYMENT"
             )
 
-            // 프론트엔드 URL + 토큰으로 결제 URL 생성 (Order 서비스와 동일)
-            val paymentUrl = "$frontendBaseUrl/auto-payment?token=$paymentToken"
+            val paymentPath = if (frontendPaymentPath.startsWith("/")) frontendPaymentPath else "/$frontendPaymentPath"
+            val paymentUrl = UriComponentsBuilder.fromUriString(frontendBaseUrl)
+                .path(paymentPath)
+                .queryParam("token", paymentToken)
+                .build()
+                .toUriString()
 
             log.info("🚀 토큰 기반 결제 URL 생성 완료 - orderId: {}, 토큰 길이: {}자", orderId, paymentToken.length)
             return paymentUrl

@@ -19,10 +19,12 @@ import jakarta.validation.Valid
 import kotlinx.coroutines.async
 import kotlinx.coroutines.coroutineScope
 import org.slf4j.LoggerFactory
+import org.springframework.beans.factory.annotation.Value
 import org.springframework.http.HttpStatus
 import org.springframework.http.ResponseEntity
 import org.springframework.security.access.prepost.PreAuthorize
 import org.springframework.security.core.annotation.AuthenticationPrincipal
+import org.springframework.web.util.UriComponentsBuilder
 import org.springframework.web.bind.annotation.*
 import com.popcorn.common.security.PassportPrincipal
 import java.util.*
@@ -42,6 +44,11 @@ class PaymentController(
 
     private val log = LoggerFactory.getLogger(PaymentController::class.java)
     private val genericErrorMessage = "시스템 오류가 발생했습니다. 잠시 후 다시 시도해주세요."
+
+    @Value("\${frontend.base-url:\${FRONTEND_BASE_URL:http://localhost:3000}}")
+    private lateinit var frontendBaseUrl: String
+
+    private val frontendPaymentPath: String = "/auto-payment"
 
     /**
      * 토스페이먼츠 결제 승인
@@ -262,7 +269,6 @@ class PaymentController(
     }
 
     private fun buildFrontendPaymentUrl(request: PaymentCreateRequest): String {
-        val frontendUrl = "http://localhost:3000"
         val orderNo = request.orderNo ?: request.orderId.toString()
         val customerKey = request.customerId?.toString() ?: "guest"
 
@@ -274,7 +280,16 @@ class PaymentController(
             customerKey = customerKey
         )
 
-        return "$frontendUrl/auto-payment?token=$token"
+        return buildPaymentEntryUrl(token)
+    }
+
+    private fun buildPaymentEntryUrl(token: String): String {
+        val paymentPath = if (frontendPaymentPath.startsWith("/")) frontendPaymentPath else "/$frontendPaymentPath"
+        return UriComponentsBuilder.fromUriString(frontendBaseUrl)
+            .path(paymentPath)
+            .queryParam("token", token)
+            .build()
+            .toUriString()
     }
 
     /**
@@ -352,7 +367,7 @@ class PaymentController(
                 customerKey = customerKey
             )
 
-            val paymentUrl = "http://localhost:3000/auto-payment?token=$newToken"
+            val paymentUrl = buildPaymentEntryUrl(newToken)
 
             ResponseEntity.ok(
                 ApiResponse.success(
