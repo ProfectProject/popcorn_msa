@@ -23,6 +23,11 @@ public class EventLineItem {
      */
     private String itemType;
 
+    /**
+     * 주문 내 개별 라인 ID
+     */
+    private UUID itemId;
+
     // === 예약 관련 필드 (itemType = "SCHEDULE") ===
     /**
      * 스케줄 ID (예약용)
