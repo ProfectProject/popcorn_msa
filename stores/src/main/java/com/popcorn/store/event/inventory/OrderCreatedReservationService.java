@@ -22,10 +22,12 @@ import java.time.Duration;
 import java.time.Instant;
 import java.time.LocalDateTime;
 import java.util.ArrayList;
+import java.util.HashSet;
 import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.Optional;
+import java.util.Set;
 import java.util.UUID;
 import java.util.stream.Collectors;
 
@@ -93,7 +95,7 @@ public class OrderCreatedReservationService {
 
         log.info("ORDER_CREATED goods 처리 시작 - orderId={}, popupId={}, lines={}", event.getOrderId(), popupId, goodsLines.size());
 
-        Map<UUID, Integer> aggregated = aggregateQuantities(goodsLines);
+        Map<UUID, Integer> aggregated = aggregateQuantities(event.getOrderId(), goodsLines);
         if (aggregated.isEmpty()) {
             log.debug("goods 항목 수량 없음 - orderId={}", event.getOrderId());
             return;
@@ -341,9 +343,18 @@ public class OrderCreatedReservationService {
         return null;
     }
 
-    private Map<UUID, Integer> aggregateQuantities(List<EventLineItem> goodsLines) {
+    private Map<UUID, Integer> aggregateQuantities(UUID orderId, List<EventLineItem> goodsLines) {
         Map<UUID, Integer> aggregated = new LinkedHashMap<>();
+        Set<UUID> processedLineIds = new HashSet<>();
         for (EventLineItem line : goodsLines) {
+            if (line == null || line.getGoodsId() == null || line.getQty() == null || line.getQty() <= 0) {
+                continue;
+            }
+            UUID itemId = line.getItemId();
+            if (itemId != null && !processedLineIds.add(itemId)) {
+                log.info("중복 goods 라인 무시 - orderId={}, itemId={}", orderId, itemId);
+                continue;
+            }
             aggregated.merge(line.getGoodsId(), line.getQty(), Integer::sum);
         }
         return aggregated;
