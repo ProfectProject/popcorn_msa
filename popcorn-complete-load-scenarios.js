@@ -77,6 +77,11 @@ const POPUP_IDS = (__ENV.POPUP_IDS || "e534dfc8-23e7-4a7c-93c6-ce4ac6ec934d,6b45
 const API_TIMEOUT = __ENV.API_TIMEOUT || "15s";  // 타임아웃 확장 (5s → 15s)
 const API_RETRY_COUNT = parseInt(__ENV.API_RETRY_COUNT || "2", 10);
 const API_RETRY_DELAY_MS = parseInt(__ENV.API_RETRY_DELAY_MS || "500", 10);
+const POPUP_LIST_TIMEOUT = __ENV.POPUP_LIST_TIMEOUT || "4s";
+const POPUP_LIST_RETRY_COUNT = parseInt(__ENV.POPUP_LIST_RETRY_COUNT || "0", 10);
+const ENABLE_POPUP_LIST = (__ENV.ENABLE_POPUP_LIST || "false").toLowerCase() === "true";
+const POPUP_LIST_SAMPLE_RATE = parseFloat(__ENV.POPUP_LIST_SAMPLE_RATE || "0.10");
+const POPUP_LIST_COOLDOWN_MS = parseInt(__ENV.POPUP_LIST_COOLDOWN_MS || "5000", 10);
 
 // 서킷 브레이커 설정
 const CIRCUIT_FAILURE_THRESHOLD = parseInt(__ENV.CIRCUIT_FAILURE_THRESHOLD || "10", 10);
@@ -141,6 +146,7 @@ const r_query_fail = new Rate("r_query_fail");
 let globalToken = null;
 let tokenExpiry = null;
 let nextLoginAttemptAt = 0;
+let nextPopupListAttemptAt = 0;
 const TOKEN_REFRESH_MARGIN = 5 * 60 * 1000; // 5분 전 갱신
 
 // ===== 서킷 브레이커 관리 =====
@@ -493,16 +499,24 @@ function extractOrderId(orderRes) {
 function api_popup_list() {
   if (!TEST_MODE && !ensureValidToken()) return null;
 
+  // popup_list는 핫패스에서 과부하를 만들기 쉬워 기본 비활성/샘플링/쿨다운 적용
+  if (!ENABLE_POPUP_LIST) return null;
+  if (Math.random() > POPUP_LIST_SAMPLE_RATE) return null;
+
+  const now = Date.now();
+  if (now < nextPopupListAttemptAt) return null;
+  nextPopupListAttemptAt = now + POPUP_LIST_COOLDOWN_MS;
+
   return retryApiCall("popup_list", () => {
     const res = http.get(`${BASE_URL}/api/stores/v1/popups`, {
       headers: headers(),
-      timeout: API_TIMEOUT,
+      timeout: POPUP_LIST_TIMEOUT,
       tags: { name: "popup_list" }
     });
     t_popup_list.add(res.timings.duration);
     check(res, { "popup_list 2xx": ok2xx });
     return res;
-  });
+  }, POPUP_LIST_RETRY_COUNT);
 }
 
 function api_popup_detail(popupId) {
