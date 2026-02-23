@@ -45,8 +45,8 @@ spring:
     schemas: store
     clean-disabled: false
 
-  Kafka:
-    bootstrap-servers: ${KAFKA_BOOTSTRAP_SERVERS}
+  kafka:
+    bootstrap-servers: ${KAFKA_BOOTSTRAP_SERVERS:kafka-1:9092,kafka-2:9092,kafka-3:9092}
 
     producer:
       acks: all
@@ -56,7 +56,7 @@ spring:
       value-serializer: org.apache.kafka.common.serialization.StringSerializer
 
     consumer:
-      group-id: ${STORE_KAFKA_CONSUMER_GROUP_ID}
+      group-id: ${STORE_KAFKA_CONSUMER_GROUP_ID:stores-group}
       auto-offset-reset: earliest
       enable-auto-commit: false
       key-deserializer: org.apache.kafka.common.serialization.StringDeserializer
@@ -64,7 +64,7 @@ spring:
 
     listener:
       ack-mode: manual
-      concurrency: ${KAFKA_LISTENER_CONCURRENCY}
+      concurrency: ${KAFKA_LISTENER_CONCURRENCY:3}
 
 jwt:
   secret: ${JWT_SECRET}
@@ -94,7 +94,7 @@ popcorn:
     topic:
       replicas: ${KAFKA_TOPIC_REPLICAS:3}
     partitions:
-      storeEvents: ${STORE_EVENTS_PARTITIONS}
+      storeEvents: ${STORE_EVENTS_PARTITIONS:12}
       storeRequests: ${STORE_REQUESTS_PARTITIONS:12}
 
 store:
