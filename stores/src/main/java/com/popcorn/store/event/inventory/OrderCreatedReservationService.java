@@ -91,6 +91,8 @@ public class OrderCreatedReservationService {
             return;
         }
 
+        log.info("ORDER_CREATED goods 처리 시작 - orderId={}, popupId={}, lines={}", event.getOrderId(), popupId, goodsLines.size());
+
         Map<UUID, Integer> aggregated = aggregateQuantities(goodsLines);
         if (aggregated.isEmpty()) {
             log.debug("goods 항목 수량 없음 - orderId={}", event.getOrderId());
@@ -220,10 +222,14 @@ public class OrderCreatedReservationService {
         List<GoodsOrderReservation> reservations = new ArrayList<>();
 
         for (GoodsHoldItem item : holdItems) {
+            log.debug("Goods hold success - orderId={}, goodsId={}, qty={}", event.getOrderId(), item.getGoodsId(), item.getQuantity());
             GoodsOrderReservation reservation = reservationService.createGoodsReservation(
                     event.getOrderId(), event.getOrderNo(), popupId, item.getGoodsId(), item.getQuantity()
             );
             reservations.add(reservation);
+
+            log.info("Goods reservation created - orderId={}, goodsId={}, reservationId={}",
+                    event.getOrderId(), item.getGoodsId(), reservation.getId());
 
             kafkaPublisher.publishGoodsReservationSucceeded(
                     event.getOrderId(),
@@ -231,6 +237,7 @@ public class OrderCreatedReservationService {
                     item.getQuantity(),
                     expiresAt
             );
+            log.info("Goods reservation event published - orderId={}, goodsId={}", event.getOrderId(), item.getGoodsId());
         }
 
         scheduleExpiration(event.getOrderId(), popupId, reservations, ReservationType.GOODS, RESERVATION_TYPE_GOODS);
