@@ -82,6 +82,9 @@ const POPUP_LIST_RETRY_COUNT = parseInt(__ENV.POPUP_LIST_RETRY_COUNT || "0", 10)
 const ENABLE_POPUP_LIST = (__ENV.ENABLE_POPUP_LIST || "false").toLowerCase() === "true";
 const POPUP_LIST_SAMPLE_RATE = parseFloat(__ENV.POPUP_LIST_SAMPLE_RATE || "0.10");
 const POPUP_LIST_COOLDOWN_MS = parseInt(__ENV.POPUP_LIST_COOLDOWN_MS || "5000", 10);
+const POPUP_DETAIL_TIMEOUT = __ENV.POPUP_DETAIL_TIMEOUT || "6s";
+const POPUP_DETAIL_RETRY_COUNT = parseInt(__ENV.POPUP_DETAIL_RETRY_COUNT || "0", 10);
+const POPUP_DETAIL_COOLDOWN_MS = parseInt(__ENV.POPUP_DETAIL_COOLDOWN_MS || "3000", 10);
 
 // 서킷 브레이커 설정
 const CIRCUIT_FAILURE_THRESHOLD = parseInt(__ENV.CIRCUIT_FAILURE_THRESHOLD || "10", 10);
@@ -147,6 +150,7 @@ let globalToken = null;
 let tokenExpiry = null;
 let nextLoginAttemptAt = 0;
 let nextPopupListAttemptAt = 0;
+let nextPopupDetailAttemptAt = 0;
 const TOKEN_REFRESH_MARGIN = 5 * 60 * 1000; // 5분 전 갱신
 
 // ===== 서킷 브레이커 관리 =====
@@ -522,16 +526,22 @@ function api_popup_list() {
 function api_popup_detail(popupId) {
   if (!TEST_MODE && !ensureValidToken()) return null;
 
+  const now = Date.now();
+  if (now < nextPopupDetailAttemptAt) return null;
+
   return retryApiCall(`popup_detail(${popupId})`, () => {
     const res = http.get(`${BASE_URL}/api/stores/v1/popups/${popupId}`, {
       headers: headers(),
-      timeout: API_TIMEOUT,
+      timeout: POPUP_DETAIL_TIMEOUT,
       tags: { name: "popup_detail" }
     });
+    if (!res || res.status === 0 || res.status >= 500) {
+      nextPopupDetailAttemptAt = Date.now() + POPUP_DETAIL_COOLDOWN_MS;
+    }
     t_popup_detail.add(res.timings.duration);
     check(res, { "popup_detail 2xx": ok2xx });
     return res;
-  });
+  }, POPUP_DETAIL_RETRY_COUNT);
 }
 
 function api_order_create({ popupId }) {
