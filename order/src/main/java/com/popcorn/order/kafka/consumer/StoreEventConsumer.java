@@ -4,14 +4,14 @@ import java.util.HashMap;
 import java.util.Map;
 import java.util.UUID;
 
-import org.springframework.core.OrderComparator;
 import org.springframework.kafka.annotation.KafkaListener;
+import org.springframework.kafka.support.KafkaHeaders;
+import org.springframework.messaging.handler.annotation.Header;
 import org.springframework.stereotype.Service;
 
 import com.fasterxml.jackson.core.JsonProcessingException;
 import com.fasterxml.jackson.core.type.TypeReference;
 import com.fasterxml.jackson.databind.ObjectMapper;
-import com.popcorn.order.constants.EventConstants;
 import com.popcorn.order.entity.OrderStatus;
 import com.popcorn.order.service.core.OrderCommandService;
 
@@ -28,8 +28,15 @@ public class StoreEventConsumer {
             topics = "store-events",
             groupId = "${kafka.consumer.groups.store-reservation:order-reservation-cg}"
     )
-    public void storeReserveConsumer(String kafkaMessage){
-        log.info("카프카 메세지-StoreEventConsumer:{}",kafkaMessage);
+    public void storeReserveConsumer(
+            String kafkaMessage,
+            @Header(KafkaHeaders.RECEIVED_TOPIC) String topic,
+            @Header(KafkaHeaders.RECEIVED_PARTITION) int partition,
+            @Header(KafkaHeaders.OFFSET) long offset,
+            @Header(value = KafkaHeaders.RECEIVED_KEY, required = false) String key
+    ){
+        log.info("[KAFKA_CONSUME] topic={}, partition={}, offset={}, key={}", topic, partition, offset, key);
+        log.info("StoreEventConsumer payload={}", kafkaMessage);
 
         Map<Object, Object> map = new HashMap<>();
         ObjectMapper mapper = new ObjectMapper();
@@ -37,7 +44,9 @@ public class StoreEventConsumer {
             map = mapper.readValue(kafkaMessage, new TypeReference<Map<Object, Object>>() {
             });
         } catch (JsonProcessingException e) {
-            e.printStackTrace();
+            log.error("[KAFKA_CONSUME_PARSE_FAIL] topic={}, partition={}, offset={}, error={}",
+                    topic, partition, offset, e.getMessage(), e);
+            return;
         }
 
         log.info("카프카 orderId={} , eventType={}",(String)map.get("orderId"),(String)map.get("eventType"));
@@ -48,6 +57,12 @@ public class StoreEventConsumer {
         /*if (orderIdRaw  == null || orderIdRaw .isBlank()) {
             return null;
         }*/
+
+        if (orderIdRaw == null || orderIdRaw.isBlank()) {
+            log.warn("[KAFKA_CONSUME_SKIP] orderId is empty. topic={}, partition={}, offset={}",
+                    topic, partition, offset);
+            return;
+        }
 
         UUID orderId = UUID.fromString(orderIdRaw);
         

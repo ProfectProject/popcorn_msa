@@ -18,6 +18,7 @@ import com.popcorn.order.kafka.event.order_events.OrderStatusUpdatedEvent;
 import com.popcorn.order.service.lookup.OrderPopupLookupService;
 
 import lombok.RequiredArgsConstructor;
+import lombok.extern.slf4j.Slf4j;
 import org.springframework.stereotype.Component;
 
 import java.time.Instant;
@@ -30,6 +31,7 @@ import java.util.UUID;
 
 @Component
 @RequiredArgsConstructor
+@Slf4j
 public class OrderEventProducer {
 
     private static final String ORDER_EVENTS_TOPIC = "order-events";
@@ -218,6 +220,15 @@ public class OrderEventProducer {
         );
 
         outboxEventRepository.save(outboxEvent);
+        log.info(
+                "[OUTBOX_SAVE] topic={}, aggregateType={}, aggregateId={}, eventType={}, eventId={}, correlationId={}",
+                ORDER_EVENTS_TOPIC,
+                AGGREGATE_TYPE_ORDER,
+                orderId,
+                eventType,
+                eventId,
+                correlationId
+        );
     }
 
     private UUID resolveStoreId(UUID popupId) {

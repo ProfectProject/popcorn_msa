@@ -4,10 +4,17 @@ server:
 
 spring:
   kafka:
-    enabled: true
     bootstrap-servers: ${KAFKA_BOOTSTRAP_SERVERS}
+    properties:
+      reconnect.backoff.ms: 1000
+      reconnect.backoff.max.ms: 10000
+      retry.backoff.ms: 1000
     consumer:
-      group-id: order-service-group
+      group-id: ${KAFKA_CONSUMER_GROUP_ID:order-service-group}
+      auto-offset-reset: earliest
+      enable-auto-commit: false
+    listener:
+      missing-topics-fatal: false
   config:
     activate:
       on-profile: prod
