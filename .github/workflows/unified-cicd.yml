@@ -233,39 +233,30 @@ jobs:
         run: |
           if [ "${{ matrix.service }}" == "order" ]; then
             echo "ecr_repo=goorm-popcorn-order" >> $GITHUB_OUTPUT
-            echo "task_def_file=order/goorm-popcorn-dev-order-service.json" >> $GITHUB_OUTPUT
             echo "container_name=order-service" >> $GITHUB_OUTPUT
           elif [ "${{ matrix.service }}" == "gateway" ]; then
             echo "ecr_repo=goorm-popcorn-api-gateway" >> $GITHUB_OUTPUT
-            echo "task_def_file=gateway/goorm-popcorn-dev-api-gateway.json" >> $GITHUB_OUTPUT
             echo "container_name=api-gateway" >> $GITHUB_OUTPUT
           elif [ "${{ matrix.service }}" == "users" ]; then
             echo "ecr_repo=goorm-popcorn-user" >> $GITHUB_OUTPUT
-            echo "task_def_file=users/goorm-popcorn-dev-user-service-revision2.json" >> $GITHUB_OUTPUT
             echo "container_name=user-service" >> $GITHUB_OUTPUT
           elif [ "${{ matrix.service }}" == "orderQuery" ]; then
             echo "ecr_repo=goorm-popcorn-order-query" >> $GITHUB_OUTPUT
-            echo "task_def_file=orderQuery/goorm-popcorn-dev-order-query.json" >> $GITHUB_OUTPUT
             echo "container_name=order-query" >> $GITHUB_OUTPUT
           elif [ "${{ matrix.service }}" == "payment" ]; then
             echo "ecr_repo=goorm-popcorn-payment" >> $GITHUB_OUTPUT
-            echo "task_def_file=payment/goorm-popcorn-dev-payment-service.json" >> $GITHUB_OUTPUT
             echo "container_name=payment-service" >> $GITHUB_OUTPUT
           elif [ "${{ matrix.service }}" == "stores" ]; then
             echo "ecr_repo=goorm-popcorn-store" >> $GITHUB_OUTPUT
-            echo "task_def_file=stores/goorm-popcorn-dev-store-service.json" >> $GITHUB_OUTPUT
             echo "container_name=store-service" >> $GITHUB_OUTPUT
           elif [ "${{ matrix.service }}" == "checkIns" ]; then
             echo "ecr_repo=goorm-popcorn-checkin" >> $GITHUB_OUTPUT
-            echo "task_def_file=checkIns/goorm-popcorn-dev-checkin-service.json" >> $GITHUB_OUTPUT
             echo "container_name=checkin-service" >> $GITHUB_OUTPUT
           elif [ "${{ matrix.service }}" == "coupon" ]; then
             echo "ecr_repo=goorm-popcorn-coupon" >> $GITHUB_OUTPUT
-            echo "task_def_file=coupon/goorm-popcorn-dev-coupon-service.json" >> $GITHUB_OUTPUT
             echo "container_name=coupon-service" >> $GITHUB_OUTPUT
           else
             echo "ecr_repo=goorm-popcorn-${{ matrix.service }}" >> $GITHUB_OUTPUT
-            echo "task_def_file=${{ matrix.service }}/goorm-popcorn-dev-${{ matrix.service }}.json" >> $GITHUB_OUTPUT
             echo "container_name=${{ matrix.service }}-service" >> $GITHUB_OUTPUT
           fi
 
