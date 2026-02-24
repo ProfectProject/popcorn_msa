@@ -114,3 +114,12 @@ popcorn:
 store:
   cors:
     allowed-origin-patterns: https://api.goormpopcorn.shop
+
+popup:
+  detail:
+    # Fail fast on Redis misses under peak, then serve cached/base data path.
+    redis-lookup-timeout-ms: ${POPUP_DETAIL_REDIS_LOOKUP_TIMEOUT_MS:40}
+    # Keep same-response hot key in process for burst traffic.
+    hot-cache-ttl-ms: ${POPUP_DETAIL_HOT_CACHE_TTL_MS:5000}
+    # Local fallback cache for transient backend spikes.
+    local-cache-ttl-seconds: ${POPUP_DETAIL_LOCAL_CACHE_TTL_SECONDS:300}
