@@ -4,6 +4,7 @@ import { Trend, Rate } from "k6/metrics";
 
 const BASE_URL = __ENV.BASE_URL || "https://api.goormpopcorn.shop";
 const AUTH_TOKEN = __ENV.AUTH_TOKEN || "";
+const QUERY_PATH_PREFIX = __ENV.QUERY_PATH_PREFIX || "/api/orderquery/v1";
 const POPUP_HOT_ID = __ENV.POPUP_HOT_ID || "e534dfc8-23e7-4a7c-93c6-ce4ac6ec934d";
 const USER_IDS = (__ENV.USER_IDS || "1,2,3,4,5").split(",");
 const ORDER_ID_FEED_URL = __ENV.ORDER_ID_FEED_URL || "";
@@ -40,7 +41,7 @@ function pickUserId() {
 }
 
 function api_my_order_status(orderId) {
-  const res = http.get(`${BASE_URL}/api/order-query/v1/orders/${orderId}`, {
+  const res = http.get(`${BASE_URL}${QUERY_PATH_PREFIX}/orders/${orderId}`, {
     headers: headers(),
     tags: { name: "query_my_order_status" },
   });
@@ -52,7 +53,7 @@ function api_my_order_status(orderId) {
 }
 
 function api_popup_stock(popupId) {
-  const res = http.get(`${BASE_URL}/api/order-query/v1/popups/${popupId}/stock`, {
+  const res = http.get(`${BASE_URL}${QUERY_PATH_PREFIX}/popups/${popupId}/stock`, {
     headers: headers(),
     tags: { name: "query_popup_stock" },
   });
@@ -64,7 +65,7 @@ function api_popup_stock(popupId) {
 }
 
 function api_order_list(userId, page = 0, size = 20) {
-  const res = http.get(`${BASE_URL}/api/order-query/v1/users/${userId}/orders?page=${page}&size=${size}`, {
+  const res = http.get(`${BASE_URL}${QUERY_PATH_PREFIX}/users/${userId}/orders?page=${page}&size=${size}`, {
     headers: headers(),
     tags: { name: "query_order_list" },
   });
@@ -108,9 +109,20 @@ const STORM_MY_ORDER_RPS = Math.floor((STORM_RPS_TOTAL * STORM_SPLIT_MY_ORDER_PC
 const STORM_POPUP_STOCK_RPS = Math.max(0, STORM_RPS_TOTAL - STORM_MY_ORDER_RPS);
 
 function addDurations(a, b) {
-  const ma = parseInt(String(a).replace("m", ""), 10);
-  const mb = parseInt(String(b).replace("m", ""), 10);
-  return `${ma + mb}m`;
+  const toSeconds = (value) => {
+    const v = String(value).trim();
+    const m = v.match(/^(\d+)([smh])$/i);
+    if (!m) throw new Error(`Unsupported duration format: ${value}`);
+    const n = parseInt(m[1], 10);
+    const unit = m[2].toLowerCase();
+    if (unit === "s") return n;
+    if (unit === "m") return n * 60;
+    if (unit === "h") return n * 3600;
+    throw new Error(`Unsupported duration unit: ${unit}`);
+  };
+
+  const totalSeconds = toSeconds(a) + toSeconds(b);
+  return `${totalSeconds}s`;
 }
 
 const mixStart = STORM_DURATION;

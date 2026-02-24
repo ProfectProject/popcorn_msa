@@ -44,6 +44,7 @@ public class JwtFilter implements GlobalFilter, Ordered{
 
             // Order Query 서비스 경로들
             "/api/orderquery",
+            "/api/order-query",
 
             // Swagger/OpenAPI 관련 경로 (전체) - 포괄적 설정
             "/v3/api-docs",           // 모든 서비스 OpenAPI 문서
@@ -68,6 +69,8 @@ public class JwtFilter implements GlobalFilter, Ordered{
             "/api/qr/swagger-ui",
             "/api/orderquery/v3",
             "/api/orderquery/swagger-ui",
+            "/api/order-query/v3",
+            "/api/order-query/swagger-ui",
             "/api/backend/v3",
             "/api/backend/swagger-ui",
             "/api/stores/v3/api-docs",

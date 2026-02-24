@@ -222,6 +222,24 @@ spring:
                   maxBackoff: 200ms
                   factor: 2
                   basedOnPreviousValue: true
+        - id: order-query
+          uri: ${ORDERQUERY_SERVICE_URL}
+          predicates:
+            - Path=/api/order-query/**    # order query (dash path alias)
+          filters:
+            - RewritePath=^/api/order-query/(?<remaining>v3/api-docs.*), /${remaining}
+            - RewritePath=^/api/order-query/(?<remaining>swagger-ui.*), /${remaining}
+            - RewritePath=^/api/order-query/(?<remaining>webjars.*), /${remaining}
+            - name: Retry
+              args:
+                retries: 2
+                methods: GET
+                statuses: BAD_GATEWAY,GATEWAY_TIMEOUT,INTERNAL_SERVER_ERROR,SERVICE_UNAVAILABLE
+                backoff:
+                  firstBackoff: 80ms
+                  maxBackoff: 200ms
+                  factor: 2
+                  basedOnPreviousValue: true
   webflux:
     base-path: /
 
@@ -262,6 +280,8 @@ springdoc:
         url: ${GATEWAY_SERVICE_URL}/api/v1/coupons/v3/api-docs
       - name: orderQuery
         url: ${GATEWAY_SERVICE_URL}/api/orderquery/v3/api-docs
+      - name: order-query
+        url: ${GATEWAY_SERVICE_URL}/api/order-query/v3/api-docs
 
 resilience4j:
   circuitbreaker:

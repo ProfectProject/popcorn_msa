@@ -2,12 +2,12 @@ import http from "k6/http";
 import { check, sleep, group } from "k6";
 import { Trend, Rate } from "k6/metrics";
 
-const BASE_URL = __ENV.BASE_URL || "https://api.goormpopcorn.shop";
+const BASE_URL = __ENV.BASE_URL || "http://localhost:8080";
 const AUTH_TOKEN = __ENV.AUTH_TOKEN || "";
 const SCENARIO = (__ENV.SCENARIO || "hot").toLowerCase();
 
-const POPUP_HOT_ID = __ENV.POPUP_HOT_ID || "e534dfc8-23e7-4a7c-93c6-ce4ac6ec934d";
-const POPUP_IDS = (__ENV.POPUP_IDS || "e534dfc8-23e7-4a7c-93c6-ce4ac6ec934d,6b455543-d7dd-481e-9cea-f91e20bed808").split(",");
+const POPUP_HOT_ID = __ENV.POPUP_HOT_ID || "HOT_POPUP_ID";
+const POPUP_IDS = (__ENV.POPUP_IDS || "P1,P2,P3,P4").split(",");
 
 const STEADY_RPS = parseInt(__ENV.STEADY_RPS || "250", 10);
 const RUSH_RPS = parseInt(__ENV.RUSH_RPS || "800", 10);
@@ -22,6 +22,7 @@ const t_popup_detail = new Trend("t_popup_detail");
 const t_order_create = new Trend("t_order_create");
 const t_stock_reserve = new Trend("t_stock_reserve");
 const t_payment_req = new Trend("t_payment_req");
+
 const r_fail = new Rate("r_fail");
 
 function headers() {
@@ -29,13 +30,11 @@ function headers() {
   if (AUTH_TOKEN) h["Authorization"] = `Bearer ${AUTH_TOKEN}`;
   return h;
 }
-
 function ok2xx(res) {
   const ok = res.status >= 200 && res.status < 300;
   r_fail.add(!ok);
   return ok;
 }
-
 function pickDistributedPopup() {
   return POPUP_IDS[Math.floor(Math.random() * POPUP_IDS.length)];
 }
@@ -57,19 +56,23 @@ function api_popup_detail(popupId) {
 function api_order_create({ popupId }) {
   const body = JSON.stringify({
     popupId,
-    orderType: "GOODS",
-    paymentMethod: "CARD",
-    items: [{ goodsId: "00000000-0000-0000-0000-000000000301", qty: 1, unitPrice: 1000, orderItemType: "GOODS" }],
+    lines: [{ goodsId: "G1", quantity: 1 }],
+    orderType: "RESERVATION",
   });
 
-  const res = http.post(`${BASE_URL}/api/orders/v1`, body, { headers: headers(), tags: { name: "order_create" } });
+  const res = http.post(`${BASE_URL}/api/orders/v1/orders`, body, { headers: headers(), tags: { name: "order_create" } });
   t_order_create.add(res.timings.duration);
   check(res, { "order_create 2xx": () => ok2xx(res) });
   return res;
 }
 
 function api_stock_reserve({ popupId, orderId }) {
-  const body = JSON.stringify({ popupId, orderId, items: [{ goodsId: "00000000-0000-0000-0000-000000000301", quantity: 1 }] });
+  const body = JSON.stringify({
+    popupId,
+    orderId,
+    items: [{ goodsId: "G1", quantity: 1 }],
+  });
+
   const res = http.post(`${BASE_URL}/api/stores/v1/stocks/reserve`, body, { headers: headers(), tags: { name: "stock_reserve" } });
   t_stock_reserve.add(res.timings.duration);
   check(res, { "stock_reserve 2xx": () => ok2xx(res) });
@@ -78,6 +81,7 @@ function api_stock_reserve({ popupId, orderId }) {
 
 function api_payment_request({ orderId }) {
   const body = JSON.stringify({ orderId });
+
   const res = http.post(`${BASE_URL}/api/payments/v1/payments/request`, body, { headers: headers(), tags: { name: "payment_request" } });
   t_payment_req.add(res.timings.duration);
   check(res, { "payment_request 2xx": () => ok2xx(res) });
@@ -128,6 +132,7 @@ export const options = {
       tags: { stage: "spike", scenario: SCENARIO },
     },
   },
+
   thresholds: {
     r_fail: ["rate<0.01"],
     http_req_duration: ["p(95)<500"],
@@ -137,9 +142,20 @@ export const options = {
 };
 
 function addDurations(a, b) {
-  const ma = parseInt(String(a).replace("m", ""), 10);
-  const mb = parseInt(String(b).replace("m", ""), 10);
-  return `${ma + mb}m`;
+  const toSeconds = (value) => {
+    const v = String(value).trim();
+    const m = v.match(/^(\d+)([smh])$/i);
+    if (!m) throw new Error(`Unsupported duration format: ${value}`);
+    const n = parseInt(m[1], 10);
+    const unit = m[2].toLowerCase();
+    if (unit === "s") return n;
+    if (unit === "m") return n * 60;
+    if (unit === "h") return n * 3600;
+    throw new Error(`Unsupported duration unit: ${unit}`);
+  };
+
+  const totalSeconds = toSeconds(a) + toSeconds(b);
+  return `${totalSeconds}s`;
 }
 
 export function stageSteady() {
@@ -174,6 +190,7 @@ function scenarioHot(stage) {
   if (Math.random() < writeProb) {
     const orderRes = api_order_create({ popupId: POPUP_HOT_ID });
     const orderId = extractOrderId(orderRes);
+
     if (orderId) api_stock_reserve({ popupId: POPUP_HOT_ID, orderId });
     if (orderId) api_payment_request({ orderId });
   }
@@ -181,6 +198,7 @@ function scenarioHot(stage) {
 
 function scenarioDist(stage) {
   const popupId = pickDistributedPopup();
+
   api_popup_list();
   api_popup_detail(popupId);
 
@@ -197,6 +215,7 @@ function scenarioDist(stage) {
 
 function scenarioFault(stage) {
   const popupId = stage === "rush" || stage === "spike" ? POPUP_HOT_ID : pickDistributedPopup();
+
   api_popup_detail(popupId);
 
   let writeProb = 0.20;
