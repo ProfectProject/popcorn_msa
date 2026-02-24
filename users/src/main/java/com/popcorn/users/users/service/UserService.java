@@ -1,6 +1,8 @@
 package com.popcorn.users.users.service;
 
 import java.util.List;
+import java.util.Map;
+import java.util.HashMap;
 import java.util.UUID;
 
 import org.springframework.security.crypto.password.PasswordEncoder;
@@ -56,6 +58,25 @@ public class UserService {
     @Transactional(readOnly = true)
     public boolean existsActiveUser(Long userId) {
         return userRepository.existsByUserIdAndIsActiveTrue(userId);
+    }
+
+    /**
+     * 활성 사용자 이름 배치 조회 (내부 서비스용)
+     */
+    @Transactional(readOnly = true)
+    public Map<Long, String> getActiveUserNamesByIds(List<Long> userIds) {
+        if (userIds == null || userIds.isEmpty()) {
+            return Map.of();
+        }
+
+        List<User> users = userRepository.findAllByUserIdInAndIsActiveTrue(userIds);
+        Map<Long, String> result = new HashMap<>();
+        for (User user : users) {
+            if (user.getName() != null && !user.getName().isBlank()) {
+                result.put(user.getUserId(), user.getName());
+            }
+        }
+        return result;
     }
 
     public SignupResponse register(SignupRequest request){

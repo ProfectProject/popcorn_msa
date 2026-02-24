@@ -1,129 +1,118 @@
 import http from "k6/http";
 import { check, sleep, group } from "k6";
 import { Trend, Rate } from "k6/metrics";
+import encoding from "k6/encoding";
 
-/**
- * =========================================
- * ENV
- * =========================================
- * BASE_URL        : API Gateway/Ingress base
- * AUTH_TOKEN      : Bearer token (optional)
- * POPUP_HOT_ID    : 핫팝업 popupId 1개
- * POPUP_IDS       : 분산 팝업 ids (콤마)
- *
- * SCENARIO        : hot | dist | fault
- *   - hot   : 핫팝업 집중(오픈 러시용)
- *   - dist  : 여러 팝업 분산(정상 운영용)
- *   - fault : 장애 내성(테스트 중 장애 주입하며 관측)
- *
- * STEADY_RPS      : 200~300 (default 250)
- * RUSH_RPS        : 500~1000 (default 800)
- * SPIKE_RPS       : 1500~2000 (default 1800)
- *
- * STEADY_DURATION : 10m (default 10m)
- * RUSH_DURATION   : 5m~10m (default 10m)
- * SPIKE_DURATION  : 2m~3m (default 3m)
- */
+const BASE_URL = __ENV.BASE_URL || "https://api.goormpopcorn.shop";
+const SCENARIO = (__ENV.SCENARIO || "dist").toLowerCase();
 
-const BASE_URL = __ENV.BASE_URL || "http://localhost:8080";
 const AUTH_TOKEN = __ENV.AUTH_TOKEN || "";
+const AUTO_LOGIN = (__ENV.AUTO_LOGIN || "true").toLowerCase() === "true";
 const LOGIN_URL = __ENV.LOGIN_URL || `${BASE_URL}/api/users/v1/auth/login`;
-const LOGIN_CREDENTIALS = (__ENV.LOGIN_CREDENTIALS || "")
+const REFRESH_URL = __ENV.REFRESH_URL || `${BASE_URL}/api/users/v1/auth/refresh`;
+const LOGIN_REQUIRED = (__ENV.LOGIN_REQUIRED || "true").toLowerCase() === "true";
+const LOGIN_DEBUG = (__ENV.LOGIN_DEBUG || "false").toLowerCase() === "true";
+const LOGIN_MAX_RETRIES = parseInt(__ENV.LOGIN_MAX_RETRIES || "2", 10);
+const LOGIN_RETRY_SLEEP_SEC = parseFloat(__ENV.LOGIN_RETRY_SLEEP_SEC || "1");
+const LOGIN_PAYLOAD_MODE = (__ENV.LOGIN_PAYLOAD_MODE || "simple").toLowerCase(); // simple | compat
+const LOGIN_ONCE_ONLY = (__ENV.LOGIN_ONCE_ONLY || "true").toLowerCase() === "true";
+const NEED_ADMIN_LOGIN = (__ENV.NEED_ADMIN_LOGIN || "false").toLowerCase() === "true";
+const ACCESS_TOKEN_TTL_SEC = parseInt(__ENV.ACCESS_TOKEN_TTL_SEC || "3600", 10);
+const TOKEN_REFRESH_SKEW_SEC = parseInt(__ENV.TOKEN_REFRESH_SKEW_SEC || "60", 10);
+const SKIP_WRITES_WHEN_AUTH_UNAVAILABLE = (__ENV.SKIP_WRITES_WHEN_AUTH_UNAVAILABLE || "true").toLowerCase() === "true";
+
+const CUSTOMER_EMAIL = __ENV.CUSTOMER_EMAIL || "popcorn1@popcorn.com";
+const CUSTOMER_PASSWORD = __ENV.CUSTOMER_PASSWORD || "test123";
+const ADMIN_EMAIL = __ENV.ADMIN_EMAIL || "popcorn5@popcorn.com";
+const ADMIN_PASSWORD = __ENV.ADMIN_PASSWORD || "testPassword123";
+
+const POPUP_HOT_ID = __ENV.POPUP_HOT_ID || "07c79042-f179-452e-9318-0d3abb403c44";
+const POPUP_IDS = (__ENV.POPUP_IDS || "07c79042-f179-452e-9318-0d3abb403c44,7e413857-3363-4bfc-b153-a2da54b7a94c,e534dfc8-23e7-4a7c-93c6-ce4ac6ec934d")
   .split(",")
   .map((v) => v.trim())
   .filter(Boolean);
-const LOGIN_MAX_RETRIES = parseInt(__ENV.LOGIN_MAX_RETRIES || "2", 10);
-const LOGIN_RETRY_SLEEP_SEC = parseFloat(__ENV.LOGIN_RETRY_SLEEP_SEC || "1");
-const LOGIN_REQUIRED = (__ENV.LOGIN_REQUIRED || "false").toLowerCase() === "true";
-const LOGIN_DEBUG = (__ENV.LOGIN_DEBUG || "false").toLowerCase() === "true";
-const SCENARIO = (__ENV.SCENARIO || "hot").toLowerCase();
 
-const POPUP_HOT_ID = __ENV.POPUP_HOT_ID || "07c79042-f179-452e-9318-0d3abb403c44";
-const POPUP_IDS = (__ENV.POPUP_IDS || "07c79042-f179-452e-9318-0d3abb403c44,7e413857-3363-4bfc-b153-a2da54b7a94c,e534dfc8-23e7-4a7c-93c6-ce4ac6ec934d").split(",");
 const HTTP_TIMEOUT = __ENV.HTTP_TIMEOUT || "30s";
 const MAX_RETRIES = parseInt(__ENV.MAX_RETRIES || "2", 10);
 const RETRY_SLEEP_SEC = parseFloat(__ENV.RETRY_SLEEP_SEC || "0.2");
 const NO_CONNECTION_REUSE = (__ENV.NO_CONNECTION_REUSE || "false").toLowerCase() === "true";
-const ENABLE_POPUP_LIST = (__ENV.ENABLE_POPUP_LIST || "false").toLowerCase() === "true";
-const POPUP_LIST_RATIO = Math.max(0, Math.min(1, parseFloat(__ENV.POPUP_LIST_RATIO || "0.01")));
-const POPUP_LIST_TIMEOUT = __ENV.POPUP_LIST_TIMEOUT || "3s";
-const POPUP_LIST_MAX_RETRIES = parseInt(__ENV.POPUP_LIST_MAX_RETRIES || "0", 10);
-const POPUP_LIST_BACKOFF_MS = parseInt(__ENV.POPUP_LIST_BACKOFF_MS || "60000", 10);
-const POPUP_LIST_API = __ENV.POPUP_LIST_API || "/api/popups/v1/popups";
-const POPUP_DETAIL_API_TEMPLATE = __ENV.POPUP_DETAIL_API_TEMPLATE || "/api/popups/v1/popups/{popupId}";
 
-const STEADY_RPS = parseInt(__ENV.STEADY_RPS || "250", 10);
-const RUSH_RPS = parseInt(__ENV.RUSH_RPS || "800", 10);
-const SPIKE_RPS = parseInt(__ENV.SPIKE_RPS || "1800", 10);
+const ENABLE_POPUP_LIST = (__ENV.ENABLE_POPUP_LIST || "true").toLowerCase() === "true";
+const POPUP_PUBLIC = (__ENV.POPUP_PUBLIC || "true").toLowerCase() === "true";
+const POPUP_LIST_RATIO = Math.max(0, Math.min(1, parseFloat(__ENV.POPUP_LIST_RATIO || "0.10")));
+const POPUP_LIST_TIMEOUT = __ENV.POPUP_LIST_TIMEOUT || "5s";
+const POPUP_LIST_MAX_RETRIES = parseInt(__ENV.POPUP_LIST_MAX_RETRIES || "1", 10);
+const POPUP_LIST_BACKOFF_MS = parseInt(__ENV.POPUP_LIST_BACKOFF_MS || "30000", 10);
 
-const STEADY_DURATION = __ENV.STEADY_DURATION || "10m";
-const RUSH_DURATION = __ENV.RUSH_DURATION || "10m";
-const SPIKE_DURATION = __ENV.SPIKE_DURATION || "3m";
+const POPUP_LIST_API = __ENV.POPUP_LIST_API || "/api/stores/v1/popups";
+const POPUP_DETAIL_API_TEMPLATE = __ENV.POPUP_DETAIL_API_TEMPLATE || "/api/stores/v1/popups/{popupId}";
+const ORDER_CREATE_API = __ENV.ORDER_CREATE_API || "/api/orders/v1";
+const STOCK_RESERVE_API = __ENV.STOCK_RESERVE_API || "/api/stores/v1/stocks/reserve";
+const PAYMENT_REQUEST_API = __ENV.PAYMENT_REQUEST_API || "/api/pay/v1/payments";
 
-// ===== metrics =====
+const ENABLE_STOCK_RESERVE = (__ENV.ENABLE_STOCK_RESERVE || "false").toLowerCase() === "true";
+const ENABLE_PAYMENT_REQUEST = (__ENV.ENABLE_PAYMENT_REQUEST || "false").toLowerCase() === "true";
+const WRITE_PROB_MULTIPLIER = parseFloat(__ENV.WRITE_PROB_MULTIPLIER || "1");
+
+const STEADY_RPS = parseInt(__ENV.STEADY_RPS || "1", 10);
+const RUSH_RPS = parseInt(__ENV.RUSH_RPS || "1", 10);
+const SPIKE_RPS = parseInt(__ENV.SPIKE_RPS || "1", 10);
+
+const STEADY_DURATION = __ENV.STEADY_DURATION || "5s";
+const RUSH_DURATION = __ENV.RUSH_DURATION || "5s";
+const SPIKE_DURATION = __ENV.SPIKE_DURATION || "5s";
+const ENABLE_STAGE1 = (__ENV.ENABLE_STAGE1 || "true").toLowerCase() === "true";
+const ENABLE_STAGE2 = (__ENV.ENABLE_STAGE2 || "true").toLowerCase() === "true";
+const ENABLE_STAGE3 = (__ENV.ENABLE_STAGE3 || "true").toLowerCase() === "true";
+const GRACEFUL_STOP = __ENV.GRACEFUL_STOP || "10s";
+const SETUP_TIMEOUT = __ENV.SETUP_TIMEOUT || "120s";
+
+const THRESHOLD_FAIL_RATE = parseFloat(__ENV.THRESHOLD_FAIL_RATE || "0.01");
+const THRESHOLD_STEADY_P95 = parseInt(__ENV.THRESHOLD_STEADY_P95 || "500", 10);
+const THRESHOLD_RUSH_P95 = parseInt(__ENV.THRESHOLD_RUSH_P95 || "1500", 10);
+const THRESHOLD_SPIKE_P95 = parseInt(__ENV.THRESHOLD_SPIKE_P95 || "4000", 10);
+const THRESHOLD_ORDER_CREATE_P95 = parseInt(__ENV.THRESHOLD_ORDER_CREATE_P95 || "2000", 10);
+const VU_PREALLOC_MULTIPLIER = parseFloat(__ENV.VU_PREALLOC_MULTIPLIER || "2");
+const VU_MAX_MULTIPLIER = parseFloat(__ENV.VU_MAX_MULTIPLIER || "10");
+const VU_PREALLOC_MIN = parseInt(__ENV.VU_PREALLOC_MIN || "10", 10);
+
 const t_popup_list = new Trend("t_popup_list");
 const t_popup_detail = new Trend("t_popup_detail");
 const t_order_create = new Trend("t_order_create");
 const t_stock_reserve = new Trend("t_stock_reserve");
 const t_payment_req = new Trend("t_payment_req");
-
 const r_fail = new Rate("r_fail");
+
 let popupListDisabledUntil = 0;
 
-// ===== helpers =====
-export function setup() {
-  if (AUTH_TOKEN) return { token: AUTH_TOKEN };
-  if (LOGIN_CREDENTIALS.length === 0) return { token: "" };
+function parseDurationSeconds(input) {
+  const m = String(input || "").trim().match(/^(\d+)\s*([smh])$/i);
+  if (!m) return null;
+  const n = parseInt(m[1], 10);
+  const u = m[2].toLowerCase();
+  if (u === "s") return n;
+  if (u === "m") return n * 60;
+  return n * 3600;
+}
 
-  for (const cred of LOGIN_CREDENTIALS) {
-    const idx = cred.indexOf(":");
-    if (idx < 1 || idx >= cred.length - 1) continue;
-    const email = cred.slice(0, idx).trim();
-    const password = cred.slice(idx + 1).trim();
+function secondsToDuration(totalSeconds) {
+  if (totalSeconds % 3600 === 0) return `${totalSeconds / 3600}h`;
+  if (totalSeconds % 60 === 0) return `${totalSeconds / 60}m`;
+  return `${totalSeconds}s`;
+}
 
-    const payloads = [
-      { email, password },
-      { username: email, password },
-      { loginId: email, password },
-      { userEmail: email, userPassword: password },
-      { email, passwd: password },
-    ];
-
-    for (let attempt = 0; attempt <= LOGIN_MAX_RETRIES; attempt++) {
-      for (const payload of payloads) {
-        const res = http.post(
-          LOGIN_URL,
-          JSON.stringify(payload),
-          {
-            headers: { "Content-Type": "application/json" },
-            timeout: HTTP_TIMEOUT,
-            responseType: "text",
-            tags: { name: "login" },
-          }
-        );
-
-        if (LOGIN_DEBUG) {
-          console.log(`[login] status=${res.status} payloadKeys=${Object.keys(payload).join(",")} body=${(res.body || "").slice(0, 300)}`);
-        }
-
-        if (res.status < 200 || res.status >= 300) continue;
-        const token = extractTokenFromLoginResponse(res);
-        if (token) return { token };
-      }
-      if (attempt < LOGIN_MAX_RETRIES) sleep(LOGIN_RETRY_SLEEP_SEC * (attempt + 1));
-    }
+function addDurations(a, b) {
+  const sa = parseDurationSeconds(a);
+  const sb = parseDurationSeconds(b);
+  if (sa === null || sb === null) {
+    throw new Error(`Unsupported duration format: ${a}, ${b}. Use s/m/h like 30s, 10m, 1h`);
   }
-  if (LOGIN_REQUIRED) {
-    throw new Error("Automatic login failed. Check LOGIN_URL and LOGIN_CREDENTIALS.");
-  }
-  console.warn("Automatic login failed; running without token. Set LOGIN_REQUIRED=true to fail-fast.");
-  return { token: "" };
+  return secondsToDuration(sa + sb);
 }
 
 function pickFirstHeaderValue(headerValue) {
   if (!headerValue) return null;
-  if (Array.isArray(headerValue)) return headerValue[0] || null;
-  return headerValue;
+  return Array.isArray(headerValue) ? headerValue[0] || null : headerValue;
 }
 
 function extractTokenFromLoginResponse(res) {
@@ -141,7 +130,7 @@ function extractTokenFromLoginResponse(res) {
       null;
     if (tokenFromBody) return String(tokenFromBody);
   } catch (_) {
-    // ignore body parsing error
+    // ignore
   }
 
   const authHeader = pickFirstHeaderValue(res.headers?.Authorization || res.headers?.authorization);
@@ -155,56 +144,248 @@ function extractTokenFromLoginResponse(res) {
     const m = String(setCookie).match(/(?:access_token|accessToken|token)=([^;]+)/i);
     if (m?.[1]) return m[1];
   }
+
   return null;
 }
 
-function headers(setupData) {
+function extractJwtExpMs(token) {
+  try {
+    const parts = String(token || "").split(".");
+    if (parts.length < 2) return null;
+    const payload = JSON.parse(
+      encoding.b64decode(parts[1], "rawurl", "s")
+    );
+    if (!payload?.exp) return null;
+    return Number(payload.exp) * 1000;
+  } catch (_) {
+    return null;
+  }
+}
+
+function buildTokenBundle(accessToken, refreshToken) {
+  const expMs = extractJwtExpMs(accessToken);
+  const fallbackMs = Date.now() + ACCESS_TOKEN_TTL_SEC * 1000;
+  return {
+    accessToken: accessToken || "",
+    refreshToken: refreshToken || "",
+    accessTokenExpiresAtMs: expMs || fallbackMs,
+  };
+}
+
+function extractRefreshTokenFromLoginResponse(res) {
+  try {
+    const parsed = JSON.parse(res.body || "{}");
+    return (
+      parsed?.refreshToken ||
+      parsed?.data?.refreshToken ||
+      parsed?.result?.refreshToken ||
+      ""
+    );
+  } catch (_) {
+    return "";
+  }
+}
+
+function login(email, password, role) {
+  const payloads = LOGIN_PAYLOAD_MODE === "compat"
+    ? [
+        { email, password },
+        { username: email, password },
+        { loginId: email, password },
+        { userEmail: email, userPassword: password },
+        { email, passwd: password },
+      ]
+    : [{ email, password }];
+
+  for (let attempt = 0; attempt <= LOGIN_MAX_RETRIES; attempt++) {
+    for (const payload of payloads) {
+      const res = http.post(
+        LOGIN_URL,
+        JSON.stringify(payload),
+        {
+          headers: { "Content-Type": "application/json" },
+          timeout: HTTP_TIMEOUT,
+          responseType: "text",
+          tags: { name: `login_${role}` },
+        }
+      );
+
+      if (LOGIN_DEBUG) {
+        console.log(`[login:${role}] status=${res.status} keys=${Object.keys(payload).join(",")} body=${(res.body || "").slice(0, 200)}`);
+      }
+
+      if (res.status >= 200 && res.status < 300) {
+        const token = extractTokenFromLoginResponse(res);
+        const refreshToken = extractRefreshTokenFromLoginResponse(res);
+        if (token) return buildTokenBundle(token, refreshToken);
+      }
+    }
+
+    if (attempt < LOGIN_MAX_RETRIES) {
+      sleep(LOGIN_RETRY_SLEEP_SEC * (attempt + 1));
+    }
+  }
+
+  return buildTokenBundle("", "");
+}
+
+function refreshAccessToken(tokenBundle, role = "customer") {
+  const refreshToken = tokenBundle?.refreshToken || "";
+  if (!refreshToken) return null;
+
+  const res = http.post(
+    REFRESH_URL,
+    JSON.stringify({ refreshToken }),
+    {
+      headers: { "Content-Type": "application/json" },
+      timeout: HTTP_TIMEOUT,
+      responseType: "text",
+      tags: { name: `refresh_${role}` },
+    }
+  );
+
+  if (LOGIN_DEBUG) {
+    console.log(`[refresh:${role}] status=${res.status} body=${(res.body || "").slice(0, 200)}`);
+  }
+
+  if (res.status < 200 || res.status >= 300) return null;
+
+  try {
+    const parsed = JSON.parse(res.body || "{}");
+    const accessToken =
+      parsed?.accessToken ||
+      parsed?.token ||
+      parsed?.data?.accessToken ||
+      parsed?.result?.accessToken ||
+      "";
+    if (!accessToken) return null;
+    return buildTokenBundle(accessToken, refreshToken);
+  } catch (_) {
+    return null;
+  }
+}
+
+function ensureRoleToken(setupData, role = "customer") {
+  if (AUTH_TOKEN) return AUTH_TOKEN;
+  const roleTokens = setupData?.tokens?.[role];
+  if (!roleTokens) return "";
+
+  const now = Date.now();
+  const shouldRefresh = now >= (Number(roleTokens.accessTokenExpiresAtMs || 0) - TOKEN_REFRESH_SKEW_SEC * 1000);
+  if (!shouldRefresh && roleTokens.accessToken) return roleTokens.accessToken;
+
+  const refreshed = refreshAccessToken(roleTokens, role);
+  if (refreshed?.accessToken) {
+    setupData.tokens[role] = refreshed;
+    return refreshed.accessToken;
+  }
+
+  const reloginCred =
+    role === "admin"
+      ? { email: ADMIN_EMAIL, password: ADMIN_PASSWORD }
+      : { email: CUSTOMER_EMAIL, password: CUSTOMER_PASSWORD };
+  const reloginBundle = login(reloginCred.email, reloginCred.password, role);
+  setupData.tokens[role] = reloginBundle;
+  return reloginBundle?.accessToken || "";
+}
+
+export function setup() {
+  if (AUTH_TOKEN) {
+    const staticBundle = buildTokenBundle(AUTH_TOKEN, "");
+    return { tokens: { customer: staticBundle, admin: staticBundle } };
+  }
+
+  if (!AUTO_LOGIN) {
+    if (LOGIN_REQUIRED) {
+      throw new Error("No AUTH_TOKEN and AUTO_LOGIN=false. Enable AUTO_LOGIN or set AUTH_TOKEN.");
+    }
+    return {
+      tokens: {
+        customer: buildTokenBundle("", ""),
+        admin: buildTokenBundle("", ""),
+      },
+    };
+  }
+
+  const customer = login(CUSTOMER_EMAIL, CUSTOMER_PASSWORD, "customer");
+  let admin = customer;
+  if (!LOGIN_ONCE_ONLY && NEED_ADMIN_LOGIN) {
+    admin = login(ADMIN_EMAIL, ADMIN_PASSWORD, "admin");
+  }
+
+  if (LOGIN_REQUIRED && !customer?.accessToken) {
+    throw new Error("Customer auto login failed. Check CUSTOMER_EMAIL/CUSTOMER_PASSWORD/LOGIN_URL");
+  }
+
+  if (!customer?.accessToken) {
+    console.warn("Customer auto login failed; requests may be unauthorized.");
+  }
+  if (!admin?.accessToken) {
+    console.warn("Admin auto login failed; admin token will fallback to customer token.");
+  }
+
+  return {
+    tokens: {
+      customer,
+      admin: admin?.accessToken ? admin : customer,
+    },
+  };
+}
+
+function headers(setupData, role = "customer", withAuth = true) {
   const h = { "Content-Type": "application/json" };
-  const token = setupData?.token || AUTH_TOKEN;
-  if (token) h["Authorization"] = `Bearer ${token}`;
+  if (withAuth) {
+    const token = ensureRoleToken(setupData, role) || ensureRoleToken(setupData, "customer");
+    if (token) h["Authorization"] = `Bearer ${token}`;
+  }
   return h;
 }
-function reqParams(name, setupData) {
-  return { headers: headers(setupData), tags: { name }, timeout: HTTP_TIMEOUT };
+
+function reqParams(name, setupData, role = "customer", withAuth = true) {
+  return { headers: headers(setupData, role, withAuth), tags: { name }, timeout: HTTP_TIMEOUT };
 }
+
+function hasAuthToken(setupData, role = "customer") {
+  if (AUTH_TOKEN) return true;
+  const token = setupData?.tokens?.[role]?.accessToken || "";
+  return Boolean(token);
+}
+
 function requestWithRetry(method, url, body, params, maxRetries = MAX_RETRIES) {
   let res;
   for (let attempt = 0; attempt <= maxRetries; attempt++) {
-    if (method === "GET") res = http.get(url, params);
-    else res = http.post(url, body, params);
+    res = method === "GET" ? http.get(url, params) : http.post(url, body, params);
     if (res && !res.error) return res;
     if (attempt < maxRetries) sleep(RETRY_SLEEP_SEC * (attempt + 1));
   }
   return res;
 }
+
 function ok2xx(res) {
   const ok = res.status >= 200 && res.status < 300;
   r_fail.add(!ok);
   return ok;
 }
+
 function pickDistributedPopup() {
   return POPUP_IDS[Math.floor(Math.random() * POPUP_IDS.length)];
 }
 
-/**
- * =========================================
- * API 호출 (교체 포인트: 너희 엔드포인트/바디로 수정)
- * =========================================
- * 아래는 예시 경로야.
- */
-
 function api_popup_list(setupData) {
   if (Date.now() < popupListDisabledUntil) return null;
+
   const res = requestWithRetry(
     "GET",
     `${BASE_URL}${POPUP_LIST_API}`,
     null,
-    { ...reqParams("popup_list", setupData), timeout: POPUP_LIST_TIMEOUT },
+    { ...reqParams("popup_list", setupData, "customer", !POPUP_PUBLIC), timeout: POPUP_LIST_TIMEOUT },
     POPUP_LIST_MAX_RETRIES
   );
+
   if (res?.error || res.status >= 500) {
     popupListDisabledUntil = Date.now() + POPUP_LIST_BACKOFF_MS;
   }
+
   if (!res) return null;
   t_popup_list.add(res.timings.duration);
   check(res, { "popup_list 2xx": () => ok2xx(res) });
@@ -213,7 +394,7 @@ function api_popup_list(setupData) {
 
 function api_popup_detail(popupId, setupData) {
   const detailPath = POPUP_DETAIL_API_TEMPLATE.replace("{popupId}", encodeURIComponent(popupId));
-  const res = requestWithRetry("GET", `${BASE_URL}${detailPath}`, null, reqParams("popup_detail", setupData));
+  const res = requestWithRetry("GET", `${BASE_URL}${detailPath}`, null, reqParams("popup_detail", setupData, "customer", !POPUP_PUBLIC));
   t_popup_detail.add(res.timings.duration);
   check(res, { "popup_detail 2xx": () => ok2xx(res) });
   return res;
@@ -222,15 +403,23 @@ function api_popup_detail(popupId, setupData) {
 function api_order_create({ popupId }, setupData) {
   const body = JSON.stringify({
     popupId,
-    // TODO: 실제 주문 생성 payload로 교체
-    lines: [{ goodsId: "G1", quantity: 1 }],
-    orderType: "RESERVATION",
+    orderType: "GOODS",
+    paymentMethod: "CARD",
+    items: [
+      {
+        orderItemType: "GOODS",
+        qty: 1,
+        unitPrice: 10000,
+        goodsId: "00000000-0000-0000-0000-000000000301",
+      },
+    ],
   });
 
-  const res = requestWithRetry("POST", `${BASE_URL}/api/orders/v1/orders`, body, {
-    ...reqParams("order_create", setupData),
+  const res = requestWithRetry("POST", `${BASE_URL}${ORDER_CREATE_API}`, body, {
+    ...reqParams("order_create", setupData, "customer"),
     responseType: "text",
   });
+
   t_order_create.add(res.timings.duration);
   check(res, { "order_create 2xx": () => ok2xx(res) });
   return res;
@@ -240,20 +429,19 @@ function api_stock_reserve({ popupId, orderId }, setupData) {
   const body = JSON.stringify({
     popupId,
     orderId,
-    // TODO: 실제 재고 예약/차감 payload로 교체
-    items: [{ goodsId: "G1", quantity: 1 }],
+    items: [{ goodsId: "00000000-0000-0000-0000-000000000301", quantity: 1 }],
   });
 
-  const res = requestWithRetry("POST", `${BASE_URL}/api/stores/v1/stocks/reserve`, body, reqParams("stock_reserve", setupData));
+  const res = requestWithRetry("POST", `${BASE_URL}${STOCK_RESERVE_API}`, body, reqParams("stock_reserve", setupData));
   t_stock_reserve.add(res.timings.duration);
   check(res, { "stock_reserve 2xx": () => ok2xx(res) });
   return res;
 }
 
 function api_payment_request({ orderId }, setupData) {
-  const body = JSON.stringify({ orderId });
+  const body = JSON.stringify({ orderId, paymentMethod: "CARD", amount: 10000 });
 
-  const res = requestWithRetry("POST", `${BASE_URL}/api/payments/v1/payments/request`, body, reqParams("payment_request", setupData));
+  const res = requestWithRetry("POST", `${BASE_URL}${PAYMENT_REQUEST_API}`, body, reqParams("payment_request", setupData, "customer"));
   t_payment_req.add(res.timings.duration);
   check(res, { "payment_request 2xx": () => ok2xx(res) });
   return res;
@@ -261,111 +449,103 @@ function api_payment_request({ orderId }, setupData) {
 
 function extractOrderId(orderRes) {
   try {
-    const j = JSON.parse(orderRes.body);
-    return j?.data?.id || j?.data?.orderId || j?.orderId || null;
+    const j = JSON.parse(orderRes.body || "{}");
+    return j?.data?.id || j?.data?.orderId || j?.result?.orderId || j?.orderId || null;
   } catch (_) {
     return null;
   }
 }
 
-/**
- * =========================================
- * 단계(부하 레벨) = 3단계 순차 실행
- * - 1단계 steady  (10m, 200~300 RPS)
- * - 2단계 rush    (5~10m, 500~1000 RPS)
- * - 3단계 spike   (2~3m, 1500~2000 RPS)
- * =========================================
- * startTime으로 "완전히" 순차 실행됨
- */
+function calcPreAllocated(rate, envKey) {
+  const fromEnv = parseInt(__ENV[envKey] || "", 10);
+  if (Number.isFinite(fromEnv) && fromEnv > 0) return fromEnv;
+  return Math.max(VU_PREALLOC_MIN, Math.ceil(rate * VU_PREALLOC_MULTIPLIER));
+}
+
+function calcMaxVUs(rate, preAllocated, envKey) {
+  const fromEnv = parseInt(__ENV[envKey] || "", 10);
+  if (Number.isFinite(fromEnv) && fromEnv > 0) return fromEnv;
+  return Math.max(preAllocated * 2, Math.ceil(rate * VU_MAX_MULTIPLIER));
+}
+
+const steadyPreAllocated = calcPreAllocated(STEADY_RPS, "STEADY_PREALLOC_VUS");
+const rushPreAllocated = calcPreAllocated(RUSH_RPS, "RUSH_PREALLOC_VUS");
+const spikePreAllocated = calcPreAllocated(SPIKE_RPS, "SPIKE_PREALLOC_VUS");
+const steadyMaxVUs = calcMaxVUs(STEADY_RPS, steadyPreAllocated, "STEADY_MAX_VUS");
+const rushMaxVUs = calcMaxVUs(RUSH_RPS, rushPreAllocated, "RUSH_MAX_VUS");
+const spikeMaxVUs = calcMaxVUs(SPIKE_RPS, spikePreAllocated, "SPIKE_MAX_VUS");
+
+const scenarios = {};
+
+if (ENABLE_STAGE1) {
+  scenarios.stage1_steady = {
+    executor: "constant-arrival-rate",
+    rate: STEADY_RPS,
+    timeUnit: "1s",
+    duration: STEADY_DURATION,
+    preAllocatedVUs: steadyPreAllocated,
+    maxVUs: steadyMaxVUs,
+    exec: "stageSteady",
+    gracefulStop: GRACEFUL_STOP,
+    tags: { stage: "steady", scenario: SCENARIO },
+  };
+}
+
+if (ENABLE_STAGE2) {
+  scenarios.stage2_rush = {
+    executor: "constant-arrival-rate",
+    rate: RUSH_RPS,
+    timeUnit: "1s",
+    duration: RUSH_DURATION,
+    preAllocatedVUs: rushPreAllocated,
+    maxVUs: rushMaxVUs,
+    exec: "stageRush",
+    startTime: STEADY_DURATION,
+    gracefulStop: GRACEFUL_STOP,
+    tags: { stage: "rush", scenario: SCENARIO },
+  };
+}
+
+if (ENABLE_STAGE3) {
+  scenarios.stage3_spike = {
+    executor: "constant-arrival-rate",
+    rate: SPIKE_RPS,
+    timeUnit: "1s",
+    duration: SPIKE_DURATION,
+    preAllocatedVUs: spikePreAllocated,
+    maxVUs: spikeMaxVUs,
+    exec: "stageSpike",
+    startTime: addDurations(STEADY_DURATION, RUSH_DURATION),
+    gracefulStop: GRACEFUL_STOP,
+    tags: { stage: "spike", scenario: SCENARIO },
+  };
+}
+
+const thresholds = {
+  t_order_create: [`p(95)<${THRESHOLD_ORDER_CREATE_P95}`],
+};
+
+if (ENABLE_STAGE1) {
+  thresholds["r_fail{stage:steady}"] = [`rate<${THRESHOLD_FAIL_RATE}`];
+  thresholds["http_req_duration{stage:steady}"] = [`p(95)<${THRESHOLD_STEADY_P95}`];
+}
+if (ENABLE_STAGE2) {
+  thresholds["r_fail{stage:rush}"] = [`rate<${THRESHOLD_FAIL_RATE}`];
+  thresholds["http_req_duration{stage:rush}"] = [`p(95)<${THRESHOLD_RUSH_P95}`];
+}
+if (ENABLE_STAGE3) {
+  thresholds["r_fail{stage:spike}"] = [`rate<${THRESHOLD_FAIL_RATE}`];
+  thresholds["http_req_duration{stage:spike}"] = [`p(95)<${THRESHOLD_SPIKE_P95}`];
+}
+
 export const options = {
   discardResponseBodies: true,
   noConnectionReuse: NO_CONNECTION_REUSE,
-  scenarios: {
-    stage1_steady: {
-      executor: "constant-arrival-rate",
-      rate: STEADY_RPS,
-      timeUnit: "1s",
-      duration: STEADY_DURATION,
-      preAllocatedVUs: 500,
-      maxVUs: 15000,
-      exec: "stageSteady",
-      tags: { stage: "steady", scenario: SCENARIO },
-    },
-    stage2_rush: {
-      executor: "constant-arrival-rate",
-      rate: RUSH_RPS,
-      timeUnit: "1s",
-      duration: RUSH_DURATION,
-      preAllocatedVUs: 800,
-      maxVUs: 20000,
-      exec: "stageRush",
-      startTime: STEADY_DURATION,
-      tags: { stage: "rush", scenario: SCENARIO },
-    },
-    stage3_spike: {
-      executor: "constant-arrival-rate",
-      rate: SPIKE_RPS,
-      timeUnit: "1s",
-      duration: SPIKE_DURATION,
-      preAllocatedVUs: 1500,
-      maxVUs: 25000,
-      exec: "stageSpike",
-      startTime: addDurations(STEADY_DURATION, RUSH_DURATION),
-      tags: { stage: "spike", scenario: SCENARIO },
-    },
-  },
-
-  thresholds: {
-    // 단계별 목표
-    "http_req_duration{stage:steady}": ["p(95)<500"],
-    "http_req_duration{stage:rush}": ["p(95)<1500"],
-    "http_req_duration{stage:spike}": ["p(95)<4000"],
-    "r_fail{stage:steady}": ["rate<0.01"],
-    "r_fail{stage:rush}": ["rate<0.01"],
-    "r_fail{stage:spike}": ["rate<0.01"],
-
-    // 엔드포인트별(더 세밀하게)
-    "http_req_duration{name:popup_detail,stage:steady}": ["p(95)<400"],
-    "http_req_duration{name:popup_detail,stage:rush}": ["p(95)<1200"],
-    "http_req_duration{name:popup_detail,stage:spike}": ["p(95)<3000"],
-    "http_req_duration{name:popup_list,stage:steady}": ["p(95)<600"],
-    "http_req_duration{name:popup_list,stage:rush}": ["p(95)<1800"],
-    "http_req_duration{name:popup_list,stage:spike}": ["p(95)<4000"],
-    "http_req_failed{name:popup_detail,stage:steady}": ["rate<0.01"],
-    "http_req_failed{name:popup_detail,stage:rush}": ["rate<0.02"],
-    "http_req_failed{name:popup_detail,stage:spike}": ["rate<0.05"],
-
-    // 쓰기 경로 참고
-    t_order_create: ["p(95)<1200"],
-    t_payment_req: ["p(95)<1500"],
-  },
+  scenarios,
+  thresholds,
+  setupTimeout: SETUP_TIMEOUT,
 };
 
-/**
- * k6는 startTime에 "문자열 duration"을 넣을 수 있는데,
- * stage3 startTime은 (steady + rush) 합이 필요함.
- * 간단히 minutes 단위("10m")만 받는 형태로 구현.
- * (너희 문서도 분 단위라 이걸로 충분)
- */
-function addDurations(a, b) {
-  // "10m" 형태만 지원
-  const ma = parseInt(String(a).replace("m", ""), 10);
-  const mb = parseInt(String(b).replace("m", ""), 10);
-  return `${ma + mb}m`;
-}
-
-/**
- * =========================================
- * 단계별 실행 함수
- * =========================================
- * stageSteady / stageRush / stageSpike
- *
- * - stage는 "부하 레벨"이고
- * - SCENARIO는 "트래픽 모양"임
- */
-
-// 1단계: 정상 운영(분산 시나리오가 가장 자연스러움)
-// 하지만 SCENARIO에 따라 트래픽 모양을 바꿀 수 있게 해놨음.
 export function stageSteady(setupData) {
   group("stage1_steady", () => {
     runScenario(SCENARIO, "steady", setupData);
@@ -373,8 +553,6 @@ export function stageSteady(setupData) {
   });
 }
 
-// 2단계: 오픈 러시(핫팝업 집중이 핵심)
-// SCENARIO=hot 권장, dist/fault도 선택 가능
 export function stageRush(setupData) {
   group("stage2_rush", () => {
     runScenario(SCENARIO, "rush", setupData);
@@ -382,7 +560,6 @@ export function stageRush(setupData) {
   });
 }
 
-// 3단계: 스파이크(핵심 경로 집중)
 export function stageSpike(setupData) {
   group("stage3_spike", () => {
     runScenario(SCENARIO, "spike", setupData);
@@ -390,78 +567,73 @@ export function stageSpike(setupData) {
   });
 }
 
-/**
- * =========================================
- * 시나리오 정의 (문서 3개 반영)
- * =========================================
- */
-
-// SCENARIO 1) hot : 오픈 러시(핫키/핫팝업)
 function scenarioHot(stage, setupData) {
-  // 공통: 핫팝업에 트래픽 집중
   if (ENABLE_POPUP_LIST && Math.random() < POPUP_LIST_RATIO) {
-    api_popup_list(setupData); // 목록 조회(샘플링)
+    api_popup_list(setupData);
   }
-  api_popup_detail(POPUP_HOT_ID, setupData);   // 상세 조회
+  api_popup_detail(POPUP_HOT_ID, setupData);
 
-  // 단계별로 쓰기 비중 조절
-  let writeProb = 0.15; // steady 기본
-  if (stage === "rush") writeProb = 0.30;
+  let writeProb = 0.15;
+  if (stage === "rush") writeProb = 0.3;
   if (stage === "spike") writeProb = 0.55;
+  writeProb = Math.max(0, Math.min(1, writeProb * WRITE_PROB_MULTIPLIER));
 
   if (Math.random() < writeProb) {
+    if (SKIP_WRITES_WHEN_AUTH_UNAVAILABLE && !hasAuthToken(setupData, "customer")) return;
     const orderRes = api_order_create({ popupId: POPUP_HOT_ID }, setupData);
     const orderId = extractOrderId(orderRes);
 
-    // 재고(스토어) 병목 확인 포인트
-    if (orderId) api_stock_reserve({ popupId: POPUP_HOT_ID, orderId }, setupData);
+    if (ENABLE_STOCK_RESERVE && orderId) {
+      api_stock_reserve({ popupId: POPUP_HOT_ID, orderId }, setupData);
+    }
 
-    // 결제 요청
-    if (orderId) api_payment_request({ orderId }, setupData);
+    if (ENABLE_PAYMENT_REQUEST && orderId) {
+      api_payment_request({ orderId }, setupData);
+    }
   }
 }
 
-// SCENARIO 2) dist : 정상 운영(여러 팝업 분산)
 function scenarioDist(stage, setupData) {
   const popupId = pickDistributedPopup();
 
-  // read-heavy
   if (ENABLE_POPUP_LIST && Math.random() < POPUP_LIST_RATIO) {
-    api_popup_list(setupData); // 목록 조회(샘플링)
+    api_popup_list(setupData);
   }
   api_popup_detail(popupId, setupData);
 
-  // 쓰기 비중은 낮게 유지(steady 운영 느낌)
-  let writeProb = 0.10;
-  if (stage === "rush") writeProb = 0.15;   // rush에서도 분산 운영 가정
+  let writeProb = 0.1;
+  if (stage === "rush") writeProb = 0.15;
   if (stage === "spike") writeProb = 0.25;
+  writeProb = Math.max(0, Math.min(1, writeProb * WRITE_PROB_MULTIPLIER));
 
   if (Math.random() < writeProb) {
+    if (SKIP_WRITES_WHEN_AUTH_UNAVAILABLE && !hasAuthToken(setupData, "customer")) return;
     const orderRes = api_order_create({ popupId }, setupData);
     const orderId = extractOrderId(orderRes);
-    if (orderId) api_payment_request({ orderId }, setupData);
+
+    if (ENABLE_PAYMENT_REQUEST && orderId) {
+      api_payment_request({ orderId }, setupData);
+    }
   }
 }
 
-// SCENARIO 3) fault : 장애 내성(지연/실패 주입)
-// k6는 장애를 직접 "만드는" 도구가 아니라 "트래픽 유지 + 관측" 도구.
-// 그래서 여기서는 핵심 경로를 계속 때리면서,
-// 테스트 중에 실제로 PG 지연/Pod 재시작/Kafka 리밸런싱을 주입하면 됨.
 function scenarioFault(stage, setupData) {
   const popupId = stage === "rush" || stage === "spike" ? POPUP_HOT_ID : pickDistributedPopup();
-
-  // 장애 상황에서도 사용자들은 계속 조회/주문을 시도한다는 가정
   api_popup_detail(popupId, setupData);
 
-  // 핵심 트랜잭션 유지(조금 높은 비율)
-  let writeProb = 0.20;
+  let writeProb = 0.2;
   if (stage === "rush") writeProb = 0.35;
-  if (stage === "spike") writeProb = 0.60;
+  if (stage === "spike") writeProb = 0.6;
+  writeProb = Math.max(0, Math.min(1, writeProb * WRITE_PROB_MULTIPLIER));
 
   if (Math.random() < writeProb) {
+    if (SKIP_WRITES_WHEN_AUTH_UNAVAILABLE && !hasAuthToken(setupData, "customer")) return;
     const orderRes = api_order_create({ popupId }, setupData);
     const orderId = extractOrderId(orderRes);
-    if (orderId) api_payment_request({ orderId }, setupData); // PG 지연 주입 시 여기서 duration 증가 관측
+
+    if (ENABLE_PAYMENT_REQUEST && orderId) {
+      api_payment_request({ orderId }, setupData);
+    }
   }
 }
 
@@ -469,8 +641,6 @@ function runScenario(name, stage, setupData) {
   if (name === "hot") return scenarioHot(stage, setupData);
   if (name === "dist") return scenarioDist(stage, setupData);
   if (name === "fault") return scenarioFault(stage, setupData);
-
-  // 기본값
   return scenarioHot(stage, setupData);
 }
 

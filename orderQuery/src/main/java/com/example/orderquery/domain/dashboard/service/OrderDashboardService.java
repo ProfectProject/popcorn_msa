@@ -22,6 +22,7 @@ import org.springframework.data.domain.Sort;
 import org.springframework.data.jpa.domain.Specification;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
+import org.springframework.core.ParameterizedTypeReference;
 import org.springframework.web.client.RestClient;
 
 import java.math.BigDecimal;
@@ -31,7 +32,7 @@ import java.time.LocalDateTime;
 import java.time.LocalTime;
 import java.util.*;
 import java.util.stream.Collectors;
-import java.util.Collections;
+import java.util.concurrent.ConcurrentHashMap;
 
 /**
  * 📊 주문 대시보드 서비스
@@ -47,6 +48,16 @@ public class OrderDashboardService {
 
     @Value("${USERS_SERVICE_BASE_URL:http://localhost:8080}")
     private String usersServiceBaseUrl;
+    @Value("${order-query.dashboard.resolve-user-names:true}")
+    private boolean resolveUserNamesEnabled;
+    @Value("${order-query.dashboard.max-page-size:50}")
+    private int maxPageSize;
+    @Value("${order-query.dashboard.user-name-cache-ttl-seconds:300}")
+    private long userNameCacheTtlSeconds;
+    @Value("${order-query.dashboard.user-name-batch-size:200}")
+    private int userNameBatchSize;
+
+    private final Map<Long, CachedUserName> userNameCache = new ConcurrentHashMap<>();
 
     /**
      * 🏠 대시보드 메인 데이터 조회 (시스템 전체)
@@ -181,18 +192,30 @@ public class OrderDashboardService {
     /**
      * 📋 전체 주문 목록 조회 (고급 필터링)
      */
+    @Cacheable(
+            value = "orderList",
+            key = "'orders:' + #status + ':' + #startDate + ':' + #endDate + ':' + #userId + ':' + #minAmount + ':' + #maxAmount + ':' + #popupId + ':' + #paymentMethod + ':' + #orderType + ':' + #page + ':' + #size + ':' + #sortBy + ':' + #sortDirection",
+            unless = "#result == null"
+    )
     public OrderItemPageDto getAllOrdersWithFilters(
             String status, LocalDate startDate, LocalDate endDate, Long userId,
             Integer minAmount, Integer maxAmount, String popupId,
             String paymentMethod, String orderType,
             int page, int size, String sortBy, String sortDirection) {
 
+        int safePage = Math.max(page, 0);
+        int safeSize = Math.max(1, Math.min(size, maxPageSize));
+
         // Specification 빌드
         Specification<OrderItemView> spec = null;
 
         if (status != null && !status.isEmpty()) {
-            Specification<OrderItemView> statusSpec = OrderItemViewSpecifications.hasStatus(OrderStatus.valueOf(status));
-            spec = spec != null ? spec.and(statusSpec) : statusSpec;
+            try {
+                Specification<OrderItemView> statusSpec = OrderItemViewSpecifications.hasStatus(OrderStatus.valueOf(status));
+                spec = spec != null ? spec.and(statusSpec) : statusSpec;
+            } catch (IllegalArgumentException e) {
+                log.warn("잘못된 status 파라미터 무시: {}", status);
+            }
         }
 
         if (startDate != null && endDate != null) {
@@ -218,36 +241,42 @@ public class OrderDashboardService {
             spec = spec != null ? spec.and(popupSpec) : popupSpec;
         }
 
-        // 정렬 설정
+        // 정렬 화이트리스트 (무거운/비인덱스 컬럼 정렬 방지)
+        Set<String> allowedSortFields = Set.of("createdAt", "orderedAt", "updatedAt", "linePrice", "orderNo");
+        String safeSortBy = allowedSortFields.contains(sortBy) ? sortBy : "createdAt";
         Sort.Direction direction = "asc".equalsIgnoreCase(sortDirection) ?
             Sort.Direction.ASC : Sort.Direction.DESC;
-        Sort sort = Sort.by(direction, sortBy);
+        Sort sort = Sort.by(direction, safeSortBy);
 
         // 페이지 요청
-        Pageable pageable = PageRequest.of(page, size, sort);
+        Pageable pageable = PageRequest.of(safePage, safeSize, sort);
 
         // 데이터 조회
         Page<OrderItemView> orderPage = orderItemViewRepository.findAll(spec, pageable);
 
-        Map<Long, String> userNames = resolveUserNames(
-                orderPage.getContent().stream()
-                        .map(OrderItemView::getUserId)
-                        .filter(Objects::nonNull)
-                        .collect(Collectors.toSet())
-        );
+        Map<Long, String> userNames = Collections.emptyMap();
+        if (resolveUserNamesEnabled) {
+            userNames = resolveUserNames(
+                    orderPage.getContent().stream()
+                            .map(OrderItemView::getUserId)
+                            .filter(Objects::nonNull)
+                            .collect(Collectors.toSet())
+            );
+        }
+        final Map<Long, String> finalUserNames = userNames;
 
         // DTO 변환
         List<OrderItemDto> orderItems = orderPage.getContent().stream()
-                .map(orderView -> convertToDto(orderView, userNames.get(orderView.getUserId())))
+                .map(orderView -> convertToDto(orderView, finalUserNames.get(orderView.getUserId())))
                 .collect(Collectors.toList());
 
         // 페이지 정보
         PageInfoDto pageInfo = PageInfoDto.builder()
                 .totalElements(orderPage.getTotalElements())
                 .totalPages(orderPage.getTotalPages())
-                .page(page)
-                .currentPage(page)
-                .size(size)
+                .page(safePage)
+                .currentPage(safePage)
+                .size(safeSize)
                 .hasNext(orderPage.hasNext())
                 .hasPrevious(orderPage.hasPrevious())
                 .build();
@@ -543,6 +572,84 @@ public class OrderDashboardService {
             return Collections.emptyMap();
         }
 
+        long now = System.currentTimeMillis();
+        long ttlMs = Math.max(1, userNameCacheTtlSeconds) * 1000;
+        Map<Long, String> resolved = new HashMap<>();
+        List<Long> misses = new ArrayList<>();
+
+        for (Long userId : userIds) {
+            CachedUserName cached = userNameCache.get(userId);
+            if (cached != null && cached.expiresAtMs() > now && cached.name() != null && !cached.name().isBlank()) {
+                resolved.put(userId, cached.name());
+            } else {
+                misses.add(userId);
+            }
+        }
+
+        if (!misses.isEmpty()) {
+            Map<Long, String> batchResolved = fetchUserNamesBatch(misses);
+            for (Map.Entry<Long, String> entry : batchResolved.entrySet()) {
+                resolved.put(entry.getKey(), entry.getValue());
+                userNameCache.put(entry.getKey(), new CachedUserName(entry.getValue(), now + ttlMs));
+            }
+
+            Set<Long> unresolved = new HashSet<>(misses);
+            unresolved.removeAll(batchResolved.keySet());
+            if (!unresolved.isEmpty()) {
+                Map<Long, String> fallbackResolved = fetchUserNamesIndividually(unresolved);
+                for (Map.Entry<Long, String> entry : fallbackResolved.entrySet()) {
+                    resolved.put(entry.getKey(), entry.getValue());
+                    userNameCache.put(entry.getKey(), new CachedUserName(entry.getValue(), now + ttlMs));
+                }
+            }
+        }
+
+        return resolved;
+    }
+
+    private Map<Long, String> fetchUserNamesBatch(List<Long> userIds) {
+        RestClient client = restClientBuilder.baseUrl(usersServiceBaseUrl).build();
+        Map<Long, String> userNames = new HashMap<>();
+
+        int chunkSize = Math.max(1, userNameBatchSize);
+        for (int start = 0; start < userIds.size(); start += chunkSize) {
+            int end = Math.min(start + chunkSize, userIds.size());
+            List<Long> chunk = userIds.subList(start, end);
+
+            try {
+                Map<String, String> response = client.get()
+                        .uri(uriBuilder -> uriBuilder
+                                .path("/api/users/v1/users/batch")
+                                .queryParam("userIds", chunk.toArray())
+                                .build())
+                        .header("X-Internal-Service", "orderquery-service")
+                        .header("X-Internal-Call", "true")
+                        .retrieve()
+                        .body(new ParameterizedTypeReference<Map<String, String>>() {});
+
+                if (response == null || response.isEmpty()) {
+                    continue;
+                }
+
+                response.forEach((k, v) -> {
+                    if (v == null || v.isBlank()) {
+                        return;
+                    }
+                    try {
+                        userNames.put(Long.parseLong(k), v);
+                    } catch (NumberFormatException ignored) {
+                        log.debug("배치 사용자 이름 응답 key 변환 실패: {}", k);
+                    }
+                });
+            } catch (Exception ex) {
+                log.debug("배치 사용자 이름 조회 실패 - size: {}", chunk.size(), ex);
+            }
+        }
+
+        return userNames;
+    }
+
+    private Map<Long, String> fetchUserNamesIndividually(Set<Long> userIds) {
         RestClient client = restClientBuilder.baseUrl(usersServiceBaseUrl).build();
         Map<Long, String> userNames = new HashMap<>();
 
@@ -559,7 +666,7 @@ public class OrderDashboardService {
                     userNames.put(userId, response.name());
                 }
             } catch (Exception ex) {
-                log.debug("사용자 이름 조회 실패 - userId: {}", userId, ex);
+                log.debug("단건 사용자 이름 조회 실패 - userId: {}", userId, ex);
             }
         }
 
@@ -605,6 +712,7 @@ public class OrderDashboardService {
     }
 
     private record UserSimpleResponse(Long id, String name) {}
+    private record CachedUserName(String name, long expiresAtMs) {}
 
     // === 🏪 스토어별 헬퍼 메서드들 ===
 

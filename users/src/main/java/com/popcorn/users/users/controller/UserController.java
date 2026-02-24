@@ -274,6 +274,14 @@ public class UserController {
     }
 
     /**
+     * 내부 서비스용 사용자 이름 배치 조회 (userId 목록 기반)
+     */
+    @GetMapping("/batch")
+    public Map<Long, String> getUserNamesByIdsForInternal(@RequestParam(name = "userIds") List<Long> userIds) {
+        return userService.getActiveUserNamesByIds(userIds);
+    }
+
+    /**
      * 내부 서비스용 - 활성 CUSTOMER 사용자 ID 목록 조회
      */
     @GetMapping("/customer-ids")
