@@ -4,6 +4,8 @@ import java.io.IOException;
 import java.util.List;
 
 import org.springframework.beans.factory.annotation.Value;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 import org.springframework.security.authentication.UsernamePasswordAuthenticationToken;
 import org.springframework.security.core.authority.SimpleGrantedAuthority;
 import org.springframework.security.core.context.SecurityContextHolder;
@@ -21,10 +23,22 @@ import jakarta.servlet.http.HttpServletResponse;
 
 @Component
 public class HeaderAuthenticationFilter extends OncePerRequestFilter {
+    private static final Logger log = LoggerFactory.getLogger(HeaderAuthenticationFilter.class);
 
     @Value("${passport.secret}")
     private String passportSecret;
-    
+
+    @Override
+    protected boolean shouldNotFilter(HttpServletRequest request) throws ServletException {
+        String uri = request.getRequestURI();
+        if (uri == null) return false;
+        if ("/".equals(uri) || "/error".equals(uri) || "/favicon.ico".equals(uri)) return true;
+        if (uri.startsWith("/actuator")) return true;
+        if (uri.startsWith("/api/pay/v")) return true;
+        if (isPublicApiPath(uri)) return true;
+        return uri.startsWith("/api/users/v1/auth/refresh") || uri.startsWith("/users/v1/auth/refresh");
+    }
+
     @Override
     protected void doFilterInternal(
             HttpServletRequest request,
@@ -33,42 +47,14 @@ public class HeaderAuthenticationFilter extends OncePerRequestFilter {
     ) throws ServletException, IOException {
         String uri = request.getRequestURI();
 
-        // Allow actuator endpoints without passport/internal headers
-        if (uri != null && uri.startsWith("/actuator")) {
-            filterChain.doFilter(request, response);
-            return;
-        }
-
-        // Allow all Payment API endpoints without authentication (configured as permitAll in SecurityConfig)
-        if (uri != null && uri.startsWith("/api/pay/v")) {
-            filterChain.doFilter(request, response);
-            return;
-        }
-
-        // Allow public API endpoints that are configured as permitAll in SecurityConfig
-        if (isPublicApiPath(uri)) {
-            filterChain.doFilter(request, response);
-            return;
-        }
-
-        // Allow refresh token API - uses refresh token for authentication instead of headers
-        if (uri != null && (uri.startsWith("/api/users/v1/auth/refresh") || uri.startsWith("/users/v1/auth/refresh"))) {
-            filterChain.doFilter(request, response);
-            return;
-        }
-
         // 기존 인증이 없을 때만 헤더에서 인증 정보 추출
         if (SecurityContextHolder.getContext().getAuthentication() == null) {
             String internalServiceHeader = request.getHeader("X-Internal-Service");
             String internalCallHeader = request.getHeader("X-Internal-Call");
             String passportHeader = request.getHeader("X-Passport");
 
-            // 디버그 로깅 추가
-            System.out.println("🔍 HeaderAuthenticationFilter - URI: " + uri);
-            System.out.println("🔍 X-Internal-Service: " + internalServiceHeader);
-            System.out.println("🔍 X-Internal-Call: " + internalCallHeader);
-            System.out.println("🔍 X-Passport: " + passportHeader);
-            System.out.println("🔍 passport.secret: " + passportSecret);
+            log.debug("HeaderAuthenticationFilter uri={} hasPassport={} internalCall={} internalService={}",
+                    uri, passportHeader != null, internalCallHeader, internalServiceHeader);
 
             if (passportHeader != null) {
                 try {
@@ -94,10 +80,9 @@ public class HeaderAuthenticationFilter extends OncePerRequestFilter {
                             );
 
                     SecurityContextHolder.getContext().setAuthentication(auth);
-
-                    System.out.println("✅ Passport 인증 성공 - userId=" + user.id());
+                    log.debug("Passport auth success userId={}", user.id());
                 } catch (Exception e) {
-                    System.out.println("❌ Passport 인증 실패: " + e.getMessage());
+                    log.warn("Passport auth failed: {}", e.getMessage());
                 }
 
                 filterChain.doFilter(request, response);
@@ -114,10 +99,10 @@ public class HeaderAuthenticationFilter extends OncePerRequestFilter {
                                 List.of(new SimpleGrantedAuthority("ROLE_SYSTEM"))
                         );
                 SecurityContextHolder.getContext().setAuthentication(systemAuth);
-                System.out.println("✅ 내부 서비스 호출 인증 성공 - 서비스: " + internalServiceHeader);
+                log.debug("Internal service auth success service={}", internalServiceHeader);
             } 
             else {
-                System.out.println("❌ 인증 헤더 누락 - Gateway 헤더 또는 내부 호출 헤더가 필요함");
+                log.debug("Missing auth headers uri={}", uri);
             }
         }
 
