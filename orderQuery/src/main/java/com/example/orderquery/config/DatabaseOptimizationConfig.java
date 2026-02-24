@@ -5,6 +5,7 @@ import com.zaxxer.hikari.HikariDataSource;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.boot.context.properties.ConfigurationProperties;
 import org.springframework.core.env.Environment;
+import org.springframework.core.env.Profiles;
 import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.Configuration;
 import org.springframework.context.annotation.Primary;
@@ -56,7 +57,13 @@ public class DatabaseOptimizationConfig {
         config.setConnectionTimeout(30000);     // 연결 타임아웃 30초
         config.setIdleTimeout(600000);          // 유휴 연결 타임아웃 10분
         config.setMaxLifetime(1800000);         // 최대 연결 생존 시간 30분
-        config.setLeakDetectionThreshold(60000); // 연결 누수 감지 1분
+        // 운영 시작 구간(Flyway/JPA init)에서 false positive가 자주 발생해 프로파일별로 조정
+        long leakDetectionMs = environment.getProperty(
+            "spring.datasource.hikari.leak-detection-threshold",
+            Long.class,
+            environment.acceptsProfiles(Profiles.of("prod")) ? 0L : 120000L
+        );
+        config.setLeakDetectionThreshold(Math.max(leakDetectionMs, 0L));
 
         // === 🚀 성능 최적화 설정 ===
         config.setPoolName("OrderQueryOptimizedPool");
@@ -82,8 +89,8 @@ public class DatabaseOptimizationConfig {
         config.addDataSourceProperty("enabledSSLModes", "prefer");    // SSL 설정
         config.addDataSourceProperty("readOnlyMode", "true");         // 읽기 전용 모드
 
-        log.info("🚀 [DB 최적화] HikariCP 연결 풀 설정 완료 - maxPoolSize: {}, minIdle: {}",
-            config.getMaximumPoolSize(), config.getMinimumIdle());
+        log.info("🚀 [DB 최적화] HikariCP 연결 풀 설정 완료 - maxPoolSize: {}, minIdle: {}, leakDetectionMs: {}",
+            config.getMaximumPoolSize(), config.getMinimumIdle(), config.getLeakDetectionThreshold());
 
         return new HikariDataSource(config);
     }
