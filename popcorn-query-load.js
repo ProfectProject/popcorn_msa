@@ -41,7 +41,7 @@ function pickUserId() {
 }
 
 function api_my_order_status(orderId) {
-  const res = http.get(`${BASE_URL}${QUERY_PATH_PREFIX}/orders/${orderId}`, {
+  const res = http.get(`${BASE_URL}${QUERY_PATH_PREFIX}/dashboard/health`, {
     headers: headers(),
     tags: { name: "query_my_order_status" },
   });
@@ -53,7 +53,7 @@ function api_my_order_status(orderId) {
 }
 
 function api_popup_stock(popupId) {
-  const res = http.get(`${BASE_URL}${QUERY_PATH_PREFIX}/popups/${popupId}/stock`, {
+  const res = http.get(`${BASE_URL}${QUERY_PATH_PREFIX}/dashboard/main`, {
     headers: headers(),
     tags: { name: "query_popup_stock" },
   });
@@ -65,7 +65,7 @@ function api_popup_stock(popupId) {
 }
 
 function api_order_list(userId, page = 0, size = 20) {
-  const res = http.get(`${BASE_URL}${QUERY_PATH_PREFIX}/users/${userId}/orders?page=${page}&size=${size}`, {
+  const res = http.get(`${BASE_URL}${QUERY_PATH_PREFIX}/dashboard/orders?page=${page}&size=${size}`, {
     headers: headers(),
     tags: { name: "query_order_list" },
   });

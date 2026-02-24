@@ -5,6 +5,8 @@ import { Trend, Rate } from "k6/metrics";
 const BASE_URL = __ENV.BASE_URL || "http://localhost:8080";
 const AUTH_TOKEN = __ENV.AUTH_TOKEN || "";
 const SCENARIO = (__ENV.SCENARIO || "hot").toLowerCase();
+const ENABLE_POPUP_LIST = (__ENV.ENABLE_POPUP_LIST || "false").toLowerCase() === "true";
+const ENABLE_WRITE = (__ENV.ENABLE_WRITE || "false").toLowerCase() === "true";
 
 const POPUP_HOT_ID = __ENV.POPUP_HOT_ID || "HOT_POPUP_ID";
 const POPUP_IDS = (__ENV.POPUP_IDS || "P1,P2,P3,P4").split(",");
@@ -180,14 +182,14 @@ export function stageSpike() {
 }
 
 function scenarioHot(stage) {
-  api_popup_list();
+  if (ENABLE_POPUP_LIST) api_popup_list();
   api_popup_detail(POPUP_HOT_ID);
 
   let writeProb = 0.15;
   if (stage === "rush") writeProb = 0.30;
   if (stage === "spike") writeProb = 0.55;
 
-  if (Math.random() < writeProb) {
+  if (ENABLE_WRITE && Math.random() < writeProb) {
     const orderRes = api_order_create({ popupId: POPUP_HOT_ID });
     const orderId = extractOrderId(orderRes);
 
@@ -199,14 +201,14 @@ function scenarioHot(stage) {
 function scenarioDist(stage) {
   const popupId = pickDistributedPopup();
 
-  api_popup_list();
+  if (ENABLE_POPUP_LIST) api_popup_list();
   api_popup_detail(popupId);
 
   let writeProb = 0.10;
   if (stage === "rush") writeProb = 0.15;
   if (stage === "spike") writeProb = 0.25;
 
-  if (Math.random() < writeProb) {
+  if (ENABLE_WRITE && Math.random() < writeProb) {
     const orderRes = api_order_create({ popupId });
     const orderId = extractOrderId(orderRes);
     if (orderId) api_payment_request({ orderId });
@@ -216,13 +218,14 @@ function scenarioDist(stage) {
 function scenarioFault(stage) {
   const popupId = stage === "rush" || stage === "spike" ? POPUP_HOT_ID : pickDistributedPopup();
 
+  if (ENABLE_POPUP_LIST) api_popup_list();
   api_popup_detail(popupId);
 
   let writeProb = 0.20;
   if (stage === "rush") writeProb = 0.35;
   if (stage === "spike") writeProb = 0.60;
 
-  if (Math.random() < writeProb) {
+  if (ENABLE_WRITE && Math.random() < writeProb) {
     const orderRes = api_order_create({ popupId });
     const orderId = extractOrderId(orderRes);
     if (orderId) api_payment_request({ orderId });
