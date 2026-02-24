@@ -53,7 +53,7 @@ CREATE TABLE IF NOT EXISTS order_query.popup_order_items_view (
     order_status varchar(30),
     ordered_at timestamp NOT NULL,
 
-    item_type varchar(20) NOT NULL, -- RESERVATION / GOODS / SCHEDULE
+    item_type varchar(10) NOT NULL, -- RESERVATION / GOODS / SCHEDULE
 
     schedule_id uuid,
     schedule_start_at timestamp,
