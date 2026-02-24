@@ -32,8 +32,8 @@ spring:
     # 🚨 Emergency HikariCP 극한 최적화 - 1800 RPS 대응
     hikari:
       connection-init-sql: SET search_path TO coupons
-      maximum-pool-size: 1000        # 🚨 Emergency: 50 → 1000
-      minimum-idle: 400              # 🚨 Emergency: 10 → 400
+      maximum-pool-size: 2000        # 🚨 EXTREME: 1000 → 2000 (800 RPS 대응)
+      minimum-idle: 800              # 🚨 EXTREME: 400 → 800
       connection-timeout: 15000      # 🚨 Emergency: 30s → 15s
       validation-timeout: 5000       # 🚨 Emergency: 검증 타임아웃 5초
       idle-timeout: 300000          # 🚨 Emergency: 10분 → 5분

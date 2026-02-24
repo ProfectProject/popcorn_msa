@@ -39,8 +39,8 @@ spring:
     # 🚨 Emergency HikariCP 극한 최적화 - 1800 RPS 대응
     hikari:
       connection-init-sql: SET search_path TO orders
-      minimum-idle: 400              # 🚨 Emergency: 200 → 400
-      maximum-pool-size: 1000        # 🚨 Emergency: 500 → 1000
+      minimum-idle: 800              # 🚨 EXTREME: 400 → 800 (800 RPS 대응)
+      maximum-pool-size: 2000        # 🚨 EXTREME: 1000 → 2000
       connection-timeout: 15000      # 🚨 Emergency: 10s → 15s
       validation-timeout: 5000       # 🚨 Emergency: 1s → 5s
       idle-timeout: 300000          # 🚨 Emergency: 5분 유지
