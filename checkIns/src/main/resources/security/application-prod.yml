@@ -2,6 +2,18 @@ server:
   port: ${SERVER_PORT:8086}
   shutdown: graceful  # 프로덕션에서는 graceful shutdown
 
+  # 🚨 Emergency Tomcat 극한 최적화 - 1800 RPS 대응
+  tomcat:
+    uri-encoding: UTF-8
+    threads:
+      max: 2000                    # 🚨 Emergency: 극한 스레드 수
+      min-spare: 500              # 🚨 Emergency: 최소 스레드 500개
+    connection-timeout: 60000      # 🚨 Emergency: 60초 타임아웃
+    keep-alive-timeout: 60000      # 🚨 Emergency: Keep-Alive 60초
+    max-connections: 100000        # 🚨 Emergency: 최대 연결 수 100K
+    accept-count: 5000            # 🚨 Emergency: 대기 연결 수 5K
+    max-http-form-post-size: 2MB  # POST 크기 제한
+
 spring:
   config:
     activate:
@@ -16,13 +28,19 @@ spring:
     driver-class-name: org.postgresql.Driver
     username: ${QR_USERNAME}
     password: ${QR_PASSWORD}
-    # 프로덕션 커넥션 풀 최적화
+    # 🚨 Emergency HikariCP 극한 최적화 - 1800 RPS 대응
     hikari:
-      maximum-pool-size: 30
-      minimum-idle: 10
-      idle-timeout: 300000
-      connection-timeout: 20000
-      max-lifetime: 1200000
+      connection-init-sql: SET search_path TO qr
+      maximum-pool-size: 1000        # 🚨 Emergency: 30 → 1000
+      minimum-idle: 400              # 🚨 Emergency: 10 → 400
+      connection-timeout: 15000      # 🚨 Emergency: 20s → 15s
+      validation-timeout: 5000       # 🚨 Emergency: 검증 타임아웃 5초
+      idle-timeout: 300000          # 🚨 Emergency: 5분 유지
+      max-lifetime: 900000           # 🚨 Emergency: 15분으로 조정
+      leak-detection-threshold: 15000 # 🚨 Emergency: 누수 감지 15초
+      pool-name: "CheckInsHikariPool"
+      connection-test-query: SELECT 1 # 연결 테스트 쿼리
+      keepalive-time: 30000          # 🚨 Emergency: Keep alive 30초
 
   # JPA 설정 (프로덕션)
   jpa:
@@ -30,14 +48,25 @@ spring:
       ddl-auto: validate  # 프로덕션에서는 반드시 validate
     properties:
       hibernate:
+        type:
+          preferred_enum_jdbc_type: NAMED_ENUM
         format_sql: false
         show_sql: false
+        use_sql_comments: false        # SQL 주석 비활성화 (성능)
         dialect: org.hibernate.dialect.PostgreSQLDialect
+        default_schema: qr
         jdbc:
-          batch_size: 50
-        order_inserts: true
-        order_updates: true
-        jdbc.batch_versioned_data: true
+          batch_size: 100              # 🚨 Emergency: 50 → 100 (극한 배치)
+          batch_versioned_data: true   # 버전 데이터 배치 처리
+          fetch_size: 100              # 페치 크기 증가
+        order_inserts: true            # INSERT 순서 최적화
+        order_updates: true            # UPDATE 순서 최적화
+        # 🚀 L2 캐시 활성화 (CheckIns 극한 성능)
+        cache:
+          use_second_level_cache: true
+          use_query_cache: true
+          region:
+            factory_class: org.hibernate.cache.jcache.JCacheRegionFactory
     show-sql: false
 
   # Flyway 설정 (프로덕션)
@@ -61,16 +90,21 @@ spring:
         enabled: ${REDIS_SSL_ENABLED:true}
       password: ${REDIS_PASSWORD}
       database: 1  # CheckIns 서비스 전용 DB
-      timeout: 10000ms
-      connection-timeout: 5000ms
-      # 프로덕션 레디스 풀 설정
+      timeout: 5000ms              # 🚨 Emergency: 10s → 5s (더 빠른 응답)
+      connection-timeout: 5000ms    # 🚨 Emergency: 5s 연결 타임아웃
+      # 🚨 Emergency Redis 극한 최적화 - 1800 RPS 대응
       lettuce:
         pool:
-          max-active: 50
-          max-idle: 20
-          min-idle: 10
-          max-wait: 3000ms
-        shutdown-timeout: 100ms
+          max-active: 2000          # 🚨 Emergency: 50 → 2000 (극한)
+          max-idle: 1000            # 🚨 Emergency: 20 → 1000 (극한)
+          min-idle: 500             # 🚨 Emergency: 10 → 500 (극한)
+          max-wait: 60000ms         # 🚨 Emergency: 3s → 60s (더 긴 대기)
+          time-between-eviction-runs: 60000ms
+          min-evictable-idle-time: 300000ms
+          test-on-borrow: false     # 성능 향상
+          test-on-return: false     # 성능 향상
+          test-while-idle: true     # 유휴 중 검사만 활성화
+        shutdown-timeout: 1000ms     # Emergency: 100ms → 1s
 
 # 로깅 설정 (프로덕션 - 최적화)
 logging:

@@ -6,6 +6,18 @@ server:
   port: 8088
   shutdown: graceful
 
+  # 🚨 Emergency Tomcat 극한 최적화 - 1800 RPS 대응
+  tomcat:
+    uri-encoding: UTF-8
+    threads:
+      max: 2000                    # 🚨 Emergency: 극한 스레드 수
+      min-spare: 500              # 🚨 Emergency: 최소 스레드 500개
+    connection-timeout: 60000      # 🚨 Emergency: 60초 타임아웃
+    keep-alive-timeout: 60000      # 🚨 Emergency: Keep-Alive 60초
+    max-connections: 100000        # 🚨 Emergency: 최대 연결 수 100K
+    accept-count: 5000            # 🚨 Emergency: 대기 연결 수 5K
+    max-http-form-post-size: 2MB  # POST 크기 제한
+
 spring:
   config:
     activate:
@@ -17,13 +29,19 @@ spring:
     username: ${COUPON_USERNAME}
     password: ${COUPON_PASSWORD}
     driver-class-name: org.postgresql.Driver
+    # 🚨 Emergency HikariCP 극한 최적화 - 1800 RPS 대응
     hikari:
-      maximum-pool-size: 50
-      minimum-idle: 10
-      connection-timeout: 30000
-      idle-timeout: 600000
-      max-lifetime: 1800000
-      leak-detection-threshold: 60000
+      connection-init-sql: SET search_path TO coupons
+      maximum-pool-size: 1000        # 🚨 Emergency: 50 → 1000
+      minimum-idle: 400              # 🚨 Emergency: 10 → 400
+      connection-timeout: 15000      # 🚨 Emergency: 30s → 15s
+      validation-timeout: 5000       # 🚨 Emergency: 검증 타임아웃 5초
+      idle-timeout: 300000          # 🚨 Emergency: 10분 → 5분
+      max-lifetime: 900000           # 🚨 Emergency: 30분 → 15분
+      leak-detection-threshold: 15000 # 🚨 Emergency: 60s → 15s
+      pool-name: "CouponHikariPool"
+      connection-test-query: SELECT 1 # 연결 테스트 쿼리
+      keepalive-time: 30000          # 🚨 Emergency: Keep alive 30초
 
   # JPA 설정 (Production 최적화)
   jpa:
@@ -35,12 +53,22 @@ spring:
       hibernate:
         dialect: org.hibernate.dialect.PostgreSQLDialect
         format_sql: false
+        use_sql_comments: false        # SQL 주석 비활성화 (성능)
+        show_sql: false                # SQL 로깅 비활성화 (성능)
         default_schema: coupons
         jdbc:
-          batch_size: 50
-          order_inserts: true
-          order_updates: true
+          batch_size: 100              # 🚨 Emergency: 50 → 100 (극한 배치)
+          batch_versioned_data: true   # 버전 데이터 배치 처리
+          fetch_size: 100              # 페치 크기 증가
+          order_inserts: true          # INSERT 순서 최적화
+          order_updates: true          # UPDATE 순서 최적화
         default_batch_fetch_size: 200
+        # 🚀 L2 캐시 활성화 (Coupon 극한 성능)
+        cache:
+          use_second_level_cache: true
+          use_query_cache: true
+          region:
+            factory_class: org.hibernate.cache.jcache.JCacheRegionFactory
         type:
           preferred_enum_jdbc_type: NAMED_ENUM
 
@@ -65,16 +93,21 @@ spring:
       password: ${REDIS_PASSWORD}
       ssl:
         enabled: ${REDIS_SSL_ENABLED:true}
-      timeout: 2000ms
-      command-timeout: 2000ms
+      timeout: 5000ms              # 🚨 Emergency: 2s → 5s (더 긴 타임아웃)
+      command-timeout: 5000ms       # 🚨 Emergency: 2s → 5s
+      # 🚨 Emergency Redis 극한 최적화 - 1800 RPS 대응
       lettuce:
         pool:
-          max-active: 50
-          max-idle: 20
-          min-idle: 10
-          max-wait: 3000ms
-          time-between-eviction-runs: 60s
-        shutdown-timeout: 2000ms
+          max-active: 2000          # 🚨 Emergency: 50 → 2000 (극한)
+          max-idle: 1000            # 🚨 Emergency: 20 → 1000 (극한)
+          min-idle: 500             # 🚨 Emergency: 10 → 500 (극한)
+          max-wait: 60000ms         # 🚨 Emergency: 3s → 60s (더 긴 대기)
+          time-between-eviction-runs: 60000ms
+          min-evictable-idle-time: 300000ms
+          test-on-borrow: false     # 성능 향상
+          test-on-return: false     # 성능 향상
+          test-while-idle: true     # 유휴 중 검사만 활성화
+        shutdown-timeout: 1000ms     # Emergency: 2s → 1s
 
   # Kafka 설정 (Production)
   kafka:

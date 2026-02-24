@@ -15,8 +15,26 @@ spring:
       server:
         webflux:
           httpclient:
-            connect-timeout: 3000    # 다운스트림 서비스 연결되는데 걸리는 시간
-            response-timeout: 30s    # orderquery 대시보드 조회 타임아웃 완화
+            connect-timeout: 15000   # 🚨 Emergency: 3s → 15s (1800 RPS 대응)
+            response-timeout: 60s    # 🚨 Emergency: 30s → 60s (완화)
+
+# 🚨 Emergency WebFlux/Netty 극한 최적화 - 1800 RPS 대응
+server:
+  port: 8080
+  netty:
+    connection-timeout: 60000        # 🚨 Emergency: 60초 연결 타임아웃
+    h2c-max-content-length: 0        # 🚨 Emergency: 무제한 컨텐츠 길이
+  # 🚨 Emergency Reactor Netty 극한 튜닝
+  reactor:
+    netty:
+      connection-provider:
+        type: fixed                  # 고정 연결 풀 사용
+        max-connections: 2000        # 🚨 Emergency: 최대 2000 연결
+        max-idle-time: 30s          # 🚨 Emergency: 유휴 연결 30초 유지
+        max-life-time: 60s          # 🚨 Emergency: 연결 최대 생존 시간
+      event-loop:
+        select-count: 8              # 🚨 Emergency: 이벤트 루프 스레드 수 증가
+        worker-count: 100            # 🚨 Emergency: 워커 스레드 100개
 
       routes:
         - id: checkIns
@@ -289,36 +307,36 @@ resilience4j:
       cbUserService:
         sliding-window-type: COUNT_BASED
         sliding-window-size: 100
-        minimum-number-of-calls: 30
-        failure-rate-threshold: 20
-        slow-call-duration-threshold: 2000ms  # 300ms → 2000ms로 증가
-        slow-call-rate-threshold: 40
-        wait-duration-in-open-state: 5s
-        permitted-number-of-calls-in-half-open-state: 10
+        minimum-number-of-calls: 50          # 🚨 Emergency: 30 → 50
+        failure-rate-threshold: 80           # 🚨 Emergency: 20 → 80% (매우 관대)
+        slow-call-duration-threshold: 10000ms  # 🚨 Emergency: 2s → 10s
+        slow-call-rate-threshold: 80         # 🚨 Emergency: 40 → 80% (매우 관대)
+        wait-duration-in-open-state: 2s      # 🚨 Emergency: 5s → 2s (빠른 복구)
+        permitted-number-of-calls-in-half-open-state: 20
         automatic-transition-from-open-to-half-open-enabled: true
         register-health-indicator: true
 
       cbStoreService:
         sliding-window-type: COUNT_BASED
         sliding-window-size: 100
-        minimum-number-of-calls: 30
-        failure-rate-threshold: 20
-        slow-call-duration-threshold: 3000ms  # 300ms → 3000ms (3초로 증가)
-        slow-call-rate-threshold: 40
-        wait-duration-in-open-state: 5s
-        permitted-number-of-calls-in-half-open-state: 10
+        minimum-number-of-calls: 50          # 🚨 Emergency: 30 → 50
+        failure-rate-threshold: 80           # 🚨 Emergency: 20 → 80% (매우 관대)
+        slow-call-duration-threshold: 15000ms  # 🚨 Emergency: 3s → 15s
+        slow-call-rate-threshold: 80         # 🚨 Emergency: 40 → 80% (매우 관대)
+        wait-duration-in-open-state: 2s      # 🚨 Emergency: 5s → 2s (빠른 복구)
+        permitted-number-of-calls-in-half-open-state: 20
         automatic-transition-from-open-to-half-open-enabled: true
         register-health-indicator: true
 
       cbOrderService:
         sliding-window-type: COUNT_BASED
         sliding-window-size: 100
-        minimum-number-of-calls: 30
-        failure-rate-threshold: 20
-        slow-call-duration-threshold: 8s    # 3s → 8s 증가
-        slow-call-rate-threshold: 40
-        wait-duration-in-open-state: 5s
-        permitted-number-of-calls-in-half-open-state: 10
+        minimum-number-of-calls: 50          # 🚨 Emergency: 30 → 50
+        failure-rate-threshold: 80           # 🚨 Emergency: 20 → 80% (매우 관대)
+        slow-call-duration-threshold: 20s    # 🚨 Emergency: 8s → 20s
+        slow-call-rate-threshold: 80         # 🚨 Emergency: 40 → 80% (매우 관대)
+        wait-duration-in-open-state: 2s      # 🚨 Emergency: 5s → 2s (빠른 복구)
+        permitted-number-of-calls-in-half-open-state: 20
         automatic-transition-from-open-to-half-open-enabled: true
         register-health-indicator: true
 
