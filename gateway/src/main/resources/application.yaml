@@ -204,7 +204,7 @@ spring:
             - RewritePath=^/api/pay/(?<remaining>swagger-ui.*), /${remaining}
             - RewritePath=^/api/pay/(?<remaining>webjars.*), /${remaining}
         - id: orderQuery
-          uri: ${ORDERQUERY_SERVICE_URL}
+          uri: ${ORDERQUERY_SERVICE_URL:https://query.goormpopcorn.shop}
           predicates:
             - Path=/api/orderquery/**    # order query
           filters:
@@ -223,7 +223,7 @@ spring:
                   factor: 2
                   basedOnPreviousValue: true
         - id: order-query
-          uri: ${ORDERQUERY_SERVICE_URL}
+          uri: ${ORDERQUERY_SERVICE_URL:https://query.goormpopcorn.shop}
           predicates:
             - Path=/api/order-query/**    # order query (dash path alias)
           filters:
