@@ -36,8 +36,7 @@ public class DatabaseOptimizationConfig {
      * - 동시 접속자 지원 강화
      * - 연결 풀 효율성 향상
      */
-    @Bean
-    @Primary
+    @Bean("optimizedDataSource")
     @ConfigurationProperties(prefix = "spring.datasource.hikari")
     public DataSource optimizedDataSource() {
         HikariConfig config = new HikariConfig();

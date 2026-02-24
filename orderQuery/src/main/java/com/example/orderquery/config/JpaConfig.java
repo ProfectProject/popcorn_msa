@@ -28,12 +28,12 @@ public class JpaConfig {
      */
     @Bean
     public LocalContainerEntityManagerFactoryBean entityManagerFactory(
-            DataSource dataSource,
+            @Qualifier("optimizedDataSource") DataSource optimizedDataSource,
             @Qualifier("jpaOptimizationProperties")
             Map<String, Object> jpaProperties
     ) {
         LocalContainerEntityManagerFactoryBean em = new LocalContainerEntityManagerFactoryBean();
-        em.setDataSource(dataSource);
+        em.setDataSource(optimizedDataSource);
         em.setPackagesToScan("com.example.orderquery.domain");
 
         // Hibernate JPA Vendor Adapter 설정
