@@ -118,7 +118,8 @@ function performLogin() {
 function api_popup_list() {
   const res = http.get(`${BASE_URL}/api/stores/v1/popups`, {
     headers: headers(),
-    tags: { name: "popup_list" }
+    tags: { name: "popup_list" },
+    timeout: "60s"  // 🚨 Emergency: 60초 타임아웃
   });
 
   t_popup_list.add(res.timings.duration);
@@ -130,7 +131,8 @@ function api_popup_list() {
 function api_popup_detail(popupId) {
   const res = http.get(`${BASE_URL}/api/stores/v1/popups/${popupId}`, {
     headers: headers(),
-    tags: { name: "popup_detail" }
+    tags: { name: "popup_detail" },
+    timeout: "60s"  // 🚨 Emergency: 60초 타임아웃
   });
 
   t_popup_detail.add(res.timings.duration);

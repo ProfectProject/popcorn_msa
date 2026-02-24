@@ -2,15 +2,15 @@ server:
   port: 8083
   shutdown: immediate
 
-  # === 🚀 극한 부하 대응 Tomcat 최적화 ===
+  # === 🚨 Emergency 극한 부하 대응 Tomcat 최적화 ===
   tomcat:
     threads:
-      max: 500                    # 극한 부하 대응 (200→500)
-      min-spare: 50              # 최소 스레드 수 증가
-    connection-timeout: 10000    # 연결 타임아웃 단축 (20s→10s)
-    keep-alive-timeout: 30000    # Keep-Alive 타임아웃 최적화
-    max-connections: 20000       # 최대 연결 수 확대 (8192→20000)
-    accept-count: 500           # 대기 연결 수 확대 (100→500)
+      max: 2000                    # 🚨 Emergency: 500→2000
+      min-spare: 500              # 🚨 Emergency: 50→500
+    connection-timeout: 60000      # 🚨 Emergency: 10s→60s
+    keep-alive-timeout: 60000      # 🚨 Emergency: 30s→60s
+    max-connections: 100000        # 🚨 Emergency: 20000→100000
+    accept-count: 5000            # 🚨 Emergency: 500→5000
     max-http-form-post-size: 2MB  # POST 크기 제한
 spring:
   config:
@@ -23,14 +23,14 @@ spring:
     driver-class-name: org.postgresql.Driver
     hikari:
       connection-init-sql: SET search_path TO store
-      maximum-pool-size: ${STORE_DB_MAX_POOL_SIZE:200}    # 🚨 Emergency 극한 대응 (60→200)
-      minimum-idle: ${STORE_DB_MIN_IDLE:80}               # 🚨 최소 idle 급증 (20→80)
-      connection-timeout: ${STORE_DB_CONNECTION_TIMEOUT_MS:500}     # 🚨 500ms로 단축
-      validation-timeout: ${STORE_DB_VALIDATION_TIMEOUT_MS:200}     # 🚨 200ms로 단축
-      idle-timeout: ${STORE_DB_IDLE_TIMEOUT_MS:120000}              # 🚨 2분으로 단축
-      max-lifetime: ${STORE_DB_MAX_LIFETIME_MS:300000}              # 🚨 5분으로 단축
-      keepalive-time: ${STORE_DB_KEEPALIVE_TIME_MS:10000}           # 🚨 10초로 단축
-      leak-detection-threshold: 5000                      # 🚨 누수감지 5초
+      maximum-pool-size: ${STORE_DB_MAX_POOL_SIZE:1000}   # 🚨 Emergency: 200→1000
+      minimum-idle: ${STORE_DB_MIN_IDLE:400}              # 🚨 Emergency: 80→400
+      connection-timeout: ${STORE_DB_CONNECTION_TIMEOUT_MS:15000}   # 🚨 Emergency: 500ms→15초
+      validation-timeout: ${STORE_DB_VALIDATION_TIMEOUT_MS:5000}   # 🚨 Emergency: 200ms→5초
+      idle-timeout: ${STORE_DB_IDLE_TIMEOUT_MS:300000}             # 🚨 Emergency: 2분→5분
+      max-lifetime: ${STORE_DB_MAX_LIFETIME_MS:900000}             # 🚨 Emergency: 5분→15분
+      keepalive-time: ${STORE_DB_KEEPALIVE_TIME_MS:30000}          # 🚨 Emergency: 10초→30초
+      leak-detection-threshold: 15000                     # 🚨 Emergency: 5초→15초
   jpa:
     open-in-view: false
     hibernate:
@@ -72,13 +72,13 @@ spring:
         enabled: ${REDIS_SSL_ENABLED:true}
       timeout: ${STORE_REDIS_TIMEOUT_MS:2000}ms       # 🚀 200ms → 2000ms (과부하 대응)
       connect-timeout: ${STORE_REDIS_CONNECT_TIMEOUT_MS:1000}ms # 🚀 200ms → 1000ms
-      # 🚀 Redis 연결 풀 설정 추가 (Prod 과부하 대응)
+      # 🚨 Emergency Redis 연결 풀 설정 (Prod 극한 대응)
       jedis:
         pool:
-          max-active: 200        # 🚀 과부하 대응: 대폭 증가
-          max-idle: 100          # 🚀 과부하 대응: 대폭 증가
-          min-idle: 50           # 🚀 과부하 대응: 대폭 증가
-          max-wait: 10000ms      # 🚀 과부하 대응: 10초 대기
+          max-active: 2000       # 🚨 Emergency: 200→2000
+          max-idle: 1000         # 🚨 Emergency: 100→1000
+          min-idle: 500          # 🚨 Emergency: 50→500
+          max-wait: 60000ms      # 🚨 Emergency: 10초→60초
           time-between-eviction-runs: 60000ms
           min-evictable-idle-time: 300000ms
           test-on-borrow: false  # 성능 향상
