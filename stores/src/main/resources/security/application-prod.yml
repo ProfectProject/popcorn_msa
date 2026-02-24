@@ -2,15 +2,16 @@ server:
   port: 8083
   shutdown: immediate
 
-  # === 🚀 Tomcat 성능 최적화 ===
+  # === 🚀 극한 부하 대응 Tomcat 최적화 ===
   tomcat:
     threads:
-      max: 200                    # 최대 스레드 수
-      min-spare: 10              # 최소 스레드 수
-    connection-timeout: 20000    # 연결 타임아웃 20초
-    keep-alive-timeout: 60000    # Keep-Alive 타임아웃
-    max-connections: 8192        # 최대 연결 수
-    accept-count: 100           # 대기 연결 수
+      max: 500                    # 극한 부하 대응 스레드 수 (200→500)
+      min-spare: 50              # 최소 스레드 수 증가
+    connection-timeout: 10000    # 연결 타임아웃 단축 (20s→10s)
+    keep-alive-timeout: 30000    # Keep-Alive 타임아웃 최적화
+    max-connections: 20000       # 최대 연결 수 확대 (8192→20000)
+    accept-count: 500           # 대기 연결 수 확대 (100→500)
+    max-http-form-post-size: 2MB  # POST 크기 제한
 spring:
   config:
     activate:
@@ -20,22 +21,43 @@ spring:
     username: ${STORE_USERNAME}
     password: ${STORE_PASSWORD}
     driver-class-name: org.postgresql.Driver
+    # === 🚀 극한 부하 대응 HikariCP 최적화 ===
     hikari:
       connection-init-sql: SET search_path TO store
-      maximum-pool-size: ${STORE_DB_MAX_POOL_SIZE:30}
-      minimum-idle: ${STORE_DB_MIN_IDLE:10}
-      connection-timeout: ${STORE_DB_CONNECTION_TIMEOUT_MS:3000}
-      validation-timeout: ${STORE_DB_VALIDATION_TIMEOUT_MS:1000}
+      maximum-pool-size: ${STORE_DB_MAX_POOL_SIZE:80}        # 극한 부하 대응 (30→80)
+      minimum-idle: ${STORE_DB_MIN_IDLE:20}                  # 최소 유지 연결 (10→20)
+      connection-timeout: ${STORE_DB_CONNECTION_TIMEOUT_MS:2000}  # 연결 타임아웃 단축 (3s→2s)
+      validation-timeout: ${STORE_DB_VALIDATION_TIMEOUT_MS:500}   # 검증 타임아웃 단축 (1s→0.5s)
+      idle-timeout: 300000                                   # 유휴 연결 타임아웃 5분
+      max-lifetime: 1800000                                  # 최대 수명 30분
+      leak-detection-threshold: 60000                        # 연결 누수 탐지 1분
+      register-mbeans: true                                  # JMX 모니터링 활성화
+      pool-name: "StoreHikariPool"                          # 풀 이름 설정
+  # === 🚀 극한 부하 대응 JPA/Hibernate 최적화 ===
   jpa:
     open-in-view: false
     hibernate:
       ddl-auto: none
     properties:
       hibernate:
+        # 극한 부하 대응 Hibernate 최적화
         type:
           preferred_enum_jdbc_type: VARCHAR
         default_schema: store
+        jdbc:
+          batch_size: 50                    # 배치 처리 최적화
+          fetch_size: 100                   # 페치 크기 최적화
+        cache:
+          use_second_level_cache: true      # 2차 캐시 활성화
+          use_query_cache: true            # 쿼리 캐시 활성화
+          region:
+            factory_class: com.hazelcast.hibernate.HazelcastCacheRegionFactory
+        show_sql: false                     # SQL 로깅 비활성화 (성능)
+        format_sql: false                   # SQL 포맷 비활성화 (성능)
+        connection:
+          provider_disables_autocommit: true  # 자동 커밋 최적화
 
+  # === 🚀 극한 부하 대응 Redis 최적화 ===
   data:
     redis:
       host: ${REDIS_HOST}
@@ -43,8 +65,24 @@ spring:
       password: ${REDIS_PASSWORD}
       ssl:
         enabled: ${REDIS_SSL_ENABLED:true}
-      timeout: 2s
-      connect-timeout: 1s
+      timeout: 1s                      # 타임아웃 단축 (2s→1s)
+      connect-timeout: 500ms          # 연결 타임아웃 단축 (1s→0.5s)
+      lettuce:
+        pool:
+          max-active: 50              # 최대 활성 연결 (극한 부하 대응)
+          max-idle: 20                # 최대 유휴 연결
+          min-idle: 5                 # 최소 유휴 연결
+          max-wait: 1s                # 최대 대기시간
+        shutdown-timeout: 100ms       # 종료 타임아웃
+
+  # === 🚀 캐시 설정 추가 ===
+  cache:
+    type: redis
+    redis:
+      time-to-live: 300000           # 5분 TTL
+      cache-null-values: false       # null 값 캐시 금지
+      use-key-prefix: true           # 키 접두사 사용
+      key-prefix: "stores:"          # 키 접두사 설정
 
 
   flyway:
@@ -89,17 +127,34 @@ passport:
   secret: ${PASSPORT_SECRET}
   ttl-seconds: 60
 
+# === 🚀 극한 부하 대응 로깅 최적화 ===
 logging:
   level:
-    com.popcorn.store: INFO
-    org.springframework.web: WARN
-    org.springframework.boot.web: INFO
-    org.hibernate.SQL: WARN
-    org.springframework.security: WARN
-    com.adjh.springbootkafka: INFO
+    com.popcorn.store: WARN                # INFO→WARN (성능 향상)
+    org.springframework.web: ERROR         # WARN→ERROR (성능 향상)
+    org.springframework.boot.web: WARN     # INFO→WARN (성능 향상)
+    org.hibernate.SQL: ERROR              # WARN→ERROR (성능 향상)
+    org.springframework.security: ERROR    # WARN→ERROR (성능 향상)
+    com.adjh.springbootkafka: WARN        # INFO→WARN (성능 향상)
     org:
-      apache.kafka: INFO
-      springframework.kafka: INFO
+      apache.kafka: WARN                   # INFO→WARN (성능 향상)
+      springframework.kafka: WARN          # INFO→WARN (성능 향상)
+    com.zaxxer.hikari: WARN               # HikariCP 로그 최소화
+    root: WARN                            # 전체 로그 레벨 상향
+
+# === 🚀 극한 부하 대응 추가 설정 ===
+management:
+  endpoints:
+    web:
+      exposure:
+        include: health,metrics,prometheus,hikaricp  # 모니터링 엔드포인트
+  endpoint:
+    health:
+      show-details: when-authorized
+  metrics:
+    export:
+      prometheus:
+        enabled: true                     # Prometheus 메트릭 활성화
 
 popcorn:
   kafka:

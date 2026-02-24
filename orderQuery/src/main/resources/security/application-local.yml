@@ -30,8 +30,8 @@ spring:
 
   flyway:
     enabled: true
-    user: ${ORDER_QUERY_FLYWAY_USERNAME}
-    password: ${ORDER_QUERY_FLYWAY_PASSWORD}
+    user: ${ORDER_QUERY_FLYWAY_USERNAME:order_query_app}
+    password: ${ORDER_QUERY_FLYWAY_PASSWORD:order_query123}
     default-schema: order_query
     schemas: order_query
     locations: classpath:db/migration/schema,classpath:db/migration/seed
@@ -39,10 +39,10 @@ spring:
     validate-on-migrate: true
     clean-disabled: false
   kafka:
-    bootstrap-servers: ${KAFKA_BOOTSTRAP_SERVERS}
+    bootstrap-servers: ${KAFKA_BOOTSTRAP_SERVERS:localhost:29092}
 
     consumer:
-      group-id: ${ORDER_QUERY_KAFKA_GROUP}
+      group-id: ${ORDER_QUERY_KAFKA_GROUP:order-query-cg}
       auto-offset-reset: earliest
       enable-auto-commit: false
       key-deserializer: org.apache.kafka.common.serialization.StringDeserializer
@@ -50,7 +50,7 @@ spring:
 
     listener:
       ack-mode: manual
-      concurrency: ${KAFKA_LISTENER_CONCURRENCY}
+      concurrency: ${KAFKA_LISTENER_CONCURRENCY:3}
 
 popcorn:
   kafka:
@@ -60,7 +60,7 @@ popcorn:
       store-events: ${KAFKA_TOPIC_STORE_EVENTS:store-events}
       checkin-events: ${KAFKA_TOPIC_CHECKIN_EVENTS:checkin-events}
 jwt:
-  secret: ${JWT_SECRET}
+  secret: ${JWT_SECRET:dGVzdC1qd3Qtc2VjcmV0LWtleS1mb3ItbG9jYWwtZGV2ZWxvcG1lbnQtb25seS1kb25vdC11c2UtaW4tcHJvZHVjdGlvbg==}
   expiration: 3600000
 
 management:
@@ -78,5 +78,5 @@ logging:
 
 
 passport:
-  secret: ${PASSPORT_SECRET}
+  secret: ${PASSPORT_SECRET:passport-shared-secret}
   ttl-seconds: 60

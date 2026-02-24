@@ -1,13 +1,16 @@
 server:
   port: 8082
   shutdown: immediate
+  # === 🚀 극한 부하 대응 Tomcat 최적화 ===
   tomcat:
     threads:
-      max: 200                 # 최대 스레드 수
-      min-spare: 10           # 최소 유지 스레드
-    connection-timeout: 20000  # 연결 타임아웃
-    max-connections: 8192      # 최대 동시 연결수
-    accept-count: 100          # 대기열 크기
+      max: 500                 # 극한 부하 대응 스레드 수 (200→500)
+      min-spare: 50           # 최소 유지 스레드 증가
+    connection-timeout: 10000  # 연결 타임아웃 단축 (20s→10s)
+    keep-alive-timeout: 30000  # Keep-Alive 타임아웃 최적화
+    max-connections: 20000      # 최대 동시 연결수 확대 (8192→20000)
+    accept-count: 500          # 대기열 크기 확대 (100→500)
+    max-http-form-post-size: 2MB  # POST 크기 제한
 spring:
   config:
     activate:
@@ -24,26 +27,32 @@ spring:
         enabled: ${REDIS_SSL_ENABLED:true}
       repositories:
         enabled: false
+      # === 🚀 극한 부하 대응 Redis 최적화 ===
       lettuce:
         pool:
-          max-active: 16         # Redis 연결 풀 크기
-          max-idle: 8           # 최대 idle 연결
-          min-idle: 2           # 최소 idle 연결
-          max-wait: 5000        # 최대 대기 시간 5초
+          max-active: 50         # Redis 연결 풀 크기 확대 (16→50)
+          max-idle: 20          # 최대 idle 연결 증가 (8→20)
+          min-idle: 5           # 최소 idle 연결 증가 (2→5)
+          max-wait: 2000        # 최대 대기 시간 단축 (5s→2s)
         shutdown-timeout: 100ms
-      timeout: 3000ms            # 개별 명령 타임아웃
+      timeout: 1000ms            # 개별 명령 타임아웃 단축 (3s→1s)
+      connect-timeout: 500ms     # 연결 타임아웃 추가
   datasource:
     url: jdbc:postgresql://${DB_HOST}:${DB_PORT}/${DB_NAME}
     username: ${USER_AUTH_USERNAME}
     password: ${USER_AUTH_PASSWORD}
     driver-class-name: org.postgresql.Driver
+    # === 🚀 극한 부하 대응 HikariCP 최적화 ===
     hikari:
-      maximum-pool-size: 20        # 동시 연결 수 대폭 증가
-      minimum-idle: 5              # 최소 idle 연결 확보
-      connection-timeout: 20000    # 연결 대기 시간 20초
-      idle-timeout: 600000         # idle 타임아웃 10분
+      maximum-pool-size: 80        # 극한 부하 대응 연결 수 (20→80)
+      minimum-idle: 20             # 최소 idle 연결 확보 (5→20)
+      connection-timeout: 15000    # 연결 대기 시간 단축 (20s→15s)
+      validation-timeout: 3000     # 검증 타임아웃 3초
+      idle-timeout: 300000         # idle 타임아웃 5분 (10분→5분)
       max-lifetime: 1800000        # 연결 최대 생명주기 30분
       leak-detection-threshold: 60000 # 연결 누수 감지 60초
+      register-mbeans: true        # JMX 모니터링 활성화
+      pool-name: "UserHikariPool"  # 풀 이름 설정
 
   jpa:
     open-in-view: false
@@ -95,16 +104,32 @@ passport:
   secret: ${PASSPORT_SECRET}
   ttl-seconds: 60
 
+# === 🚀 극한 부하 대응 로깅 최적화 ===
 logging:
   level:
-    root: WARN                           # 프로덕션에서 WARNING 이상만
-    com.popcorn.users: INFO             # 애플리케이션 로그는 INFO 유지
-    com.popcorn.common: INFO            # 공통 모듈 INFO 유지
-    com.zaxxer.hikari: WARN             # HikariCP 로그 최소화
-    org.springframework.security: WARN   # Spring Security 로그 최소화
-    org.hibernate: WARN                 # Hibernate 로그 최소화
+    root: ERROR                          # 극한 부하 대응 로깅 최소화 (WARN→ERROR)
+    com.popcorn.users: WARN             # 애플리케이션 로그 최소화 (INFO→WARN)
+    com.popcorn.common: WARN            # 공통 모듈 최소화 (INFO→WARN)
+    com.zaxxer.hikari: ERROR            # HikariCP 로그 최소화 (WARN→ERROR)
+    org.springframework.security: ERROR  # Spring Security 로그 최소화 (WARN→ERROR)
+    org.springframework.web: ERROR       # Web 로그 최소화
+    org.hibernate: ERROR                # Hibernate 로그 최소화 (WARN→ERROR)
   pattern:
-    console: "%d{HH:mm:ss.SSS} %-5level [%thread] %logger{36} - %msg%n"  # 간결한 로그 패턴
+    console: "%d{HH:mm:ss.SSS} %-5level [%thread] %logger{20} - %msg%n"  # 더 간결한 로그 패턴
+
+# === 🚀 극한 부하 대응 모니터링 ===
+management:
+  endpoints:
+    web:
+      exposure:
+        include: health,metrics,prometheus,hikaricp  # 모니터링 엔드포인트
+  endpoint:
+    health:
+      show-details: when-authorized
+  metrics:
+    export:
+      prometheus:
+        enabled: true                     # Prometheus 메트릭 활성화
 app:
   gateway:
     url: ${GATEWAY_SERVICE_URL}
