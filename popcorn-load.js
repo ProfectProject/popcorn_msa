@@ -12,12 +12,16 @@ const MAX_RETRIES = parseInt(__ENV.MAX_RETRIES || "3", 10);
 const POPUP_DETAIL_RETRIES = parseInt(__ENV.POPUP_DETAIL_RETRIES || "3", 10);
 const RETRY_BACKOFF_MS = parseInt(__ENV.RETRY_BACKOFF_MS || "400", 10);
 const POPUP_DETAIL_COOLDOWN_SEC = parseInt(__ENV.POPUP_DETAIL_COOLDOWN_SEC || "20", 10);
-const POPUP_DETAIL_SAMPLE_RATE = parseFloat(__ENV.POPUP_DETAIL_SAMPLE_RATE || "0.25");
+const POPUP_DETAIL_SAMPLE_RATE = parseFloat(__ENV.POPUP_DETAIL_SAMPLE_RATE || "0.02");
 const POPUP_DETAIL_TIMEOUT_COOLDOWN_SEC = parseInt(__ENV.POPUP_DETAIL_TIMEOUT_COOLDOWN_SEC || "120", 10);
+const POPUP_DETAIL_CIRCUIT_BREAKER_THRESHOLD = parseInt(__ENV.POPUP_DETAIL_CIRCUIT_BREAKER_THRESHOLD || "20", 10);
+const POPUP_DETAIL_CIRCUIT_BREAKER_SEC = parseInt(__ENV.POPUP_DETAIL_CIRCUIT_BREAKER_SEC || "180", 10);
 const NO_CONNECTION_REUSE = (__ENV.NO_CONNECTION_REUSE || "false").toLowerCase() === "true";
 const NO_VU_CONNECTION_REUSE = (__ENV.NO_VU_CONNECTION_REUSE || "false").toLowerCase() === "true";
 const BATCH = parseInt(__ENV.BATCH || "20", 10);
 const BATCH_PER_HOST = parseInt(__ENV.BATCH_PER_HOST || "8", 10);
+const RATE_SCALE = parseFloat(__ENV.RATE_SCALE || "1.0");
+const MAX_STAGE_RPS = parseInt(__ENV.MAX_STAGE_RPS || "120", 10);
 
 const POPUP_HOT_ID = __ENV.POPUP_HOT_ID || "";
 const POPUP_IDS = (__ENV.POPUP_IDS || "")
@@ -46,6 +50,13 @@ const t_payment_req = new Trend("t_payment_req");
 
 const r_fail = new Rate("r_fail");
 const popupDetailCooldown = new Map();
+let popupDetailFailureStreak = 0;
+let popupDetailCircuitOpenUntil = 0;
+
+function toEffectiveRate(rps) {
+  const scaled = Math.max(1, Math.floor(rps * RATE_SCALE));
+  return Math.min(scaled, MAX_STAGE_RPS);
+}
 
 function headers() {
   const h = { "Content-Type": "application/json" };
@@ -90,11 +101,15 @@ function api_popup_list() {
 }
 
 function api_popup_detail(popupId) {
+  const now = Date.now();
+  if (popupDetailCircuitOpenUntil > now) {
+    return { status: 204, timings: { duration: 0 } };
+  }
+
   if (Math.random() > POPUP_DETAIL_SAMPLE_RATE) {
     return { status: 204, timings: { duration: 0 } };
   }
 
-  const now = Date.now();
   const blockedUntil = popupDetailCooldown.get(popupId) || 0;
   if (blockedUntil > now) {
     return { status: 204, timings: { duration: 0 } };
@@ -109,9 +124,20 @@ function api_popup_detail(popupId) {
   );
 
   if (!res || res.status === 0) {
+    popupDetailFailureStreak += 1;
     popupDetailCooldown.set(popupId, now + POPUP_DETAIL_TIMEOUT_COOLDOWN_SEC * 1000);
   } else if (res.status >= 500) {
+    popupDetailFailureStreak += 1;
     popupDetailCooldown.set(popupId, now + POPUP_DETAIL_COOLDOWN_SEC * 1000);
+  } else if (res.status >= 200 && res.status < 300) {
+    popupDetailFailureStreak = 0;
+  } else {
+    popupDetailFailureStreak += 1;
+  }
+
+  if (popupDetailFailureStreak >= POPUP_DETAIL_CIRCUIT_BREAKER_THRESHOLD) {
+    popupDetailCircuitOpenUntil = now + POPUP_DETAIL_CIRCUIT_BREAKER_SEC * 1000;
+    popupDetailFailureStreak = 0;
   }
 
   t_popup_detail.add(res.timings.duration);
@@ -172,7 +198,7 @@ export const options = {
   scenarios: {
     stage1_steady: {
       executor: "constant-arrival-rate",
-      rate: STEADY_RPS,
+      rate: toEffectiveRate(STEADY_RPS),
       timeUnit: "1s",
       duration: STEADY_DURATION,
       preAllocatedVUs: parseInt(__ENV.STEADY_PRE_VUS || "300", 10),
@@ -182,7 +208,7 @@ export const options = {
     },
     stage2_rush: {
       executor: "constant-arrival-rate",
-      rate: RUSH_RPS,
+      rate: toEffectiveRate(RUSH_RPS),
       timeUnit: "1s",
       duration: RUSH_DURATION,
       preAllocatedVUs: parseInt(__ENV.RUSH_PRE_VUS || "600", 10),
@@ -193,7 +219,7 @@ export const options = {
     },
     stage3_spike: {
       executor: "constant-arrival-rate",
-      rate: SPIKE_RPS,
+      rate: toEffectiveRate(SPIKE_RPS),
       timeUnit: "1s",
       duration: SPIKE_DURATION,
       preAllocatedVUs: parseInt(__ENV.SPIKE_PRE_VUS || "900", 10),
