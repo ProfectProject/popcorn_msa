@@ -43,8 +43,8 @@ spring:
       password: ${REDIS_PASSWORD}
       ssl:
         enabled: ${REDIS_SSL_ENABLED:true}
-      timeout: 2s
-      connect-timeout: 1s
+      timeout: ${STORE_REDIS_TIMEOUT_MS:200}ms
+      connect-timeout: ${STORE_REDIS_CONNECT_TIMEOUT_MS:200}ms
 
 
   flyway:
@@ -123,3 +123,5 @@ popup:
     hot-cache-ttl-ms: ${POPUP_DETAIL_HOT_CACHE_TTL_MS:5000}
     # Local fallback cache for transient backend spikes.
     local-cache-ttl-seconds: ${POPUP_DETAIL_LOCAL_CACHE_TTL_SECONDS:300}
+  list:
+    local-cache-ttl-seconds: ${POPUP_LIST_LOCAL_CACHE_TTL_SECONDS:300}
