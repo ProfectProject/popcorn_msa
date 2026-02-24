@@ -16,6 +16,8 @@ const POPUP_DETAIL_SAMPLE_RATE = parseFloat(__ENV.POPUP_DETAIL_SAMPLE_RATE || "0
 const POPUP_DETAIL_TIMEOUT_COOLDOWN_SEC = parseInt(__ENV.POPUP_DETAIL_TIMEOUT_COOLDOWN_SEC || "120", 10);
 const POPUP_DETAIL_CIRCUIT_BREAKER_THRESHOLD = parseInt(__ENV.POPUP_DETAIL_CIRCUIT_BREAKER_THRESHOLD || "20", 10);
 const POPUP_DETAIL_CIRCUIT_BREAKER_SEC = parseInt(__ENV.POPUP_DETAIL_CIRCUIT_BREAKER_SEC || "180", 10);
+const POPUP_DETAIL_DISABLE_AFTER_FAILURES = parseInt(__ENV.POPUP_DETAIL_DISABLE_AFTER_FAILURES || "5", 10);
+const POPUP_DETAIL_DISABLE_SEC = parseInt(__ENV.POPUP_DETAIL_DISABLE_SEC || "300", 10);
 const NO_CONNECTION_REUSE = (__ENV.NO_CONNECTION_REUSE || "false").toLowerCase() === "true";
 const NO_VU_CONNECTION_REUSE = (__ENV.NO_VU_CONNECTION_REUSE || "false").toLowerCase() === "true";
 const BATCH = parseInt(__ENV.BATCH || "20", 10);
@@ -52,6 +54,7 @@ const r_fail = new Rate("r_fail");
 const popupDetailCooldown = new Map();
 let popupDetailFailureStreak = 0;
 let popupDetailCircuitOpenUntil = 0;
+let popupDetailDisabledUntil = 0;
 
 function toEffectiveRate(rps) {
   const scaled = Math.max(1, Math.floor(rps * RATE_SCALE));
@@ -102,6 +105,9 @@ function api_popup_list() {
 
 function api_popup_detail(popupId) {
   const now = Date.now();
+  if (popupDetailDisabledUntil > now) {
+    return { status: 204, timings: { duration: 0 } };
+  }
   if (popupDetailCircuitOpenUntil > now) {
     return { status: 204, timings: { duration: 0 } };
   }
@@ -137,6 +143,12 @@ function api_popup_detail(popupId) {
 
   if (popupDetailFailureStreak >= POPUP_DETAIL_CIRCUIT_BREAKER_THRESHOLD) {
     popupDetailCircuitOpenUntil = now + POPUP_DETAIL_CIRCUIT_BREAKER_SEC * 1000;
+    popupDetailFailureStreak = 0;
+  }
+  if ((!res || res.status === 0 || res.status >= 500)
+      && POPUP_DETAIL_DISABLE_AFTER_FAILURES > 0
+      && popupDetailFailureStreak >= POPUP_DETAIL_DISABLE_AFTER_FAILURES) {
+    popupDetailDisabledUntil = now + POPUP_DETAIL_DISABLE_SEC * 1000;
     popupDetailFailureStreak = 0;
   }
 
