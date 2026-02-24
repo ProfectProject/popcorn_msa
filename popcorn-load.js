@@ -7,9 +7,22 @@ const AUTH_TOKEN = __ENV.AUTH_TOKEN || "";
 const SCENARIO = (__ENV.SCENARIO || "hot").toLowerCase();
 const ENABLE_POPUP_LIST = (__ENV.ENABLE_POPUP_LIST || "false").toLowerCase() === "true";
 const ENABLE_WRITE = (__ENV.ENABLE_WRITE || "false").toLowerCase() === "true";
+const REQUEST_TIMEOUT = __ENV.REQUEST_TIMEOUT || "15s";
+const MAX_RETRIES = parseInt(__ENV.MAX_RETRIES || "2", 10);
+const POPUP_DETAIL_RETRIES = parseInt(__ENV.POPUP_DETAIL_RETRIES || "0", 10);
+const RETRY_BACKOFF_MS = parseInt(__ENV.RETRY_BACKOFF_MS || "250", 10);
+const POPUP_DETAIL_COOLDOWN_SEC = parseInt(__ENV.POPUP_DETAIL_COOLDOWN_SEC || "20", 10);
 
-const POPUP_HOT_ID = __ENV.POPUP_HOT_ID || "HOT_POPUP_ID";
-const POPUP_IDS = (__ENV.POPUP_IDS || "P1,P2,P3,P4").split(",");
+const POPUP_HOT_ID = __ENV.POPUP_HOT_ID || "";
+const POPUP_IDS = (__ENV.POPUP_IDS || "")
+  .split(",")
+  .map((v) => v.trim())
+  .filter(Boolean);
+const EFFECTIVE_POPUP_IDS = [...new Set([POPUP_HOT_ID, ...POPUP_IDS].filter(Boolean))]
+  .filter((v) => v !== "HOT_POPUP_ID" && !/^P\\d+$/i.test(v));
+if (EFFECTIVE_POPUP_IDS.length === 0) {
+  throw new Error("Set valid POPUP_HOT_ID or POPUP_IDS (UUID list).");
+}
 
 const STEADY_RPS = parseInt(__ENV.STEADY_RPS || "250", 10);
 const RUSH_RPS = parseInt(__ENV.RUSH_RPS || "800", 10);
@@ -26,6 +39,7 @@ const t_stock_reserve = new Trend("t_stock_reserve");
 const t_payment_req = new Trend("t_payment_req");
 
 const r_fail = new Rate("r_fail");
+const popupDetailCooldown = new Map();
 
 function headers() {
   const h = { "Content-Type": "application/json" };
@@ -38,18 +52,56 @@ function ok2xx(res) {
   return ok;
 }
 function pickDistributedPopup() {
-  return POPUP_IDS[Math.floor(Math.random() * POPUP_IDS.length)];
+  if (EFFECTIVE_POPUP_IDS.length === 0) return POPUP_HOT_ID;
+  return EFFECTIVE_POPUP_IDS[Math.floor(Math.random() * EFFECTIVE_POPUP_IDS.length)];
+}
+
+function shouldRetry(res) {
+  if (!res) return true;
+  if (res.status === 0) return true;
+  return res.status === 429 || res.status >= 500;
+}
+
+function requestWithRetry(method, url, body, tag, retries = MAX_RETRIES) {
+  let res = null;
+  for (let i = 0; i <= retries; i++) {
+    if (method === "GET") {
+      res = http.get(url, { headers: headers(), timeout: REQUEST_TIMEOUT, tags: { name: tag } });
+    } else {
+      res = http.post(url, body, { headers: headers(), timeout: REQUEST_TIMEOUT, tags: { name: tag } });
+    }
+    if (!shouldRetry(res)) return res;
+    if (i < retries) sleep((RETRY_BACKOFF_MS * (i + 1)) / 1000);
+  }
+  return res;
 }
 
 function api_popup_list() {
-  const res = http.get(`${BASE_URL}/api/stores/v1/popups`, { headers: headers(), tags: { name: "popup_list" } });
+  const res = requestWithRetry("GET", `${BASE_URL}/api/stores/v1/popups`, null, "popup_list");
   t_popup_list.add(res.timings.duration);
   check(res, { "popup_list 2xx": () => ok2xx(res) });
   return res;
 }
 
 function api_popup_detail(popupId) {
-  const res = http.get(`${BASE_URL}/api/stores/v1/popups/${popupId}`, { headers: headers(), tags: { name: "popup_detail" } });
+  const now = Date.now();
+  const blockedUntil = popupDetailCooldown.get(popupId) || 0;
+  if (blockedUntil > now) {
+    return { status: 204, timings: { duration: 0 } };
+  }
+
+  const res = requestWithRetry(
+    "GET",
+    `${BASE_URL}/api/stores/v1/popups/${popupId}`,
+    null,
+    "popup_detail",
+    POPUP_DETAIL_RETRIES
+  );
+
+  if (!res || res.status === 0 || res.status >= 500) {
+    popupDetailCooldown.set(popupId, now + POPUP_DETAIL_COOLDOWN_SEC * 1000);
+  }
+
   t_popup_detail.add(res.timings.duration);
   check(res, { "popup_detail 2xx": () => ok2xx(res) });
   return res;
@@ -62,7 +114,7 @@ function api_order_create({ popupId }) {
     orderType: "RESERVATION",
   });
 
-  const res = http.post(`${BASE_URL}/api/orders/v1/orders`, body, { headers: headers(), tags: { name: "order_create" } });
+  const res = requestWithRetry("POST", `${BASE_URL}/api/orders/v1/orders`, body, "order_create");
   t_order_create.add(res.timings.duration);
   check(res, { "order_create 2xx": () => ok2xx(res) });
   return res;
@@ -75,7 +127,7 @@ function api_stock_reserve({ popupId, orderId }) {
     items: [{ goodsId: "G1", quantity: 1 }],
   });
 
-  const res = http.post(`${BASE_URL}/api/stores/v1/stocks/reserve`, body, { headers: headers(), tags: { name: "stock_reserve" } });
+  const res = requestWithRetry("POST", `${BASE_URL}/api/stores/v1/stocks/reserve`, body, "stock_reserve");
   t_stock_reserve.add(res.timings.duration);
   check(res, { "stock_reserve 2xx": () => ok2xx(res) });
   return res;
@@ -84,7 +136,7 @@ function api_stock_reserve({ popupId, orderId }) {
 function api_payment_request({ orderId }) {
   const body = JSON.stringify({ orderId });
 
-  const res = http.post(`${BASE_URL}/api/payments/v1/payments/request`, body, { headers: headers(), tags: { name: "payment_request" } });
+  const res = requestWithRetry("POST", `${BASE_URL}/api/payments/v1/payments/request`, body, "payment_request");
   t_payment_req.add(res.timings.duration);
   check(res, { "payment_request 2xx": () => ok2xx(res) });
   return res;
@@ -100,14 +152,16 @@ function extractOrderId(orderRes) {
 }
 
 export const options = {
+  discardResponseBodies: true,
+  noConnectionReuse: true,
   scenarios: {
     stage1_steady: {
       executor: "constant-arrival-rate",
       rate: STEADY_RPS,
       timeUnit: "1s",
       duration: STEADY_DURATION,
-      preAllocatedVUs: 500,
-      maxVUs: 15000,
+      preAllocatedVUs: parseInt(__ENV.STEADY_PRE_VUS || "300", 10),
+      maxVUs: parseInt(__ENV.STEADY_MAX_VUS || "3000", 10),
       exec: "stageSteady",
       tags: { stage: "steady", scenario: SCENARIO },
     },
@@ -116,8 +170,8 @@ export const options = {
       rate: RUSH_RPS,
       timeUnit: "1s",
       duration: RUSH_DURATION,
-      preAllocatedVUs: 800,
-      maxVUs: 20000,
+      preAllocatedVUs: parseInt(__ENV.RUSH_PRE_VUS || "600", 10),
+      maxVUs: parseInt(__ENV.RUSH_MAX_VUS || "6000", 10),
       exec: "stageRush",
       startTime: STEADY_DURATION,
       tags: { stage: "rush", scenario: SCENARIO },
@@ -127,8 +181,8 @@ export const options = {
       rate: SPIKE_RPS,
       timeUnit: "1s",
       duration: SPIKE_DURATION,
-      preAllocatedVUs: 1500,
-      maxVUs: 25000,
+      preAllocatedVUs: parseInt(__ENV.SPIKE_PRE_VUS || "900", 10),
+      maxVUs: parseInt(__ENV.SPIKE_MAX_VUS || "9000", 10),
       exec: "stageSpike",
       startTime: addDurations(STEADY_DURATION, RUSH_DURATION),
       tags: { stage: "spike", scenario: SCENARIO },
@@ -182,18 +236,19 @@ export function stageSpike() {
 }
 
 function scenarioHot(stage) {
+  const hotPopupId = POPUP_HOT_ID || pickDistributedPopup();
   if (ENABLE_POPUP_LIST) api_popup_list();
-  api_popup_detail(POPUP_HOT_ID);
+  api_popup_detail(hotPopupId);
 
   let writeProb = 0.15;
   if (stage === "rush") writeProb = 0.30;
   if (stage === "spike") writeProb = 0.55;
 
   if (ENABLE_WRITE && Math.random() < writeProb) {
-    const orderRes = api_order_create({ popupId: POPUP_HOT_ID });
+    const orderRes = api_order_create({ popupId: hotPopupId });
     const orderId = extractOrderId(orderRes);
 
-    if (orderId) api_stock_reserve({ popupId: POPUP_HOT_ID, orderId });
+    if (orderId) api_stock_reserve({ popupId: hotPopupId, orderId });
     if (orderId) api_payment_request({ orderId });
   }
 }
@@ -216,7 +271,8 @@ function scenarioDist(stage) {
 }
 
 function scenarioFault(stage) {
-  const popupId = stage === "rush" || stage === "spike" ? POPUP_HOT_ID : pickDistributedPopup();
+  const hotPopupId = POPUP_HOT_ID || pickDistributedPopup();
+  const popupId = stage === "rush" || stage === "spike" ? hotPopupId : pickDistributedPopup();
 
   if (ENABLE_POPUP_LIST) api_popup_list();
   api_popup_detail(popupId);

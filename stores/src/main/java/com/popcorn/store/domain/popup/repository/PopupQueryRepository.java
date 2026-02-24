@@ -25,12 +25,12 @@ public interface PopupQueryRepository extends Repository<Popup, UUID> {
 			       p.address_detail AS addressDetail,
 			       COALESCE(sched.eventStartAt, p.reservation_open_at) AS eventStartAt,
 			       COALESCE(sched.eventEndAt, p.reservation_open_at) AS eventEndAt
-			  FROM popups p
+			  FROM store.popups p
 			  LEFT JOIN (
 			      SELECT ps.popup_id,
 			             MIN(ps.start_at) AS eventStartAt,
 			             MAX(ps.end_at) AS eventEndAt
-			        FROM popup_schedules ps
+			        FROM store.popup_schedules ps
 			       WHERE ps.deleted_at IS NULL
 			       GROUP BY ps.popup_id
 			  ) sched ON sched.popup_id = p.popup_id
@@ -50,7 +50,7 @@ public interface PopupQueryRepository extends Repository<Popup, UUID> {
 
 	@Query(value = """
 			SELECT COUNT(1)
-			  FROM popups p
+			  FROM store.popups p
 			 WHERE p.deleted_at IS NULL
 			   AND (:category IS NULL OR p.category = :category)
 			   AND (:keyword IS NULL OR p.title ILIKE CONCAT('%', :keyword, '%') OR p.description ILIKE CONCAT('%', :keyword, '%'))
@@ -73,12 +73,12 @@ public interface PopupQueryRepository extends Repository<Popup, UUID> {
 			       p.address_detail AS addressDetail,
 			       COALESCE(sched.eventStartAt, p.reservation_open_at) AS eventStartAt,
 			       COALESCE(sched.eventEndAt, p.reservation_open_at) AS eventEndAt
-			  FROM popups p
+			  FROM store.popups p
 			  LEFT JOIN (
 			      SELECT ps.popup_id,
 			             MIN(ps.start_at) AS eventStartAt,
 			             MAX(ps.end_at) AS eventEndAt
-			        FROM popup_schedules ps
+			        FROM store.popup_schedules ps
 			       WHERE ps.deleted_at IS NULL
 			         AND ps.popup_id = :popupId
 			       GROUP BY ps.popup_id
@@ -100,12 +100,12 @@ public interface PopupQueryRepository extends Repository<Popup, UUID> {
 			       p.address_detail AS addressDetail,
 			       COALESCE(sched.eventStartAt, p.reservation_open_at) AS eventStartAt,
 			       COALESCE(sched.eventEndAt, p.reservation_open_at) AS eventEndAt
-			  FROM popups p
+			  FROM store.popups p
 			  LEFT JOIN (
 			      SELECT ps.popup_id,
 			             MIN(ps.start_at) AS eventStartAt,
 			             MAX(ps.end_at) AS eventEndAt
-			        FROM popup_schedules ps
+			        FROM store.popup_schedules ps
 			       WHERE ps.deleted_at IS NULL
 			       GROUP BY ps.popup_id
 			  ) sched ON sched.popup_id = p.popup_id
@@ -120,7 +120,7 @@ public interface PopupQueryRepository extends Repository<Popup, UUID> {
 
 	@Query(value = """
 			SELECT COUNT(1)
-			  FROM popups p
+			  FROM store.popups p
 			 WHERE p.deleted_at IS NULL
 			   AND p.status = :status
 			""", nativeQuery = true)
@@ -131,7 +131,7 @@ public interface PopupQueryRepository extends Repository<Popup, UUID> {
 	 */
 	@Query(value = """
 			SELECT p.popup_id
-			  FROM popups p
+			  FROM store.popups p
 			 WHERE p.deleted_at IS NULL
 			   AND p.status IN ('OPEN')
 			   AND p.event_end_at > CURRENT_TIMESTAMP
