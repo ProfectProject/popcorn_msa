@@ -4,7 +4,10 @@ import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.UUID;
+import java.util.concurrent.CompletableFuture;
+import java.util.concurrent.TimeUnit;
 
+import org.springframework.beans.factory.annotation.Value;
 import org.springframework.data.redis.core.RedisTemplate;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
@@ -40,6 +43,8 @@ public class PopupService {
 
 	private static final String POPUP_SCHEDULE_REMAINING_KEY_FORMAT = "popup:schedule:%s:remaining";
 	private static final boolean ENABLE_DB_REMAINING_FALLBACK = false;
+	@Value("${popup.detail.redis-lookup-timeout-ms:120}")
+	private long redisLookupTimeoutMs;
 
 	public PopupListResponse getPopups(PopupListQuery query) {
 		PopupListQuery normalizedQuery = popupValidationService.normalizeListQuery(query);
@@ -100,7 +105,7 @@ public class PopupService {
 				.filter(item -> item != null && item.getId() != null)
 				.map(PopupScheduleListResponse.ItemDto::getId)
 				.toList();
-		Map<UUID, Integer> redisRemaining = getRemainingCapacityFromRedisBulk(scheduleIds);
+		Map<UUID, Integer> redisRemaining = getRemainingCapacityFromRedisBulkWithTimeout(scheduleIds);
 
 		for (PopupScheduleListResponse.ItemDto item : response.getSchedules()) {
 			if (item == null || item.getId() == null) {
@@ -183,6 +188,17 @@ public class PopupService {
 			log.warn("⚠️ Redis remainingCapacity bulk 조회 실패 - popup 상세는 DB값으로 계속 응답합니다: {}", e.getMessage());
 		}
 		return remainingBySchedule;
+	}
+
+	private Map<UUID, Integer> getRemainingCapacityFromRedisBulkWithTimeout(List<UUID> scheduleIds) {
+		try {
+			CompletableFuture<Map<UUID, Integer>> future =
+					CompletableFuture.supplyAsync(() -> getRemainingCapacityFromRedisBulk(scheduleIds));
+			return future.get(Math.max(10, redisLookupTimeoutMs), TimeUnit.MILLISECONDS);
+		} catch (Exception e) {
+			log.warn("⚠️ Redis remainingCapacity 조회 타임아웃/실패 - popup 상세는 캐시값으로 응답합니다: {}", e.getMessage());
+			return new HashMap<>();
+		}
 	}
 
 	private Integer getRemainingCapacityFromRedis(UUID scheduleId) {

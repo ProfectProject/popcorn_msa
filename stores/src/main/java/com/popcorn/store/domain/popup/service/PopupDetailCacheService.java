@@ -5,9 +5,11 @@ import java.time.temporal.ChronoUnit;
 import java.time.Duration;
 import java.util.List;
 import java.util.UUID;
+import java.util.concurrent.ConcurrentHashMap;
 
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
+import org.springframework.beans.factory.annotation.Value;
 import org.springframework.data.redis.core.RedisTemplate;
 import org.springframework.stereotype.Service;
 
@@ -35,6 +37,10 @@ public class PopupDetailCacheService {
     private final PopupQueryService popupQueryService;
     private final RedisTemplate<String, Object> redisTemplate;
     private final ObjectMapper objectMapper;
+    private final ConcurrentHashMap<UUID, LocalCacheEntry> localFallbackCache = new ConcurrentHashMap<>();
+
+    @Value("${popup.detail.local-cache-ttl-seconds:60}")
+    private int localCacheTtlSeconds;
 
     /**
      * 📊 지능적 TTL을 가진 팝업 상세 캐시
@@ -45,15 +51,31 @@ public class PopupDetailCacheService {
             return null;
         }
 
+        PopupDetailResponse localCached = getLocalFallback(popupId);
+        if (localCached != null) {
+            return localCached;
+        }
+
         PopupDetailResponse cached = getCachedPopupDetail(popupId);
         if (cached != null) {
+            putLocalFallback(cached);
             return cached;
         }
 
-        // 1. 캐시 미스 시 DB 조회
-        PopupDetailResponse response = popupQueryService.getPopupDetail(query);
-        if (response == null) {
-            return null;
+        PopupDetailResponse response;
+        try {
+            // 1. 캐시 미스 시 DB 조회
+            response = popupQueryService.getPopupDetail(query);
+            if (response == null) {
+                return null;
+            }
+        } catch (Exception e) {
+            PopupDetailResponse stale = getLocalFallback(popupId);
+            if (stale != null) {
+                log.warn("⚠️ [로컬 fallback 반환] popupId={}, cause={}", popupId, e.getMessage());
+                return stale;
+            }
+            throw e;
         }
 
         // 2. 지능적 TTL 계산
@@ -61,6 +83,7 @@ public class PopupDetailCacheService {
 
         // 3. 수동으로 캐시 저장 (동적 TTL 적용)
         cacheWithIntelligentTtl(response, intelligentTtl);
+        putLocalFallback(response);
 
         // 최초 조회에서는 DB에서 받은 값을 그대로 반환하여 중복 DB fallback을 줄인다.
         return response;
@@ -89,6 +112,28 @@ public class PopupDetailCacheService {
     public String buildCacheKey(UUID popupId) {
         return String.format(POPUP_DETAIL_CACHE_KEY_FORMAT, popupId);
     }
+
+    private PopupDetailResponse getLocalFallback(UUID popupId) {
+        LocalCacheEntry entry = localFallbackCache.get(popupId);
+        if (entry == null) {
+            return null;
+        }
+        if (entry.expiresAtMillis < System.currentTimeMillis()) {
+            localFallbackCache.remove(popupId);
+            return null;
+        }
+        return entry.response;
+    }
+
+    private void putLocalFallback(PopupDetailResponse response) {
+        if (response == null || response.getId() == null) {
+            return;
+        }
+        long expiresAt = System.currentTimeMillis() + Math.max(1, localCacheTtlSeconds) * 1000L;
+        localFallbackCache.put(response.getId(), new LocalCacheEntry(response, expiresAt));
+    }
+
+    private record LocalCacheEntry(PopupDetailResponse response, long expiresAtMillis) {}
 
     /**
      * 🧠 지능적 TTL 계산 로직
