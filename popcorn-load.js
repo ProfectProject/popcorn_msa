@@ -12,18 +12,19 @@ const MAX_RETRIES = parseInt(__ENV.MAX_RETRIES || "3", 10);
 const POPUP_DETAIL_RETRIES = parseInt(__ENV.POPUP_DETAIL_RETRIES || "3", 10);
 const RETRY_BACKOFF_MS = parseInt(__ENV.RETRY_BACKOFF_MS || "400", 10);
 const POPUP_DETAIL_COOLDOWN_SEC = parseInt(__ENV.POPUP_DETAIL_COOLDOWN_SEC || "20", 10);
-const POPUP_DETAIL_SAMPLE_RATE = parseFloat(__ENV.POPUP_DETAIL_SAMPLE_RATE || "0.02");
+const POPUP_DETAIL_SAMPLE_RATE = parseFloat(__ENV.POPUP_DETAIL_SAMPLE_RATE || "1.0");
 const POPUP_DETAIL_TIMEOUT_COOLDOWN_SEC = parseInt(__ENV.POPUP_DETAIL_TIMEOUT_COOLDOWN_SEC || "120", 10);
-const POPUP_DETAIL_CIRCUIT_BREAKER_THRESHOLD = parseInt(__ENV.POPUP_DETAIL_CIRCUIT_BREAKER_THRESHOLD || "20", 10);
+const POPUP_DETAIL_CIRCUIT_BREAKER_THRESHOLD = parseInt(__ENV.POPUP_DETAIL_CIRCUIT_BREAKER_THRESHOLD || "0", 10);
 const POPUP_DETAIL_CIRCUIT_BREAKER_SEC = parseInt(__ENV.POPUP_DETAIL_CIRCUIT_BREAKER_SEC || "180", 10);
-const POPUP_DETAIL_DISABLE_AFTER_FAILURES = parseInt(__ENV.POPUP_DETAIL_DISABLE_AFTER_FAILURES || "5", 10);
+const POPUP_DETAIL_DISABLE_AFTER_FAILURES = parseInt(__ENV.POPUP_DETAIL_DISABLE_AFTER_FAILURES || "0", 10);
 const POPUP_DETAIL_DISABLE_SEC = parseInt(__ENV.POPUP_DETAIL_DISABLE_SEC || "300", 10);
 const NO_CONNECTION_REUSE = (__ENV.NO_CONNECTION_REUSE || "false").toLowerCase() === "true";
 const NO_VU_CONNECTION_REUSE = (__ENV.NO_VU_CONNECTION_REUSE || "false").toLowerCase() === "true";
 const BATCH = parseInt(__ENV.BATCH || "20", 10);
 const BATCH_PER_HOST = parseInt(__ENV.BATCH_PER_HOST || "8", 10);
 const RATE_SCALE = parseFloat(__ENV.RATE_SCALE || "1.0");
-const MAX_STAGE_RPS = parseInt(__ENV.MAX_STAGE_RPS || "120", 10);
+const MAX_STAGE_RPS = parseInt(__ENV.MAX_STAGE_RPS || "0", 10);
+const MIN_HTTP_REQS = parseInt(__ENV.MIN_HTTP_REQS || "10000", 10);
 
 const POPUP_HOT_ID = __ENV.POPUP_HOT_ID || "";
 const POPUP_IDS = (__ENV.POPUP_IDS || "")
@@ -58,7 +59,10 @@ let popupDetailDisabledUntil = 0;
 
 function toEffectiveRate(rps) {
   const scaled = Math.max(1, Math.floor(rps * RATE_SCALE));
-  return Math.min(scaled, MAX_STAGE_RPS);
+  if (MAX_STAGE_RPS > 0) {
+    return Math.min(scaled, MAX_STAGE_RPS);
+  }
+  return scaled;
 }
 
 function headers() {
@@ -141,7 +145,8 @@ function api_popup_detail(popupId) {
     popupDetailFailureStreak += 1;
   }
 
-  if (popupDetailFailureStreak >= POPUP_DETAIL_CIRCUIT_BREAKER_THRESHOLD) {
+  if (POPUP_DETAIL_CIRCUIT_BREAKER_THRESHOLD > 0
+      && popupDetailFailureStreak >= POPUP_DETAIL_CIRCUIT_BREAKER_THRESHOLD) {
     popupDetailCircuitOpenUntil = now + POPUP_DETAIL_CIRCUIT_BREAKER_SEC * 1000;
     popupDetailFailureStreak = 0;
   }
@@ -245,6 +250,7 @@ export const options = {
   thresholds: {
     r_fail: ["rate<0.01"],
     http_req_duration: ["p(95)<500"],
+    http_reqs: [`count>${MIN_HTTP_REQS}`],
     t_order_create: ["p(95)<1200"],
     t_payment_req: ["p(95)<1500"],
   },
