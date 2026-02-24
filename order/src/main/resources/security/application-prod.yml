@@ -2,15 +2,16 @@ server:
   port: 8084
   shutdown: immediate
 
-  # === 🚀 Tomcat 성능 최적화 ===
+  # === 🚀 극한 부하 대응 Tomcat 최적화 ===
   tomcat:
     threads:
-      max: 200                    # 최대 스레드 수
-      min-spare: 10              # 최소 스레드 수
-    connection-timeout: 20000    # 연결 타임아웃 20초
-    keep-alive-timeout: 60000    # Keep-Alive 타임아웃
-    max-connections: 8192        # 최대 연결 수
-    accept-count: 100           # 대기 연결 수
+      max: 500                    # 극한 부하 대응 (200→500)
+      min-spare: 50              # 최소 스레드 수 증가
+    connection-timeout: 10000    # 연결 타임아웃 단축 (20s→10s)
+    keep-alive-timeout: 30000    # Keep-Alive 타임아웃 최적화
+    max-connections: 20000       # 최대 연결 수 확대 (8192→20000)
+    accept-count: 500           # 대기 연결 수 확대 (100→500)
+    max-http-form-post-size: 2MB  # POST 크기 제한
 
 spring:
   kafka:
@@ -35,15 +36,16 @@ spring:
     username: ${ORDER_USERNAME}
     password: ${ORDER_PASSWORD}
     driver-class-name: org.postgresql.Driver
-    # === 🚀 HikariCP 성능 최적화 ===
+    # === 🚀 극한 부하 대응 HikariCP 최적화 ===
     hikari:
       connection-init-sql: SET search_path TO orders
-      minimum-idle: 10              # 최소 유휴 연결 증가
-      maximum-pool-size: 25         # 최대 연결 수 증가
-      idle-timeout: 600000          # 유휴 연결 타임아웃 10분
-      max-lifetime: 1800000         # 최대 연결 생존 시간 30분
-      connection-timeout: 30000     # 연결 타임아웃 30초
-      leak-detection-threshold: 60000  # 연결 누수 감지 1분
+      minimum-idle: 20              # 최소 idle 연결 확보 (10→20)
+      maximum-pool-size: 80         # 극한 부하 대응 (25→80)
+      connection-timeout: 3000      # 연결 대기 시간 단축 (30s→3s)
+      validation-timeout: 1000      # 검증 타임아웃 최적화
+      idle-timeout: 300000          # idle 타임아웃 단축 (10분→5분)
+      max-lifetime: 1200000         # 연결 최대 생명주기 단축 (30분→20분)
+      leak-detection-threshold: 30000  # 연결 누수 감지 단축 (60s→30s)
       pool-name: "OrderHikariPool"
 
   # JPA 설정 (프로덕션)

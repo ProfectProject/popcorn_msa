@@ -2,15 +2,16 @@ server:
   port: 8083
   shutdown: immediate
 
-  # === 🚀 Tomcat 성능 최적화 ===
+  # === 🚀 극한 부하 대응 Tomcat 최적화 ===
   tomcat:
     threads:
-      max: 200                    # 최대 스레드 수
-      min-spare: 10              # 최소 스레드 수
-    connection-timeout: 20000    # 연결 타임아웃 20초
-    keep-alive-timeout: 60000    # Keep-Alive 타임아웃
-    max-connections: 8192        # 최대 연결 수
-    accept-count: 100           # 대기 연결 수
+      max: 500                    # 극한 부하 대응 (200→500)
+      min-spare: 50              # 최소 스레드 수 증가
+    connection-timeout: 10000    # 연결 타임아웃 단축 (20s→10s)
+    keep-alive-timeout: 30000    # Keep-Alive 타임아웃 최적화
+    max-connections: 20000       # 최대 연결 수 확대 (8192→20000)
+    accept-count: 500           # 대기 연결 수 확대 (100→500)
+    max-http-form-post-size: 2MB  # POST 크기 제한
 spring:
   config:
     activate:
@@ -22,19 +23,28 @@ spring:
     driver-class-name: org.postgresql.Driver
     hikari:
       connection-init-sql: SET search_path TO store
-      maximum-pool-size: ${STORE_DB_MAX_POOL_SIZE:30}
-      minimum-idle: ${STORE_DB_MIN_IDLE:10}
-      connection-timeout: ${STORE_DB_CONNECTION_TIMEOUT_MS:3000}
-      validation-timeout: ${STORE_DB_VALIDATION_TIMEOUT_MS:1000}
+      maximum-pool-size: ${STORE_DB_MAX_POOL_SIZE:60}
+      minimum-idle: ${STORE_DB_MIN_IDLE:20}
+      connection-timeout: ${STORE_DB_CONNECTION_TIMEOUT_MS:1000}
+      validation-timeout: ${STORE_DB_VALIDATION_TIMEOUT_MS:500}
+      idle-timeout: ${STORE_DB_IDLE_TIMEOUT_MS:300000}
+      max-lifetime: ${STORE_DB_MAX_LIFETIME_MS:900000}
+      keepalive-time: ${STORE_DB_KEEPALIVE_TIME_MS:30000}
   jpa:
     open-in-view: false
     hibernate:
       ddl-auto: none
     properties:
       hibernate:
+        jdbc:
+          timeout: ${STORE_DB_QUERY_TIMEOUT_SEC:3}
         type:
           preferred_enum_jdbc_type: VARCHAR
         default_schema: store
+      jakarta:
+        persistence:
+          query:
+            timeout: ${STORE_DB_QUERY_TIMEOUT_MS:3000}
 
   data:
     redis:

@@ -1,13 +1,16 @@
 server:
   port: 8082
   shutdown: immediate
+  # === 🚀 극한 부하 대응 Tomcat 최적화 ===
   tomcat:
     threads:
-      max: 200                 # 최대 스레드 수
-      min-spare: 10           # 최소 유지 스레드
-    connection-timeout: 20000  # 연결 타임아웃
-    max-connections: 8192      # 최대 동시 연결수
-    accept-count: 100          # 대기열 크기
+      max: 500                 # 극한 부하 대응 (200→500)
+      min-spare: 50            # 최소 스레드 수 증가
+    connection-timeout: 10000  # 연결 타임아웃 단축 (20s→10s)
+    keep-alive-timeout: 30000  # Keep-Alive 타임아웃 최적화
+    max-connections: 20000     # 최대 연결 수 확대 (8192→20000)
+    accept-count: 500         # 대기 연결 수 확대 (100→500)
+    max-http-form-post-size: 2MB  # POST 크기 제한
 spring:
   config:
     activate:
@@ -26,24 +29,26 @@ spring:
         enabled: false
       lettuce:
         pool:
-          max-active: 16         # Redis 연결 풀 크기
-          max-idle: 8           # 최대 idle 연결
-          min-idle: 2           # 최소 idle 연결
-          max-wait: 5000        # 최대 대기 시간 5초
+          max-active: 50         # 극한 부하 대응 (16→50)
+          max-idle: 25          # 최대 idle 연결 (8→25)
+          min-idle: 10          # 최소 idle 연결 (2→10)
+          max-wait: 200         # 최대 대기 시간 단축 (5s→200ms)
         shutdown-timeout: 100ms
-      timeout: 3000ms            # 개별 명령 타임아웃
+      timeout: 200ms            # 개별 명령 타임아웃 단축 (3s→200ms)
+      connect-timeout: 200ms    # 연결 타임아웃 추가
   datasource:
     url: jdbc:postgresql://${DB_HOST}:${DB_PORT}/${DB_NAME}
     username: ${USER_AUTH_USERNAME}
     password: ${USER_AUTH_PASSWORD}
     driver-class-name: org.postgresql.Driver
     hikari:
-      maximum-pool-size: 20        # 동시 연결 수 대폭 증가
-      minimum-idle: 5              # 최소 idle 연결 확보
-      connection-timeout: 20000    # 연결 대기 시간 20초
-      idle-timeout: 600000         # idle 타임아웃 10분
-      max-lifetime: 1800000        # 연결 최대 생명주기 30분
-      leak-detection-threshold: 60000 # 연결 누수 감지 60초
+      maximum-pool-size: 80        # 극한 부하 대응 (20→80)
+      minimum-idle: 20             # 최소 idle 연결 확보 (5→20)
+      connection-timeout: 3000     # 연결 대기 시간 단축 (20s→3s)
+      validation-timeout: 1000     # 검증 타임아웃 최적화
+      idle-timeout: 300000         # idle 타임아웃 단축 (10분→5분)
+      max-lifetime: 1200000        # 연결 최대 생명주기 단축 (30분→20분)
+      leak-detection-threshold: 30000 # 연결 누수 감지 단축 (60s→30s)
 
   jpa:
     open-in-view: false

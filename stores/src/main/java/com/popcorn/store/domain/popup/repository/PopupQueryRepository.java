@@ -35,7 +35,7 @@ public interface PopupQueryRepository extends Repository<Popup, UUID> {
 			       GROUP BY ps.popup_id
 			  ) sched ON sched.popup_id = p.popup_id
 			 WHERE p.deleted_at IS NULL
-			   AND (:category IS NULL OR p.category = :category)
+			   AND (CAST(:category AS text) IS NULL OR p.category = CAST(:category AS store.popup_category))
 			   AND (:keyword IS NULL OR p.title ILIKE CONCAT('%', :keyword, '%') OR p.description ILIKE CONCAT('%', :keyword, '%'))
 			   AND (:storeId IS NULL OR p.store_id = :storeId)
 			 ORDER BY p.created_at DESC
@@ -52,7 +52,7 @@ public interface PopupQueryRepository extends Repository<Popup, UUID> {
 			SELECT COUNT(1)
 			  FROM store.popups p
 			 WHERE p.deleted_at IS NULL
-			   AND (:category IS NULL OR p.category = :category)
+			   AND (CAST(:category AS text) IS NULL OR p.category = CAST(:category AS store.popup_category))
 			   AND (:keyword IS NULL OR p.title ILIKE CONCAT('%', :keyword, '%') OR p.description ILIKE CONCAT('%', :keyword, '%'))
 			   AND (:storeId IS NULL OR p.store_id = :storeId)
 			""", nativeQuery = true)
@@ -110,7 +110,7 @@ public interface PopupQueryRepository extends Repository<Popup, UUID> {
 			       GROUP BY ps.popup_id
 			  ) sched ON sched.popup_id = p.popup_id
 			 WHERE p.deleted_at IS NULL
-			   AND p.status = :status
+			   AND p.status = CAST(:status AS store.popup_status)
 			 ORDER BY p.created_at DESC
 			 LIMIT :limit OFFSET :offset
 			""", nativeQuery = true)
@@ -122,7 +122,7 @@ public interface PopupQueryRepository extends Repository<Popup, UUID> {
 			SELECT COUNT(1)
 			  FROM store.popups p
 			 WHERE p.deleted_at IS NULL
-			   AND p.status = :status
+			   AND p.status = CAST(:status AS store.popup_status)
 			""", nativeQuery = true)
 	long countPopupsByStatus(@Param("status") String status);
 
