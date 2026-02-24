@@ -23,9 +23,17 @@ public interface PopupQueryRepository extends Repository<Popup, UUID> {
 			       p.reservation_open_at AS reservationOpenAt,
 			       p.address_road AS addressRoad,
 			       p.address_detail AS addressDetail,
-			       COALESCE(p.event_start_at, p.reservation_open_at) AS eventStartAt,
-			       COALESCE(p.event_end_at, p.reservation_open_at) AS eventEndAt
+			       COALESCE(sched.eventStartAt, p.reservation_open_at) AS eventStartAt,
+			       COALESCE(sched.eventEndAt, p.reservation_open_at) AS eventEndAt
 			  FROM store.popups p
+			  LEFT JOIN (
+			      SELECT ps.popup_id,
+			             MIN(ps.start_at) AS eventStartAt,
+			             MAX(ps.end_at) AS eventEndAt
+			        FROM store.popup_schedules ps
+			       WHERE ps.deleted_at IS NULL
+			       GROUP BY ps.popup_id
+			  ) sched ON sched.popup_id = p.popup_id
 			 WHERE p.deleted_at IS NULL
 			   AND (:category IS NULL OR p.category = :category)
 			   AND (:keyword IS NULL OR p.title ILIKE CONCAT('%', :keyword, '%') OR p.description ILIKE CONCAT('%', :keyword, '%'))
@@ -63,9 +71,18 @@ public interface PopupQueryRepository extends Repository<Popup, UUID> {
 			       p.reservation_open_at AS reservationOpenAt,
 			       p.address_road AS addressRoad,
 			       p.address_detail AS addressDetail,
-			       COALESCE(p.event_start_at, p.reservation_open_at) AS eventStartAt,
-			       COALESCE(p.event_end_at, p.reservation_open_at) AS eventEndAt
+			       COALESCE(sched.eventStartAt, p.reservation_open_at) AS eventStartAt,
+			       COALESCE(sched.eventEndAt, p.reservation_open_at) AS eventEndAt
 			  FROM store.popups p
+			  LEFT JOIN (
+			      SELECT ps.popup_id,
+			             MIN(ps.start_at) AS eventStartAt,
+			             MAX(ps.end_at) AS eventEndAt
+			        FROM store.popup_schedules ps
+			       WHERE ps.deleted_at IS NULL
+			         AND ps.popup_id = :popupId
+			       GROUP BY ps.popup_id
+			  ) sched ON sched.popup_id = p.popup_id
 			 WHERE p.deleted_at IS NULL
 			   AND p.popup_id = :popupId
 			""", nativeQuery = true)
@@ -81,9 +98,17 @@ public interface PopupQueryRepository extends Repository<Popup, UUID> {
 			       p.reservation_open_at AS reservationOpenAt,
 			       p.address_road AS addressRoad,
 			       p.address_detail AS addressDetail,
-			       COALESCE(p.event_start_at, p.reservation_open_at) AS eventStartAt,
-			       COALESCE(p.event_end_at, p.reservation_open_at) AS eventEndAt
+			       COALESCE(sched.eventStartAt, p.reservation_open_at) AS eventStartAt,
+			       COALESCE(sched.eventEndAt, p.reservation_open_at) AS eventEndAt
 			  FROM store.popups p
+			  LEFT JOIN (
+			      SELECT ps.popup_id,
+			             MIN(ps.start_at) AS eventStartAt,
+			             MAX(ps.end_at) AS eventEndAt
+			        FROM store.popup_schedules ps
+			       WHERE ps.deleted_at IS NULL
+			       GROUP BY ps.popup_id
+			  ) sched ON sched.popup_id = p.popup_id
 			 WHERE p.deleted_at IS NULL
 			   AND p.status = :status
 			 ORDER BY p.created_at DESC
