@@ -45,7 +45,7 @@ public class OrderItemView extends BaseEntity {
     private LocalDateTime orderedAt;
 
     @Enumerated(EnumType.STRING)
-    @Column(name = "item_type", nullable = false, length = 10)
+    @Column(name = "item_type", nullable = false, length = 20)
     private ItemType itemType;
 
     // schedule fields
