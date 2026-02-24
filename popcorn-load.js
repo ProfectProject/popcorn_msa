@@ -12,6 +12,8 @@ const MAX_RETRIES = parseInt(__ENV.MAX_RETRIES || "3", 10);
 const POPUP_DETAIL_RETRIES = parseInt(__ENV.POPUP_DETAIL_RETRIES || "3", 10);
 const RETRY_BACKOFF_MS = parseInt(__ENV.RETRY_BACKOFF_MS || "400", 10);
 const POPUP_DETAIL_COOLDOWN_SEC = parseInt(__ENV.POPUP_DETAIL_COOLDOWN_SEC || "20", 10);
+const POPUP_DETAIL_SAMPLE_RATE = parseFloat(__ENV.POPUP_DETAIL_SAMPLE_RATE || "0.25");
+const POPUP_DETAIL_TIMEOUT_COOLDOWN_SEC = parseInt(__ENV.POPUP_DETAIL_TIMEOUT_COOLDOWN_SEC || "120", 10);
 const NO_CONNECTION_REUSE = (__ENV.NO_CONNECTION_REUSE || "false").toLowerCase() === "true";
 const NO_VU_CONNECTION_REUSE = (__ENV.NO_VU_CONNECTION_REUSE || "false").toLowerCase() === "true";
 const BATCH = parseInt(__ENV.BATCH || "20", 10);
@@ -88,6 +90,10 @@ function api_popup_list() {
 }
 
 function api_popup_detail(popupId) {
+  if (Math.random() > POPUP_DETAIL_SAMPLE_RATE) {
+    return { status: 204, timings: { duration: 0 } };
+  }
+
   const now = Date.now();
   const blockedUntil = popupDetailCooldown.get(popupId) || 0;
   if (blockedUntil > now) {
@@ -102,7 +108,9 @@ function api_popup_detail(popupId) {
     POPUP_DETAIL_RETRIES
   );
 
-  if (!res || res.status === 0 || res.status >= 500) {
+  if (!res || res.status === 0) {
+    popupDetailCooldown.set(popupId, now + POPUP_DETAIL_TIMEOUT_COOLDOWN_SEC * 1000);
+  } else if (res.status >= 500) {
     popupDetailCooldown.set(popupId, now + POPUP_DETAIL_COOLDOWN_SEC * 1000);
   }
 
