@@ -1,15 +1,15 @@
 server:
   port: 8082
   shutdown: immediate
-  # 🚨 Emergency Tomcat 극한 최적화 - 5xx 에러 해결
+  # 🚨 Emergency Tomcat 극한 최적화 - 1800 RPS 대응
   tomcat:
     threads:
-      max: 1000                    # 🚨 Emergency: 500 → 1000
-      min-spare: 200              # 🚨 Emergency: 50 → 200
+      max: 2000                    # 🚨 Emergency: 1000 → 2000
+      min-spare: 500              # 🚨 Emergency: 200 → 500
     connection-timeout: 60000      # 🚨 Emergency: 10s → 60s
     keep-alive-timeout: 60000      # 🚨 Emergency: 30s → 60s
-    max-connections: 50000         # 🚨 Emergency: 20000 → 50000
-    accept-count: 2000            # 🚨 Emergency: 500 → 2000
+    max-connections: 100000        # 🚨 Emergency: 50000 → 100000
+    accept-count: 5000            # 🚨 Emergency: 2000 → 5000
     max-http-form-post-size: 2MB  # POST 크기 제한
 spring:
   config:
@@ -29,28 +29,31 @@ spring:
         enabled: false
       lettuce:
         pool:
-          max-active: 1000          # 🚨 Emergency: 50 → 1000
-          max-idle: 500             # 🚨 Emergency: 25 → 500
-          min-idle: 200             # 🚨 Emergency: 10 → 200
-          max-wait: 30000ms         # 🚨 Emergency: 200ms → 30초
+          max-active: 2000          # 🚨 Emergency: 1000 → 2000 (극한)
+          max-idle: 1000            # 🚨 Emergency: 500 → 1000 (극한)
+          min-idle: 500             # 🚨 Emergency: 200 → 500 (극한)
+          max-wait: 60000ms         # 🚨 Emergency: 30초 → 60초 (더 긴 대기)
           time-between-eviction-runs: 60000ms
           min-evictable-idle-time: 300000ms
+          test-on-borrow: false     # 성능 향상
+          test-on-return: false     # 성능 향상
+          test-while-idle: true     # 유휴 중 검사만 활성화
         shutdown-timeout: 1000ms     # Emergency: 100ms → 1초
-      timeout: 2000ms            # Emergency: 200ms → 2초
-      connect-timeout: 1000ms    # Emergency: 200ms → 1초
+      timeout: 5000ms            # 🚨 Emergency: 2초 → 5초 (더 긴 타임아웃)
+      connect-timeout: 5000ms    # 🚨 Emergency: 1초 → 5초
   datasource:
     url: jdbc:postgresql://${DB_HOST}:${DB_PORT}/${DB_NAME}
     username: ${USER_AUTH_USERNAME}
     password: ${USER_AUTH_PASSWORD}
     driver-class-name: org.postgresql.Driver
     hikari:
-      maximum-pool-size: 500         # 🚨 Emergency: 150 → 500 (5xx 에러 해결)
-      minimum-idle: 200              # 🚨 Emergency: 50 → 200
-      connection-timeout: 10000      # 🚨 Emergency: 1s → 10s
+      maximum-pool-size: 1000        # 🚨 Emergency: 500 → 1000 (1800 RPS 대응)
+      minimum-idle: 400              # 🚨 Emergency: 200 → 400
+      connection-timeout: 15000      # 🚨 Emergency: 10s → 15s
       validation-timeout: 5000       # 🚨 Emergency: 500ms → 5s
       idle-timeout: 300000           # 🚨 Emergency: 3분 → 5분
       max-lifetime: 900000           # 🚨 Emergency: 10분 → 15분
-      leak-detection-threshold: 30000 # 🚨 Emergency: 10s → 30s
+      leak-detection-threshold: 15000 # 🚨 Emergency: 30s → 15s 조정
       connection-test-query: SELECT 1 # 연결 테스트 쿼리
       keepalive-time: 30000          # 🚨 Emergency: Keep alive 30초
 
@@ -63,13 +66,16 @@ spring:
         default_schema: user_auth
         type:
           preferred_enum_jdbc_type: NAMED_ENUM
-        # 성능 최적화 설정
+        # 🚀 JPA 극한 성능 최적화 설정
         jdbc:
-          batch_size: 20              # 배치 쿼리 최적화
-          fetch_size: 50              # 페치 크기 최적화
+          batch_size: 100             # 🚨 Emergency: 20 → 100 (극한 배치)
+          batch_versioned_data: true  # 버전 데이터 배치 처리
+          fetch_size: 100             # 🚨 Emergency: 50 → 100 (극한 페치)
         cache:
-          use_second_level_cache: false  # RegionFactory 미구성 환경에서는 비활성화
-          use_query_cache: false
+          use_second_level_cache: true   # 🚨 Emergency: L2 캐시 활성화
+          use_query_cache: true          # 쿼리 캐시 활성화
+          region:
+            factory_class: org.hibernate.cache.jcache.JCacheRegionFactory
         connection:
           provider_disables_autocommit: true  # AutoCommit 비활성화로 성능 향상
         order_inserts: true               # INSERT 순서 최적화

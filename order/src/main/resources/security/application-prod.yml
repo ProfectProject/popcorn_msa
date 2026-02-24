@@ -2,15 +2,15 @@ server:
   port: 8084
   shutdown: immediate
 
-  # 🚨 Emergency Tomcat 극한 최적화 - 5xx 에러 해결
+  # 🚨 Emergency Tomcat 극한 최적화 - 1800 RPS 대응
   tomcat:
     threads:
-      max: 1000                    # 🚨 Emergency: 500 → 1000
-      min-spare: 200              # 🚨 Emergency: 50 → 200
+      max: 2000                    # 🚨 Emergency: 1000 → 2000
+      min-spare: 500              # 🚨 Emergency: 200 → 500
     connection-timeout: 60000      # 🚨 Emergency: 10s → 60s
     keep-alive-timeout: 60000      # 🚨 Emergency: 30s → 60s
-    max-connections: 50000         # 🚨 Emergency: 20000 → 50000
-    accept-count: 2000            # 🚨 Emergency: 500 → 2000
+    max-connections: 100000        # 🚨 Emergency: 50000 → 100000
+    accept-count: 5000            # 🚨 Emergency: 2000 → 5000
     max-http-form-post-size: 2MB  # POST 크기 제한
 
 spring:
@@ -36,16 +36,16 @@ spring:
     username: ${ORDER_USERNAME}
     password: ${ORDER_PASSWORD}
     driver-class-name: org.postgresql.Driver
-    # 🚨 Emergency HikariCP 극한 최적화 - 5xx 에러 해결
+    # 🚨 Emergency HikariCP 극한 최적화 - 1800 RPS 대응
     hikari:
       connection-init-sql: SET search_path TO orders
-      minimum-idle: 200              # 🚨 Emergency: 20 → 200
-      maximum-pool-size: 500         # 🚨 Emergency: 80 → 500
-      connection-timeout: 10000      # 🚨 Emergency: 3s → 10s
+      minimum-idle: 400              # 🚨 Emergency: 200 → 400
+      maximum-pool-size: 1000        # 🚨 Emergency: 500 → 1000
+      connection-timeout: 15000      # 🚨 Emergency: 10s → 15s
       validation-timeout: 5000       # 🚨 Emergency: 1s → 5s
       idle-timeout: 300000          # 🚨 Emergency: 5분 유지
       max-lifetime: 900000           # 🚨 Emergency: 20분 → 15분
-      leak-detection-threshold: 30000  # 🚨 Emergency: 30s 유지
+      leak-detection-threshold: 15000  # 🚨 Emergency: 30s → 15s 조정
       pool-name: "OrderHikariPool"
       connection-test-query: SELECT 1 # 연결 테스트 쿼리
       keepalive-time: 30000          # 🚨 Emergency: Keep alive 30초
@@ -60,12 +60,21 @@ spring:
       hibernate:
         dialect: org.hibernate.dialect.PostgreSQLDialect
         format_sql: false
+        use_sql_comments: false        # SQL 주석 비활성화 (성능)
+        show_sql: false                # SQL 로깅 비활성화 (성능)
         default_schema: orders
         jdbc:
-          batch_size: 25
-        order_inserts: true
-        order_updates: true
-        jdbc.batch_versioned_data: true
+          batch_size: 100              # 🚨 Emergency: 25 → 100 (극한 배치)
+          batch_versioned_data: true   # 버전 데이터 배치 처리
+          fetch_size: 100              # 페치 크기 증가
+        order_inserts: true            # INSERT 순서 최적화
+        order_updates: true            # UPDATE 순서 최적화
+        # 🚀 L2 캐시 활성화 (Order 서비스 극한 성능)
+        cache:
+          use_second_level_cache: true
+          use_query_cache: true
+          region:
+            factory_class: org.hibernate.cache.jcache.JCacheRegionFactory
 
   # Flyway 설정 (프로덕션)
   flyway:
@@ -88,18 +97,21 @@ spring:
       ssl:
         enabled: ${REDIS_SSL_ENABLED:true}
       password: ${REDIS_PASSWORD}
-      timeout: 3000ms
+      timeout: 5000ms              # 🚨 Emergency: 3s → 5s (더 긴 타임아웃)
       database: 0
-      connection-timeout: 3000ms
-      # 🚨 Emergency Redis 극한 최적화 - 5xx 에러 해결
+      connection-timeout: 5000ms    # 🚨 Emergency: 3s → 5s
+      # 🚨 Emergency Redis 극한 최적화 - 1800 RPS 대응
       lettuce:
         pool:
-          max-active: 1000          # 🚨 Emergency: 50 → 1000
-          max-idle: 500             # 🚨 Emergency: 20 → 500
-          min-idle: 200             # 🚨 Emergency: 10 → 200
-          max-wait: 30000ms         # 🚨 Emergency: 3s → 30s
+          max-active: 2000          # 🚨 Emergency: 1000 → 2000 (극한)
+          max-idle: 1000            # 🚨 Emergency: 500 → 1000 (극한)
+          min-idle: 500             # 🚨 Emergency: 200 → 500 (극한)
+          max-wait: 60000ms         # 🚨 Emergency: 30s → 60s (더 긴 대기)
           time-between-eviction-runs: 60000ms
           min-evictable-idle-time: 300000ms
+          test-on-borrow: false     # 성능 향상
+          test-on-return: false     # 성능 향상
+          test-while-idle: true     # 유휴 중 검사만 활성화
         shutdown-timeout: 1000ms     # Emergency: 100ms → 1s
 
 # 로깅 설정 (프로덕션 - 최적화)

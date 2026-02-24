@@ -58,13 +58,13 @@ const ENABLE_STOCK_RESERVE = (__ENV.ENABLE_STOCK_RESERVE || "false").toLowerCase
 const ENABLE_PAYMENT_REQUEST = (__ENV.ENABLE_PAYMENT_REQUEST || "false").toLowerCase() === "true";
 const WRITE_PROB_MULTIPLIER = parseFloat(__ENV.WRITE_PROB_MULTIPLIER || "1");
 
-const STEADY_RPS = parseInt(__ENV.STEADY_RPS || "1", 10);
-const RUSH_RPS = parseInt(__ENV.RUSH_RPS || "1", 10);
-const SPIKE_RPS = parseInt(__ENV.SPIKE_RPS || "1", 10);
+const STEADY_RPS = parseInt(__ENV.STEADY_RPS || "250", 10);
+const RUSH_RPS = parseInt(__ENV.RUSH_RPS || "800", 10);
+const SPIKE_RPS = parseInt(__ENV.SPIKE_RPS || "1800", 10);
 
-const STEADY_DURATION = __ENV.STEADY_DURATION || "5s";
-const RUSH_DURATION = __ENV.RUSH_DURATION || "5s";
-const SPIKE_DURATION = __ENV.SPIKE_DURATION || "5s";
+const STEADY_DURATION = __ENV.STEADY_DURATION || "10m";
+const RUSH_DURATION = __ENV.RUSH_DURATION || "10m";
+const SPIKE_DURATION = __ENV.SPIKE_DURATION || "3m";
 const ENABLE_STAGE1 = (__ENV.ENABLE_STAGE1 || "true").toLowerCase() === "true";
 const ENABLE_STAGE2 = (__ENV.ENABLE_STAGE2 || "true").toLowerCase() === "true";
 const ENABLE_STAGE3 = (__ENV.ENABLE_STAGE3 || "true").toLowerCase() === "true";
