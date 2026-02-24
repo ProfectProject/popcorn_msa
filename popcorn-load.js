@@ -7,11 +7,15 @@ const AUTH_TOKEN = __ENV.AUTH_TOKEN || "";
 const SCENARIO = (__ENV.SCENARIO || "hot").toLowerCase();
 const ENABLE_POPUP_LIST = (__ENV.ENABLE_POPUP_LIST || "false").toLowerCase() === "true";
 const ENABLE_WRITE = (__ENV.ENABLE_WRITE || "false").toLowerCase() === "true";
-const REQUEST_TIMEOUT = __ENV.REQUEST_TIMEOUT || "15s";
-const MAX_RETRIES = parseInt(__ENV.MAX_RETRIES || "2", 10);
-const POPUP_DETAIL_RETRIES = parseInt(__ENV.POPUP_DETAIL_RETRIES || "0", 10);
-const RETRY_BACKOFF_MS = parseInt(__ENV.RETRY_BACKOFF_MS || "250", 10);
+const REQUEST_TIMEOUT = __ENV.REQUEST_TIMEOUT || "30s";
+const MAX_RETRIES = parseInt(__ENV.MAX_RETRIES || "3", 10);
+const POPUP_DETAIL_RETRIES = parseInt(__ENV.POPUP_DETAIL_RETRIES || "3", 10);
+const RETRY_BACKOFF_MS = parseInt(__ENV.RETRY_BACKOFF_MS || "400", 10);
 const POPUP_DETAIL_COOLDOWN_SEC = parseInt(__ENV.POPUP_DETAIL_COOLDOWN_SEC || "20", 10);
+const NO_CONNECTION_REUSE = (__ENV.NO_CONNECTION_REUSE || "false").toLowerCase() === "true";
+const NO_VU_CONNECTION_REUSE = (__ENV.NO_VU_CONNECTION_REUSE || "false").toLowerCase() === "true";
+const BATCH = parseInt(__ENV.BATCH || "20", 10);
+const BATCH_PER_HOST = parseInt(__ENV.BATCH_PER_HOST || "8", 10);
 
 const POPUP_HOT_ID = __ENV.POPUP_HOT_ID || "";
 const POPUP_IDS = (__ENV.POPUP_IDS || "")
@@ -59,7 +63,7 @@ function pickDistributedPopup() {
 function shouldRetry(res) {
   if (!res) return true;
   if (res.status === 0) return true;
-  return res.status === 429 || res.status >= 500;
+  return res.status === 408 || res.status === 429 || res.status >= 500;
 }
 
 function requestWithRetry(method, url, body, tag, retries = MAX_RETRIES) {
@@ -153,7 +157,10 @@ function extractOrderId(orderRes) {
 
 export const options = {
   discardResponseBodies: true,
-  noConnectionReuse: true,
+  noConnectionReuse: NO_CONNECTION_REUSE,
+  noVUConnectionReuse: NO_VU_CONNECTION_REUSE,
+  batch: BATCH,
+  batchPerHost: BATCH_PER_HOST,
   scenarios: {
     stage1_steady: {
       executor: "constant-arrival-rate",
