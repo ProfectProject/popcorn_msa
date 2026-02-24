@@ -38,8 +38,9 @@ public class PopupDetailCacheService {
     private final RedisTemplate<String, Object> redisTemplate;
     private final ObjectMapper objectMapper;
     private final ConcurrentHashMap<UUID, LocalCacheEntry> localFallbackCache = new ConcurrentHashMap<>();
+    private final ConcurrentHashMap<UUID, Object> loadLocks = new ConcurrentHashMap<>();
 
-    @Value("${popup.detail.local-cache-ttl-seconds:60}")
+    @Value("${popup.detail.local-cache-ttl-seconds:180}")
     private int localCacheTtlSeconds;
 
     /**
@@ -56,37 +57,49 @@ public class PopupDetailCacheService {
             return localCached;
         }
 
-        PopupDetailResponse cached = getCachedPopupDetail(popupId);
-        if (cached != null) {
-            putLocalFallback(cached);
-            return cached;
+        PopupDetailResponse redisCached = getCachedPopupDetail(popupId);
+        if (redisCached != null) {
+            putLocalFallback(redisCached);
+            return redisCached;
         }
 
-        PopupDetailResponse response;
+        Object lock = loadLocks.computeIfAbsent(popupId, ignored -> new Object());
         try {
-            // 1. 캐시 미스 시 DB 조회
-            response = popupQueryService.getPopupDetail(query);
-            if (response == null) {
-                return null;
+            synchronized (lock) {
+                // 다른 스레드가 먼저 채웠을 수 있으므로 잠금 안에서 재확인
+                PopupDetailResponse localRecheck = getLocalFallback(popupId);
+                if (localRecheck != null) {
+                    return localRecheck;
+                }
+                PopupDetailResponse redisRecheck = getCachedPopupDetail(popupId);
+                if (redisRecheck != null) {
+                    putLocalFallback(redisRecheck);
+                    return redisRecheck;
+                }
+
+                PopupDetailResponse response;
+                try {
+                    response = popupQueryService.getPopupDetail(query);
+                    if (response == null) {
+                        return null;
+                    }
+                } catch (Exception e) {
+                    PopupDetailResponse stale = getLocalFallback(popupId);
+                    if (stale != null) {
+                        log.warn("⚠️ [로컬 fallback 반환] popupId={}, cause={}", popupId, e.getMessage());
+                        return stale;
+                    }
+                    throw e;
+                }
+
+                int intelligentTtl = calculateIntelligentTtl(response);
+                cacheWithIntelligentTtl(response, intelligentTtl);
+                putLocalFallback(response);
+                return response;
             }
-        } catch (Exception e) {
-            PopupDetailResponse stale = getLocalFallback(popupId);
-            if (stale != null) {
-                log.warn("⚠️ [로컬 fallback 반환] popupId={}, cause={}", popupId, e.getMessage());
-                return stale;
-            }
-            throw e;
+        } finally {
+            loadLocks.remove(popupId, lock);
         }
-
-        // 2. 지능적 TTL 계산
-        int intelligentTtl = calculateIntelligentTtl(response);
-
-        // 3. 수동으로 캐시 저장 (동적 TTL 적용)
-        cacheWithIntelligentTtl(response, intelligentTtl);
-        putLocalFallback(response);
-
-        // 최초 조회에서는 DB에서 받은 값을 그대로 반환하여 중복 DB fallback을 줄인다.
-        return response;
     }
 
     private PopupDetailResponse getCachedPopupDetail(UUID popupId) {

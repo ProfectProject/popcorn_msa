@@ -5,6 +5,7 @@ import java.util.List;
 import java.util.Map;
 import java.util.UUID;
 import java.util.concurrent.CompletableFuture;
+import java.util.concurrent.ConcurrentHashMap;
 import java.util.concurrent.TimeUnit;
 
 import org.springframework.beans.factory.annotation.Value;
@@ -43,8 +44,11 @@ public class PopupService {
 
 	private static final String POPUP_SCHEDULE_REMAINING_KEY_FORMAT = "popup:schedule:%s:remaining";
 	private static final boolean ENABLE_DB_REMAINING_FALLBACK = false;
+	private final ConcurrentHashMap<UUID, HotPopupDetailEntry> hotPopupDetailCache = new ConcurrentHashMap<>();
 	@Value("${popup.detail.redis-lookup-timeout-ms:120}")
 	private long redisLookupTimeoutMs;
+	@Value("${popup.detail.hot-cache-ttl-ms:1500}")
+	private long hotCacheTtlMs;
 
 	public PopupListResponse getPopups(PopupListQuery query) {
 		PopupListQuery normalizedQuery = popupValidationService.normalizeListQuery(query);
@@ -55,10 +59,24 @@ public class PopupService {
 
 	public PopupDetailResponse getPopupDetail(PopupDetailQuery query) {
 		popupValidationService.validateDetailQuery(query);
+		UUID popupId = query.getPopupId();
+		if (popupId == null) {
+			throw PopupException.popupNotFound();
+		}
+
+		HotPopupDetailEntry hot = hotPopupDetailCache.get(popupId);
+		long now = System.currentTimeMillis();
+		if (hot != null && hot.expiresAtMillis() > now) {
+			return hot.response();
+		}
 
 		PopupDetailResponse cached = popupDetailCacheService.getPopupDetailCached(query);
-
-		return attachRemainingCapacity(query.getPopupId(), cached);
+		PopupDetailResponse response = attachRemainingCapacity(popupId, cached);
+		if (response != null) {
+			long ttl = Math.max(200L, hotCacheTtlMs);
+			hotPopupDetailCache.put(popupId, new HotPopupDetailEntry(response, now + ttl));
+		}
+		return response;
 	}
 
 	public PopupScheduleListResponse getProductSessions(PopupScheduleListQuery query) {
@@ -307,5 +325,7 @@ public class PopupService {
 		}
 		return "AVAILABLE";
 	}
+
+	private record HotPopupDetailEntry(PopupDetailResponse response, long expiresAtMillis) {}
 
 }
