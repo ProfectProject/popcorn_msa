@@ -4,6 +4,7 @@ import com.fasterxml.jackson.databind.ObjectMapper;
 import com.fasterxml.jackson.databind.jsontype.impl.LaissezFaireSubTypeValidator;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
+import org.springframework.beans.factory.annotation.Value;
 import org.springframework.cache.CacheManager;
 import org.springframework.cache.annotation.EnableCaching;
 import org.springframework.context.annotation.Bean;
@@ -22,6 +23,7 @@ import org.springframework.context.event.EventListener;
 import java.time.Duration;
 import java.util.HashMap;
 import java.util.Map;
+import java.util.Set;
 
 /**
  * 📊 OrderQuery 전용 캐시 최적화 설정
@@ -37,24 +39,50 @@ public class OrderQueryCacheConfig {
 
     private final RedisConnectionFactory redisConnectionFactory;
     private final ObjectMapper objectMapper;
+    @Value("${redis.idempotency.clear-on-startup:false}")
+    private boolean clearOnStartup;
 
     /**
      * 🚨 애플리케이션 시작 시 캐시 클리어 - LinkedHashMap 오류 방지
      */
     @EventListener(ApplicationReadyEvent.class)
     public void clearCacheOnStartup() {
+        if (!clearOnStartup) {
+            log.info("ℹ️ [캐시 정리] 시작 시 캐시 정리 비활성화 (redis.idempotency.clear-on-startup=false)");
+            return;
+        }
+
         try {
             RedisTemplate<String, Object> redisTemplate = new RedisTemplate<>();
             redisTemplate.setConnectionFactory(redisConnectionFactory);
             redisTemplate.setDefaultSerializer(new StringRedisSerializer());
             redisTemplate.afterPropertiesSet();
 
-            // orderquery 관련 캐시만 선택적 삭제
-            redisTemplate.getConnectionFactory().getConnection().flushDb();
-            log.warn("🚨 [캐시 정리] 시작 시 Redis 캐시 클리어 완료 - LinkedHashMap 오류 방지");
+            // 공유 Redis를 보호하기 위해 orderquery 관련 prefix만 삭제
+            long deleted = 0L;
+            deleted += deleteByPattern(redisTemplate, "orderquery:*");
+            deleted += deleteByPattern(redisTemplate, "dashboard:*");
+            deleted += deleteByPattern(redisTemplate, "statistics:*");
+            deleted += deleteByPattern(redisTemplate, "orders:list:*");
+            deleted += deleteByPattern(redisTemplate, "items:popular:*");
+            deleted += deleteByPattern(redisTemplate, "status:summary:*");
+            deleted += deleteByPattern(redisTemplate, "hourly:dist:*");
+            deleted += deleteByPattern(redisTemplate, "payment:stats:*");
+            deleted += deleteByPattern(redisTemplate, "trend:analysis:*");
+            deleted += deleteByPattern(redisTemplate, "urgent:alerts:*");
+            log.info("🧹 [캐시 정리] 시작 시 OrderQuery 캐시 정리 완료 - deletedKeys={}", deleted);
         } catch (Exception e) {
             log.error("❌ [캐시 정리] Redis 캐시 클리어 실패: {}", e.getMessage());
         }
+    }
+
+    private long deleteByPattern(RedisTemplate<String, Object> redisTemplate, String pattern) {
+        Set<String> keys = redisTemplate.keys(pattern);
+        if (keys == null || keys.isEmpty()) {
+            return 0L;
+        }
+        Long deleted = redisTemplate.delete(keys);
+        return deleted != null ? deleted : 0L;
     }
 
     /**
@@ -227,8 +255,8 @@ public class OrderQueryCacheConfig {
 
         public void logPerformanceStats() {
             if (totalQueries % 100 == 0 && totalQueries > 0) { // 100회마다 로깅
-                log.info("📊 [캐시 성능] Hit ratio: {:.2f}% (Hits: {}, Misses: {}, Total: {})",
-                    getCacheHitRatio() * 100, cacheHits, cacheMisses, totalQueries);
+                log.info("📊 [캐시 성능] Hit ratio: {}% (Hits: {}, Misses: {}, Total: {})",
+                    String.format("%.2f", getCacheHitRatio() * 100), cacheHits, cacheMisses, totalQueries);
             }
         }
 
