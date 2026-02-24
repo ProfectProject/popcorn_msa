@@ -32,6 +32,10 @@ const LOGIN_CREDENTIALS = (__ENV.LOGIN_CREDENTIALS || "")
   .split(",")
   .map((v) => v.trim())
   .filter(Boolean);
+const LOGIN_MAX_RETRIES = parseInt(__ENV.LOGIN_MAX_RETRIES || "2", 10);
+const LOGIN_RETRY_SLEEP_SEC = parseFloat(__ENV.LOGIN_RETRY_SLEEP_SEC || "1");
+const LOGIN_REQUIRED = (__ENV.LOGIN_REQUIRED || "false").toLowerCase() === "true";
+const LOGIN_DEBUG = (__ENV.LOGIN_DEBUG || "false").toLowerCase() === "true";
 const SCENARIO = (__ENV.SCENARIO || "hot").toLowerCase();
 
 const POPUP_HOT_ID = __ENV.POPUP_HOT_ID || "07c79042-f179-452e-9318-0d3abb403c44";
@@ -45,6 +49,8 @@ const POPUP_LIST_RATIO = Math.max(0, Math.min(1, parseFloat(__ENV.POPUP_LIST_RAT
 const POPUP_LIST_TIMEOUT = __ENV.POPUP_LIST_TIMEOUT || "3s";
 const POPUP_LIST_MAX_RETRIES = parseInt(__ENV.POPUP_LIST_MAX_RETRIES || "0", 10);
 const POPUP_LIST_BACKOFF_MS = parseInt(__ENV.POPUP_LIST_BACKOFF_MS || "60000", 10);
+const POPUP_LIST_API = __ENV.POPUP_LIST_API || "/api/popups/v1/popups";
+const POPUP_DETAIL_API_TEMPLATE = __ENV.POPUP_DETAIL_API_TEMPLATE || "/api/popups/v1/popups/{popupId}";
 
 const STEADY_RPS = parseInt(__ENV.STEADY_RPS || "250", 10);
 const RUSH_RPS = parseInt(__ENV.RUSH_RPS || "800", 10);
@@ -75,28 +81,81 @@ export function setup() {
     const email = cred.slice(0, idx).trim();
     const password = cred.slice(idx + 1).trim();
 
-    const res = http.post(
-      LOGIN_URL,
-      JSON.stringify({ email, password }),
-      {
-        headers: { "Content-Type": "application/json" },
-        timeout: HTTP_TIMEOUT,
-        responseType: "text",
-        tags: { name: "login" },
-      }
-    );
-    if (res.status < 200 || res.status >= 300) continue;
+    const payloads = [
+      { email, password },
+      { username: email, password },
+      { loginId: email, password },
+      { userEmail: email, userPassword: password },
+      { email, passwd: password },
+    ];
 
-    try {
-      const parsed = JSON.parse(res.body || "{}");
-      const token = parsed?.token || parsed?.accessToken || parsed?.data?.token || parsed?.data?.accessToken || null;
-      if (token) return { token };
-    } catch (_) {
-      // continue
+    for (let attempt = 0; attempt <= LOGIN_MAX_RETRIES; attempt++) {
+      for (const payload of payloads) {
+        const res = http.post(
+          LOGIN_URL,
+          JSON.stringify(payload),
+          {
+            headers: { "Content-Type": "application/json" },
+            timeout: HTTP_TIMEOUT,
+            responseType: "text",
+            tags: { name: "login" },
+          }
+        );
+
+        if (LOGIN_DEBUG) {
+          console.log(`[login] status=${res.status} payloadKeys=${Object.keys(payload).join(",")} body=${(res.body || "").slice(0, 300)}`);
+        }
+
+        if (res.status < 200 || res.status >= 300) continue;
+        const token = extractTokenFromLoginResponse(res);
+        if (token) return { token };
+      }
+      if (attempt < LOGIN_MAX_RETRIES) sleep(LOGIN_RETRY_SLEEP_SEC * (attempt + 1));
     }
   }
+  if (LOGIN_REQUIRED) {
+    throw new Error("Automatic login failed. Check LOGIN_URL and LOGIN_CREDENTIALS.");
+  }
+  console.warn("Automatic login failed; running without token. Set LOGIN_REQUIRED=true to fail-fast.");
+  return { token: "" };
+}
 
-  throw new Error("Automatic login failed. Check LOGIN_URL and LOGIN_CREDENTIALS.");
+function pickFirstHeaderValue(headerValue) {
+  if (!headerValue) return null;
+  if (Array.isArray(headerValue)) return headerValue[0] || null;
+  return headerValue;
+}
+
+function extractTokenFromLoginResponse(res) {
+  try {
+    const parsed = JSON.parse(res.body || "{}");
+    const tokenFromBody =
+      parsed?.token ||
+      parsed?.accessToken ||
+      parsed?.jwt ||
+      parsed?.data?.token ||
+      parsed?.data?.accessToken ||
+      parsed?.data?.jwt ||
+      parsed?.result?.token ||
+      parsed?.result?.accessToken ||
+      null;
+    if (tokenFromBody) return String(tokenFromBody);
+  } catch (_) {
+    // ignore body parsing error
+  }
+
+  const authHeader = pickFirstHeaderValue(res.headers?.Authorization || res.headers?.authorization);
+  if (authHeader) {
+    const bearer = String(authHeader).match(/Bearer\s+(.+)/i);
+    if (bearer?.[1]) return bearer[1].trim();
+  }
+
+  const setCookie = pickFirstHeaderValue(res.headers?.["Set-Cookie"] || res.headers?.["set-cookie"]);
+  if (setCookie) {
+    const m = String(setCookie).match(/(?:access_token|accessToken|token)=([^;]+)/i);
+    if (m?.[1]) return m[1];
+  }
+  return null;
 }
 
 function headers(setupData) {
@@ -138,7 +197,7 @@ function api_popup_list(setupData) {
   if (Date.now() < popupListDisabledUntil) return null;
   const res = requestWithRetry(
     "GET",
-    `${BASE_URL}/api/stores/v1/popups`,
+    `${BASE_URL}${POPUP_LIST_API}`,
     null,
     { ...reqParams("popup_list", setupData), timeout: POPUP_LIST_TIMEOUT },
     POPUP_LIST_MAX_RETRIES
@@ -153,7 +212,8 @@ function api_popup_list(setupData) {
 }
 
 function api_popup_detail(popupId, setupData) {
-  const res = requestWithRetry("GET", `${BASE_URL}/api/stores/v1/popups/${popupId}`, null, reqParams("popup_detail", setupData));
+  const detailPath = POPUP_DETAIL_API_TEMPLATE.replace("{popupId}", encodeURIComponent(popupId));
+  const res = requestWithRetry("GET", `${BASE_URL}${detailPath}`, null, reqParams("popup_detail", setupData));
   t_popup_detail.add(res.timings.duration);
   check(res, { "popup_detail 2xx": () => ok2xx(res) });
   return res;
