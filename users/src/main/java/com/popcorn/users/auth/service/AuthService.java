@@ -15,8 +15,10 @@ import com.popcorn.users.auth.dto.RefreshTokenRequest;
 import com.popcorn.users.auth.dto.RefreshTokenResponse;
 
 import lombok.RequiredArgsConstructor;
+import lombok.extern.slf4j.Slf4j;
 
 @Service
+@Slf4j
 @RequiredArgsConstructor
 public class AuthService {
 
@@ -52,7 +54,12 @@ public class AuthService {
         String accesstoken = jwtUtil.createJwt(userId,customUserDetails.getUsername(), role, accessTokenExpirationMs);
         String refreshtoken = jwtUtil.createRefreshJwt(userId,customUserDetails.getUsername(), role, refreshTokenExpirationMs);
 
-        refreshTokenService.saveRefreshToken(userId, refreshtoken, refreshTokenExpirationMs);
+        try {
+            refreshTokenService.saveRefreshToken(userId, refreshtoken, refreshTokenExpirationMs);
+        } catch (Exception e) {
+            // Redis 이슈로 로그인 자체가 실패하지 않도록 fail-open 처리
+            log.warn("Failed to save refresh token for userId={} (login continues): {}", userId, e.getMessage());
+        }
         return new LoginResponse(accesstoken,refreshtoken);
     }
 

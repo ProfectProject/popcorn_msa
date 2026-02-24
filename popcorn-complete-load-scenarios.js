@@ -63,6 +63,14 @@ const BASE_URL = __ENV.BASE_URL || "https://api.goormpopcorn.shop";
 // 인증 관련 (사용자 제공 계정)
 const LOGIN_EMAIL = __ENV.LOGIN_EMAIL || "popcorn1@popcorn.com";
 const LOGIN_PASSWORD = __ENV.LOGIN_PASSWORD || "test123";
+const LOGIN_EMAILS = (__ENV.LOGIN_EMAILS || LOGIN_EMAIL)
+  .split(",")
+  .map((v) => v.trim())
+  .filter(Boolean);
+const LOGIN_PASSWORDS = (__ENV.LOGIN_PASSWORDS || LOGIN_PASSWORD)
+  .split(",")
+  .map((v) => v.trim())
+  .filter(Boolean);
 const AUTH_TOKEN = __ENV.AUTH_TOKEN || "";
 const LOGIN_MAX_ATTEMPTS = parseInt(__ENV.LOGIN_MAX_ATTEMPTS || "3", 10);
 const LOGIN_RETRY_SLEEP_SECONDS = parseFloat(__ENV.LOGIN_RETRY_SLEEP_SECONDS || "1.5");
@@ -154,6 +162,7 @@ let tokenExpiry = null;
 let nextLoginAttemptAt = 0;
 let nextPopupListAttemptAt = 0;
 let nextPopupDetailAttemptAt = 0;
+let tokenCredentialEmail = null;
 const TOKEN_REFRESH_MARGIN = 5 * 60 * 1000; // 5분 전 갱신
 
 // ===== 서킷 브레이커 관리 =====
@@ -245,6 +254,15 @@ function headers() {
   return h;
 }
 
+function pickCredential() {
+  const total = LOGIN_EMAILS.length || 1;
+  const vu = typeof __VU === "number" && __VU > 0 ? __VU : 1;
+  const index = (vu - 1) % total;
+  const email = LOGIN_EMAILS[index] || LOGIN_EMAIL;
+  const password = LOGIN_PASSWORDS[index] || LOGIN_PASSWORDS[0] || LOGIN_PASSWORD;
+  return { email, password, index };
+}
+
 function ensureValidToken() {
   const now = Date.now();
 
@@ -254,10 +272,13 @@ function ensureValidToken() {
   // 로그인 실패 직후 짧은 쿨다운으로 로그인 폭주 방지
   if (now < nextLoginAttemptAt) return !!globalToken;
 
+  const credential = pickCredential();
+  const credentialChanged = tokenCredentialEmail && tokenCredentialEmail !== credential.email;
+
   // 토큰이 없거나 만료 임박시 재로그인
-  if (!globalToken || (tokenExpiry && now > (tokenExpiry - TOKEN_REFRESH_MARGIN))) {
+  if (credentialChanged || !globalToken || (tokenExpiry && now > (tokenExpiry - TOKEN_REFRESH_MARGIN))) {
     console.log("🔄 토큰 갱신 필요...");
-    const newToken = login();
+    const newToken = login(credential);
     return !!newToken;
   }
 
@@ -436,15 +457,17 @@ function extractTokenFromLoginResult(result) {
   );
 }
 
-function login() {
+function loginDirect(credential, setGlobal = true) {
+  const email = credential?.email || LOGIN_EMAIL;
+  const password = credential?.password || LOGIN_PASSWORD;
   if (AUTH_TOKEN) {
     console.log("🔐 AUTH_TOKEN 사용 중");
     return AUTH_TOKEN;
   }
 
   const loginData = {
-    email: LOGIN_EMAIL,
-    password: LOGIN_PASSWORD
+    email,
+    password
   };
 
   for (let attempt = 1; attempt <= LOGIN_MAX_ATTEMPTS; attempt++) {
@@ -468,13 +491,17 @@ function login() {
     } else if (response.status >= 200 && response.status < 300) {
       try {
         const result = JSON.parse(response.body);
-        globalToken = extractTokenFromLoginResult(result);
-        if (globalToken) {
+        const token = extractTokenFromLoginResult(result);
+        if (token) {
           // JWT 토큰 만료 시간 설정 (1시간으로 가정)
-          tokenExpiry = Date.now() + 55 * 60 * 1000; // 55분 후 만료
+          if (setGlobal) {
+            globalToken = token;
+            tokenExpiry = Date.now() + 55 * 60 * 1000; // 55분 후 만료
+            tokenCredentialEmail = email;
+          }
           nextLoginAttemptAt = 0;
-          console.log(`✅ 로그인 성공: 토큰 길이=${globalToken.length}`);
-          return globalToken;
+          console.log(`✅ 로그인 성공(${email}): 토큰 길이=${token.length}`);
+          return token;
         }
         console.log(`❌ 로그인 성공 응답이나 토큰 없음 - Body: ${shortBody(response.body)}`);
       } catch (e) {
@@ -482,8 +509,8 @@ function login() {
       }
     } else if (response.status === 401 || response.status === 403) {
       console.log(`🔐 인증 실패 (${response.status}): 계정 정보를 확인하세요`);
-      console.log(`📧 이메일: ${LOGIN_EMAIL}`);
-      console.log(`🔑 비밀번호: ${LOGIN_PASSWORD.replace(/./g, '*')}`);
+      console.log(`📧 이메일: ${email}`);
+      console.log(`🔑 비밀번호: ${String(password || "").replace(/./g, '*')}`);
       // 인증 정보 오류시에도 재시도하지 않음
       break;
     } else {
@@ -500,12 +527,25 @@ function login() {
   return null;
 }
 
+function login(credential = pickCredential()) {
+  return loginDirect(credential, true);
+}
+
 function ensureAuth(data) {
   if (AUTH_TOKEN) return true;
-  if (!globalToken && data?.token) {
+  if (!globalToken && data?.multiUserTokens) {
+    const credential = pickCredential();
+    const seededToken = data.multiUserTokens[credential.email];
+    if (seededToken) {
+      globalToken = seededToken;
+      tokenCredentialEmail = credential.email;
+      tokenExpiry = Date.now() + 50 * 60 * 1000;
+    }
+  }
+  if (!globalToken && data?.token && LOGIN_EMAILS.length <= 1) {
     globalToken = data.token;
   }
-  return !!globalToken;
+  return ensureValidToken();
 }
 
 function extractOrderId(orderRes) {
@@ -814,10 +854,16 @@ function performHealthCheck() {
 
 // ===== SETUP & OPTIONS =====
 export function setup() {
+  const seedCredential = {
+    email: LOGIN_EMAILS[0] || LOGIN_EMAIL,
+    password: LOGIN_PASSWORDS[0] || LOGIN_PASSWORD
+  };
+
   console.log(`\n🚀 ===== Popcorn 완전 구현 부하 테스트 =====`);
   console.log(`📊 모드: ${MODE.toUpperCase()}`);
   console.log(`🔗 서버: ${BASE_URL}`);
-  console.log(`📧 계정: ${LOGIN_EMAIL}`);
+  console.log(`📧 계정(시드): ${seedCredential.email}`);
+  console.log(`👥 멀티 유저 계정 수: ${LOGIN_EMAILS.length}`);
   console.log(`⚙️ 엄격한 로그인: ${STRICT_SETUP_LOGIN ? 'ON' : 'OFF'}`);
   console.log(`🧪 테스트 모드: ${TEST_MODE ? 'ON (인증 우회)' : 'OFF'}`);
   console.log(`🔄 서킷 브레이커: 실패 임계값 ${CIRCUIT_FAILURE_THRESHOLD}회`);
@@ -857,8 +903,26 @@ export function setup() {
     }
   }
 
+  const multiUserMode = LOGIN_EMAILS.length > 1;
+  if (multiUserMode) {
+    console.log(`🔐 멀티 유저 모드: setup에서 계정별 토큰 사전 발급`);
+    const multiUserTokens = {};
+    for (let i = 0; i < LOGIN_EMAILS.length; i++) {
+      const credential = {
+        email: LOGIN_EMAILS[i],
+        password: LOGIN_PASSWORDS[i] || LOGIN_PASSWORDS[0] || LOGIN_PASSWORD
+      };
+      const token = loginDirect(credential, false);
+      if (token) {
+        multiUserTokens[credential.email] = token;
+      }
+    }
+    console.log(`✅ 사전 발급 완료: ${Object.keys(multiUserTokens).length}/${LOGIN_EMAILS.length}`);
+    return { token: null, multiUserTokens };
+  }
+
   console.log(`🔐 로그인 시도 중...`);
-  const token = login();
+  const token = login(seedCredential);
 
   if (!token) {
     const errorMsg = `
@@ -867,8 +931,8 @@ export function setup() {
 📋 해결 방법:
 1. 서버 상태 확인: curl ${BASE_URL}/api/users/v1/auth/login
 2. 계정 정보 확인:
-   - 이메일: ${LOGIN_EMAIL}
-   - 비밀번호: ${LOGIN_PASSWORD.replace(/./g, '*')}
+   - 이메일: ${seedCredential.email}
+   - 비밀번호: ${String(seedCredential.password || "").replace(/./g, '*')}
 3. AUTH_TOKEN 직접 사용: -e AUTH_TOKEN=your_token_here
 4. 다른 계정 사용: -e LOGIN_EMAIL=other@email.com -e LOGIN_PASSWORD=password
 5. 비엄격 모드 사용: -e STRICT_SETUP_LOGIN=false`;
