@@ -27,7 +27,7 @@ public class SecurityConfig {
     }
 
     @Bean
-    public JwtAuthenticationFilter jwtAuthenticationFilter() {
+    public JwtAuthenticationFilter orderQueryJwtAuthenticationFilter() {
         return new JwtAuthenticationFilter(jwtUtil);
     }
 
@@ -42,7 +42,7 @@ public class SecurityConfig {
                         .requestMatchers("/swagger-ui/**", "/swagger-ui.html", "/v3/api-docs/**").permitAll()
                         .anyRequest().authenticated()
                 )
-                .addFilterBefore(jwtAuthenticationFilter(), HeaderAuthenticationFilter.class)
+                .addFilterBefore(orderQueryJwtAuthenticationFilter(), HeaderAuthenticationFilter.class)
                 .addFilterBefore(headerAuthenticationFilter, UsernamePasswordAuthenticationFilter.class)
                 .build();
     }
