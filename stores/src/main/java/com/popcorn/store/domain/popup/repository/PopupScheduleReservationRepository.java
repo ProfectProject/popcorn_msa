@@ -20,7 +20,7 @@ public class PopupScheduleReservationRepository {
 
 	public PopupScheduleCapacity cancelCapacity(UUID scheduleId, int quantity) {
 		String sql = """
-			UPDATE popup_schedules
+			UPDATE store.popup_schedules
 			   SET remaining_capacity = remaining_capacity + :quantity,
 			       updated_at = now()
 			 WHERE schedule_id = :scheduleId
@@ -43,7 +43,7 @@ public class PopupScheduleReservationRepository {
 
 	public PopupScheduleCapacity completeCapacity(UUID scheduleId, int quantity){
 		String sql = """
-				UPDATE popup_schedules
+				UPDATE store.popup_schedules
 				   SET remaining_capacity = remaining_capacity - :quantity,
 				       updated_at = now()
 				 WHERE schedule_id = :scheduleId
