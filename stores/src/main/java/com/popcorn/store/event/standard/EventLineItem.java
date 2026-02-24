@@ -80,5 +80,6 @@ public class EventLineItem {
     /**
      * 라인 총 금액 (unitPrice * qty)
      */
+    @JsonAlias("lineAmount")
     private Integer linePrice;
 }
