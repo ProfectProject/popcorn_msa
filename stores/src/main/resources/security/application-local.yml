@@ -12,6 +12,15 @@ spring:
       username: ${STORE_USERNAME}
       password: ${STORE_PASSWORD}
       driver-class-name: org.postgresql.Driver
+      # 🚀 HikariCP 성능 최적화 설정
+      hikari:
+        maximum-pool-size: 50          # DB 연결 풀 크기 증가
+        minimum-idle: 10               # 최소 유휴 연결
+        connection-timeout: 3000       # 연결 타임아웃 3초
+        idle-timeout: 600000           # 유휴 타임아웃 10분
+        max-lifetime: 1800000          # 최대 연결 수명 30분
+        leak-detection-threshold: 60000 # 연결 누수 감지 60초
+        connection-test-query: SELECT 1 # 연결 테스트 쿼리
   jpa:
     open-in-view: false
     hibernate:
@@ -21,6 +30,22 @@ spring:
         type:
           preferred_enum_jdbc_type: NAMED_ENUM
         default_schema: store
+        # 🚀 JPA 배치 및 성능 최적화
+        jdbc:
+          batch_size: 50              # 배치 처리 크기
+          batch_versioned_data: true  # 버전 데이터 배치 처리
+          fetch_size: 50              # 페치 크기
+        order_inserts: true           # INSERT 순서 최적화
+        order_updates: true           # UPDATE 순서 최적화
+        format_sql: false             # SQL 포맷팅 비활성화 (성능)
+        use_sql_comments: false       # SQL 주석 비활성화 (성능)
+        show_sql: false              # SQL 로깅 비활성화 (성능)
+        # 🚀 L2 캐시 활성화
+        cache:
+          use_second_level_cache: true
+          use_query_cache: true
+          region:
+            factory_class: org.hibernate.cache.jcache.JCacheRegionFactory
 
   cache:
     type: simple
@@ -36,10 +61,10 @@ spring:
       connection-timeout: 1000ms  # 최적화: 2초 → 1초
       jedis:
         pool:
-          max-active: 10  # 최적화: 50 → 10
-          max-idle: 8    # 최적화: 30 → 8
-          min-idle: 3    # 최적화: 15 → 3
-          max-wait: 1000ms # 최적화: 500ms → 1000ms
+          max-active: 100  # 🚀 과부하 대응: 10 → 100
+          max-idle: 50     # 🚀 과부하 대응: 8 → 50
+          min-idle: 20     # 🚀 과부하 대응: 3 → 20
+          max-wait: 5000ms # 🚀 과부하 대응: 1000ms → 5000ms
           time-between-eviction-runs: 60000ms # 유휴 연결 정리 주기
           min-evictable-idle-time: 300000ms # 최소 유휴 시간
           test-on-borrow: false # 대출 시 유효성 검사 비활성화 (성능 향상)
@@ -105,15 +130,17 @@ springdoc:
 
 logging:
   level:
-    com.popcorn.store: DEBUG
-    org.springframework.web: DEBUG
-    org.springframework.boot.web: DEBUG
-    org.hibernate.SQL: DEBUG
-    org.springframework.security: DEBUG
-    com.adjh.springbootkafka: DEBUG
+    # 🚀 성능 최적화: DEBUG → INFO/WARN
+    com.popcorn.store: INFO
+    org.springframework.web: WARN      # DEBUG → WARN
+    org.springframework.boot.web: WARN # DEBUG → WARN
+    org.hibernate.SQL: WARN            # DEBUG → WARN (SQL 로깅 최소화)
+    org.springframework.security: WARN # DEBUG → WARN
+    com.adjh.springbootkafka: INFO     # DEBUG → INFO
     org:
-      apache.kafka: INFO
-      springframework.kafka: INFO
+      apache.kafka: WARN               # INFO → WARN
+      springframework.kafka: WARN      # INFO → WARN
+    root: WARN                         # 전체 로깅 레벨 최적화
 
 popcorn:
   kafka:

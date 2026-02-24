@@ -16,7 +16,7 @@ spring:
         webflux:
           httpclient:
             connect-timeout: 3000    # 다운스트림 서비스 연결되는데 걸리는 시간
-            response-timeout: 10s    # 응답시간 초과 (5s → 10s 증가)
+            response-timeout: 30s    # orderquery 대시보드 조회 타임아웃 완화
 
       routes:
         - id: checkIns
@@ -373,8 +373,8 @@ resilience4j:
       cbCheckInDocService:
         timeout-duration: 1200ms
       cbOrderQueryService:
-        # OrderQuery is DB-heavy and can legitimately exceed sub-second latency (especially with size=200).
-        timeout-duration: 5000ms
+        # OrderQuery is DB-heavy and can legitimately exceed several seconds under load.
+        timeout-duration: 25000ms
         cancel-running-future: true
 
 management:

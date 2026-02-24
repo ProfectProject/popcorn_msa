@@ -39,6 +39,21 @@ spring:
       hibernate:
         jdbc:
           timeout: ${STORE_DB_QUERY_TIMEOUT_SEC:3}
+          # 🚀 JPA 배치 및 성능 최적화 (Prod)
+          batch_size: 100              # 배치 처리 크기 증가
+          batch_versioned_data: true   # 버전 데이터 배치 처리
+          fetch_size: 100              # 페치 크기 증가
+        order_inserts: true            # INSERT 순서 최적화
+        order_updates: true            # UPDATE 순서 최적화
+        format_sql: false              # SQL 포맷팅 비활성화 (성능)
+        use_sql_comments: false        # SQL 주석 비활성화 (성능)
+        show_sql: false                # SQL 로깅 비활성화 (성능)
+        # 🚀 L2 캐시 활성화 (Prod)
+        cache:
+          use_second_level_cache: true
+          use_query_cache: true
+          region:
+            factory_class: org.hibernate.cache.jcache.JCacheRegionFactory
         type:
           preferred_enum_jdbc_type: VARCHAR
         default_schema: store
@@ -52,10 +67,23 @@ spring:
       host: ${REDIS_HOST}
       port: ${REDIS_PORT:6379}
       password: ${REDIS_PASSWORD}
+      database: 0  # Payment, Order 서비스와 동일한 database 0 사용
       ssl:
         enabled: ${REDIS_SSL_ENABLED:true}
-      timeout: ${STORE_REDIS_TIMEOUT_MS:200}ms
-      connect-timeout: ${STORE_REDIS_CONNECT_TIMEOUT_MS:200}ms
+      timeout: ${STORE_REDIS_TIMEOUT_MS:2000}ms       # 🚀 200ms → 2000ms (과부하 대응)
+      connect-timeout: ${STORE_REDIS_CONNECT_TIMEOUT_MS:1000}ms # 🚀 200ms → 1000ms
+      # 🚀 Redis 연결 풀 설정 추가 (Prod 과부하 대응)
+      jedis:
+        pool:
+          max-active: 200        # 🚀 과부하 대응: 대폭 증가
+          max-idle: 100          # 🚀 과부하 대응: 대폭 증가
+          min-idle: 50           # 🚀 과부하 대응: 대폭 증가
+          max-wait: 10000ms      # 🚀 과부하 대응: 10초 대기
+          time-between-eviction-runs: 60000ms
+          min-evictable-idle-time: 300000ms
+          test-on-borrow: false  # 성능 향상
+          test-on-return: false  # 성능 향상
+          test-while-idle: true  # 유휴 중 검사만 활성화
 
 
   flyway:
@@ -102,15 +130,17 @@ passport:
 
 logging:
   level:
+    # 🚀 Prod 성능 최적화: 로깅 레벨 최적화
     com.popcorn.store: INFO
-    org.springframework.web: WARN
-    org.springframework.boot.web: INFO
-    org.hibernate.SQL: WARN
-    org.springframework.security: WARN
-    com.adjh.springbootkafka: INFO
+    org.springframework.web: ERROR        # WARN → ERROR
+    org.springframework.boot.web: ERROR   # INFO → ERROR
+    org.hibernate.SQL: ERROR              # WARN → ERROR (SQL 로깅 최소화)
+    org.springframework.security: ERROR   # WARN → ERROR
+    com.adjh.springbootkafka: WARN        # INFO → WARN
     org:
-      apache.kafka: INFO
-      springframework.kafka: INFO
+      apache.kafka: ERROR                 # INFO → ERROR
+      springframework.kafka: ERROR        # INFO → ERROR
+    root: WARN                            # 전체 로깅 레벨 최적화
 
 popcorn:
   kafka:

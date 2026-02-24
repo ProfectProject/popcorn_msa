@@ -1,9 +1,13 @@
 package com.popcorn.store.domain.popup.controller;
 
 import java.util.UUID;
+import java.util.concurrent.TimeUnit;
 
 import com.popcorn.store.domain.popup.dto.query.response.PopupScheduleCapacity;
 import com.popcorn.store.domain.popup.exception.PopupException;
+import org.springframework.cache.annotation.Cacheable;
+import org.springframework.retry.annotation.Backoff;
+import org.springframework.retry.annotation.Retryable;
 import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.annotation.*;
 
@@ -105,6 +109,9 @@ public class PopupController extends BaseController {
 			)
 	)
 	@GetMapping
+	@Cacheable(value = "popup-list", key = "#regionId + '-' + #category + '-' + #keyword + '-' + #storeId + '-' + #page + '-' + #size",
+	          unless = "#result.body.data == null", condition = "#page <= 10")
+	@Retryable(retryFor = {Exception.class}, maxAttempts = 3, backoff = @Backoff(delay = 100))
 	public ResponseEntity<BaseResponse<PopupListResponse>> getPopups(
 			@Parameter(description = "지역 필터", example = "101")
 			@org.springframework.web.bind.annotation.RequestParam(required = false) Long regionId,
@@ -178,6 +185,8 @@ public class PopupController extends BaseController {
 					"""))
 	)
 	@GetMapping("/{popupId}")
+	@Cacheable(value = "popup-detail", key = "#popupId", unless = "#result.body.data == null")
+	@Retryable(retryFor = {Exception.class}, maxAttempts = 3, backoff = @Backoff(delay = 50))
 	public ResponseEntity<BaseResponse<PopupDetailResponse>> getPopupDetail(
 			@Parameter(description = "상품 ID", required = true,
 					example = "00000000-0000-0000-0000-000000000101")
