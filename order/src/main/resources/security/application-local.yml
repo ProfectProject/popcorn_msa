@@ -1,8 +1,16 @@
 server:
   port: 8084
   shutdown: immediate
+  # 🚨 Emergency Tomcat 극한 최적화 - 5xx 에러 해결
   tomcat:
     uri-encoding: UTF-8
+    threads:
+      max: 1000                    # 🚨 Emergency: 대폭 증가
+      min-spare: 200              # 🚨 최소 스레드 대폭 증가
+    connection-timeout: 60000      # 🚨 60초 타임아웃
+    keep-alive-timeout: 60000      # 🚨 Keep-Alive 연장
+    max-connections: 50000         # 🚨 최대 연결 수 대폭 증가
+    accept-count: 2000            # 🚨 대기 연결 수 대폭 증가
 
 
 spring:
@@ -22,11 +30,15 @@ spring:
     password: ${ORDER_PASSWORD:order123}
     driver-class-name: org.postgresql.Driver
     hikari:
-      maximum-pool-size: 10          # 최적화: 30 → 10
-      minimum-idle: 3                # 최적화: 5 → 3
-      connection-timeout: 5000       # 최적화: 3초 → 5초
+      maximum-pool-size: 500         # 🚨 Emergency: 10 → 500 (5xx 에러 해결)
+      minimum-idle: 200              # 🚨 Emergency: 3 → 200
+      connection-timeout: 10000      # 🚨 Emergency: 5초 → 10초
       idle-timeout: 300000           # 5분 유휴 타임아웃
-      max-lifetime: 1800000          # 30분 최대 생명주기
+      max-lifetime: 900000           # 🚨 Emergency: 30분 → 15분
+      leak-detection-threshold: 30000 # 🚨 Emergency: 누수 감지 30초
+      connection-test-query: SELECT 1 # 연결 테스트 쿼리
+      keepalive-time: 30000          # 🚨 Emergency: Keep alive 30초
+      validation-timeout: 5000       # 🚨 Emergency: 검증 타임아웃 5초
 
   # JPA 설정
   jpa:
@@ -37,10 +49,25 @@ spring:
     properties:
       hibernate:
         dialect: org.hibernate.dialect.PostgreSQLDialect
-        format_sql: true
-        default_schema: orders  # Order 서비스 전용 스키마
+        format_sql: false             # SQL 포맷팅 비활성화 (성능)
+        default_schema: orders        # Order 서비스 전용 스키마
         type:
           preferred_enum_jdbc_type: NAMED_ENUM
+        # 🚀 JPA 배치 및 성능 최적화 - 5xx 에러 해결
+        jdbc:
+          batch_size: 50              # 배치 처리 크기
+          batch_versioned_data: true  # 버전 데이터 배치 처리
+          fetch_size: 50              # 페치 크기
+        order_inserts: true           # INSERT 순서 최적화
+        order_updates: true           # UPDATE 순서 최적화
+        use_sql_comments: false       # SQL 주석 비활성화 (성능)
+        show_sql: false              # SQL 로깅 비활성화 (성능)
+        # 🚀 L2 캐시 활성화
+        cache:
+          use_second_level_cache: true
+          use_query_cache: true
+          region:
+            factory_class: org.hibernate.cache.jcache.JCacheRegionFactory
 
   # Flyway 설정
   flyway:
@@ -69,11 +96,12 @@ spring:
       connection-timeout: 1000ms  # 최적화: 연결 타임아웃 감소
       lettuce:
         pool:
-          max-active: 30  # 100 → 30 (메모리 사용량 70% 감소)
-          max-idle: 10   # 30 → 10 (유휴 연결 최적화)
-          min-idle: 5    # 10 → 5 (최소 연결 효율화)
-          max-wait: 2000ms # 3초 → 2초 (응답성 개선)
-          time-between-eviction-runs: 60s
+          max-active: 1000           # 🚨 Emergency: 30 → 1000 (5xx 에러 해결)
+          max-idle: 500             # 🚨 Emergency: 10 → 500
+          min-idle: 200             # 🚨 Emergency: 5 → 200
+          max-wait: 30000ms         # 🚨 Emergency: 2초 → 30초
+          time-between-eviction-runs: 60000ms # 유휴 연결 정리 주기
+          min-evictable-idle-time: 300000ms # 최소 유휴 시간
         shutdown-timeout: 2000ms
 
 # 인증 설정

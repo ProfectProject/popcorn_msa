@@ -23,6 +23,10 @@ const SKIP_WRITES_WHEN_AUTH_UNAVAILABLE = (__ENV.SKIP_WRITES_WHEN_AUTH_UNAVAILAB
 
 const CUSTOMER_EMAIL = __ENV.CUSTOMER_EMAIL || "popcorn1@popcorn.com";
 const CUSTOMER_PASSWORD = __ENV.CUSTOMER_PASSWORD || "test123";
+const CUSTOMER_EMAILS = (__ENV.CUSTOMER_EMAILS || "popcorn1@popcorn.com,popcorn2@popcorn.com,popcorn3@popcorn.com,popcorn4@popcorn.com,popcorn6@popcorn.com")
+  .split(",")
+  .map((v) => v.trim())
+  .filter(Boolean);
 const ADMIN_EMAIL = __ENV.ADMIN_EMAIL || "popcorn5@popcorn.com";
 const ADMIN_PASSWORD = __ENV.ADMIN_PASSWORD || "testPassword123";
 
@@ -229,6 +233,16 @@ function login(email, password, role) {
   return buildTokenBundle("", "");
 }
 
+function loginAnyCustomer() {
+  const candidates = [CUSTOMER_EMAIL, ...CUSTOMER_EMAILS].filter(Boolean);
+  const dedup = [...new Set(candidates)];
+  for (const email of dedup) {
+    const token = login(email, CUSTOMER_PASSWORD, "customer");
+    if (token?.accessToken) return token;
+  }
+  return buildTokenBundle("", "");
+}
+
 function refreshAccessToken(tokenBundle, role = "customer") {
   const refreshToken = tokenBundle?.refreshToken || "";
   if (!refreshToken) return null;
@@ -307,14 +321,18 @@ export function setup() {
     };
   }
 
-  const customer = login(CUSTOMER_EMAIL, CUSTOMER_PASSWORD, "customer");
+  const customer = loginAnyCustomer();
   let admin = customer;
   if (!LOGIN_ONCE_ONLY && NEED_ADMIN_LOGIN) {
     admin = login(ADMIN_EMAIL, ADMIN_PASSWORD, "admin");
   }
 
   if (LOGIN_REQUIRED && !customer?.accessToken) {
-    throw new Error("Customer auto login failed. Check CUSTOMER_EMAIL/CUSTOMER_PASSWORD/LOGIN_URL");
+    if (POPUP_PUBLIC && SKIP_WRITES_WHEN_AUTH_UNAVAILABLE) {
+      console.warn("Customer auto login failed, but continuing with public popup endpoints and write skip mode.");
+    } else {
+      throw new Error("Customer auto login failed. Check CUSTOMER_EMAIL/CUSTOMER_PASSWORD/LOGIN_URL");
+    }
   }
 
   if (!customer?.accessToken) {

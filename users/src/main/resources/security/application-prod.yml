@@ -1,15 +1,15 @@
 server:
   port: 8082
   shutdown: immediate
-  # === 🚀 극한 부하 대응 Tomcat 최적화 ===
+  # 🚨 Emergency Tomcat 극한 최적화 - 5xx 에러 해결
   tomcat:
     threads:
-      max: 500                 # 극한 부하 대응 (200→500)
-      min-spare: 50            # 최소 스레드 수 증가
-    connection-timeout: 10000  # 연결 타임아웃 단축 (20s→10s)
-    keep-alive-timeout: 30000  # Keep-Alive 타임아웃 최적화
-    max-connections: 20000     # 최대 연결 수 확대 (8192→20000)
-    accept-count: 500         # 대기 연결 수 확대 (100→500)
+      max: 1000                    # 🚨 Emergency: 500 → 1000
+      min-spare: 200              # 🚨 Emergency: 50 → 200
+    connection-timeout: 60000      # 🚨 Emergency: 10s → 60s
+    keep-alive-timeout: 60000      # 🚨 Emergency: 30s → 60s
+    max-connections: 50000         # 🚨 Emergency: 20000 → 50000
+    accept-count: 2000            # 🚨 Emergency: 500 → 2000
     max-http-form-post-size: 2MB  # POST 크기 제한
 spring:
   config:
@@ -29,26 +29,30 @@ spring:
         enabled: false
       lettuce:
         pool:
-          max-active: 50         # 극한 부하 대응 (16→50)
-          max-idle: 25          # 최대 idle 연결 (8→25)
-          min-idle: 10          # 최소 idle 연결 (2→10)
-          max-wait: 200         # 최대 대기 시간 단축 (5s→200ms)
-        shutdown-timeout: 100ms
-      timeout: 200ms            # 개별 명령 타임아웃 단축 (3s→200ms)
-      connect-timeout: 200ms    # 연결 타임아웃 추가
+          max-active: 1000          # 🚨 Emergency: 50 → 1000
+          max-idle: 500             # 🚨 Emergency: 25 → 500
+          min-idle: 200             # 🚨 Emergency: 10 → 200
+          max-wait: 30000ms         # 🚨 Emergency: 200ms → 30초
+          time-between-eviction-runs: 60000ms
+          min-evictable-idle-time: 300000ms
+        shutdown-timeout: 1000ms     # Emergency: 100ms → 1초
+      timeout: 2000ms            # Emergency: 200ms → 2초
+      connect-timeout: 1000ms    # Emergency: 200ms → 1초
   datasource:
     url: jdbc:postgresql://${DB_HOST}:${DB_PORT}/${DB_NAME}
     username: ${USER_AUTH_USERNAME}
     password: ${USER_AUTH_PASSWORD}
     driver-class-name: org.postgresql.Driver
     hikari:
-      maximum-pool-size: 150       # 🚨 Emergency 극한 대응 (80→150)
-      minimum-idle: 50             # 🚨 최소 idle 연결 급증 (20→50)
-      connection-timeout: 1000     # 🚨 연결 타임아웃 극한 단축 (3s→1s)
-      validation-timeout: 500      # 🚨 검증 타임아웃 극한 단축 (1s→500ms)
-      idle-timeout: 180000         # 🚨 idle 타임아웃 3분으로 단축
-      max-lifetime: 600000         # 🚨 연결 생명주기 10분으로 단축
-      leak-detection-threshold: 10000 # 🚨 누수 감지 10초로 단축
+      maximum-pool-size: 500         # 🚨 Emergency: 150 → 500 (5xx 에러 해결)
+      minimum-idle: 200              # 🚨 Emergency: 50 → 200
+      connection-timeout: 10000      # 🚨 Emergency: 1s → 10s
+      validation-timeout: 5000       # 🚨 Emergency: 500ms → 5s
+      idle-timeout: 300000           # 🚨 Emergency: 3분 → 5분
+      max-lifetime: 900000           # 🚨 Emergency: 10분 → 15분
+      leak-detection-threshold: 30000 # 🚨 Emergency: 10s → 30s
+      connection-test-query: SELECT 1 # 연결 테스트 쿼리
+      keepalive-time: 30000          # 🚨 Emergency: Keep alive 30초
 
   jpa:
     open-in-view: false
