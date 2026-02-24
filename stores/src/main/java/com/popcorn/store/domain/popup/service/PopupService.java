@@ -39,6 +39,7 @@ public class PopupService {
 	private final PopupDetailCacheService popupDetailCacheService;
 
 	private static final String POPUP_SCHEDULE_REMAINING_KEY_FORMAT = "popup:schedule:%s:remaining";
+	private static final boolean ENABLE_DB_REMAINING_FALLBACK = false;
 
 	public PopupListResponse getPopups(PopupListQuery query) {
 		PopupListQuery normalizedQuery = popupValidationService.normalizeListQuery(query);
@@ -115,7 +116,7 @@ public class PopupService {
 		}
 
 		// 모든 스케줄이 Redis 미스인 경우 DB fallback을 건너뛰어 고부하 시 DB 폭주를 방지한다.
-		if (!remainingBySchedule.isEmpty() && remainingBySchedule.size() < scheduleIds.size()) {
+		if (ENABLE_DB_REMAINING_FALLBACK && !remainingBySchedule.isEmpty() && remainingBySchedule.size() < scheduleIds.size()) {
 			Map<UUID, Integer> fallback = loadRemainingCapacityFromDb(popupId);
 			fallback.forEach(remainingBySchedule::putIfAbsent);
 		}
@@ -165,24 +166,33 @@ public class PopupService {
 				.map(id -> String.format(POPUP_SCHEDULE_REMAINING_KEY_FORMAT, id))
 				.toList();
 
-		List<Object> values = redisTemplate.opsForValue().multiGet(keys);
-		if (values == null || values.isEmpty()) {
-			return remainingBySchedule;
-		}
-
-		for (int i = 0; i < scheduleIds.size() && i < values.size(); i++) {
-			Object value = values.get(i);
-			Integer parsed = parseRemainingCapacity(value);
-			if (parsed != null) {
-				remainingBySchedule.put(scheduleIds.get(i), parsed);
+		try {
+			List<Object> values = redisTemplate.opsForValue().multiGet(keys);
+			if (values == null || values.isEmpty()) {
+				return remainingBySchedule;
 			}
+
+			for (int i = 0; i < scheduleIds.size() && i < values.size(); i++) {
+				Object value = values.get(i);
+				Integer parsed = parseRemainingCapacity(value);
+				if (parsed != null) {
+					remainingBySchedule.put(scheduleIds.get(i), parsed);
+				}
+			}
+		} catch (Exception e) {
+			log.warn("⚠️ Redis remainingCapacity bulk 조회 실패 - popup 상세는 DB값으로 계속 응답합니다: {}", e.getMessage());
 		}
 		return remainingBySchedule;
 	}
 
 	private Integer getRemainingCapacityFromRedis(UUID scheduleId) {
-		Object value = redisTemplate.opsForValue().get(String.format(POPUP_SCHEDULE_REMAINING_KEY_FORMAT, scheduleId));
-		return parseRemainingCapacity(value);
+		try {
+			Object value = redisTemplate.opsForValue().get(String.format(POPUP_SCHEDULE_REMAINING_KEY_FORMAT, scheduleId));
+			return parseRemainingCapacity(value);
+		} catch (Exception e) {
+			log.warn("⚠️ Redis remainingCapacity 단건 조회 실패 - scheduleId={}: {}", scheduleId, e.getMessage());
+			return null;
+		}
 	}
 
 	private Integer parseRemainingCapacity(Object value) {

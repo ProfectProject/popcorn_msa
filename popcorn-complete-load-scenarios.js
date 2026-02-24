@@ -107,6 +107,7 @@ const DYNAMIC_LOAD_ENABLED = (__ENV.DYNAMIC_LOAD_ENABLED || "true").toLowerCase(
 const ERROR_RATE_THRESHOLD = parseFloat(__ENV.ERROR_RATE_THRESHOLD || "0.30");
 const LOAD_REDUCTION_FACTOR = parseFloat(__ENV.LOAD_REDUCTION_FACTOR || "0.7");
 const WRITE_PROB_MULTIPLIER = parseFloat(__ENV.WRITE_PROB_MULTIPLIER || "1.0");
+const ENABLE_PAYMENT_REQUEST = (__ENV.ENABLE_PAYMENT_REQUEST || "false").toLowerCase() === "true";
 
 // === OPERATIONAL MODE 설정 ===
 const SCENARIO = (__ENV.SCENARIO || "hot").toLowerCase();
@@ -127,7 +128,7 @@ const MIX_DURATION = __ENV.MIX_DURATION || "10m";
 const CONSISTENCY_RPS = parseInt(__ENV.CONSISTENCY_RPS || "80", 10);
 const CONSISTENCY_DURATION = __ENV.CONSISTENCY_DURATION || "10m";
 const ORDER_ID_FEED_URL = __ENV.ORDER_ID_FEED_URL || "";
-const USER_IDS = (__ENV.USER_IDS || "U1,U2,U3,U4,U5").split(",");
+const USER_IDS = (__ENV.USER_IDS || "1,2,3,4,5").split(",");
 
 // 성능 임계값 (환경변수로 설정 가능)
 const QUERY_P95_MS = parseInt(__ENV.QUERY_P95_MS || "400", 10);
@@ -607,20 +608,22 @@ function api_order_create({ popupId }) {
   if (!TEST_MODE && !ensureValidToken()) return null;
 
   return retryApiCall("order_create", () => {
-    // 실제 Popcorn 주문 생성 API 스펙에 맞춘 페이로드
+    // OrderCommandController 예시 스펙에 맞춘 GOODS 주문 페이로드
     const body = JSON.stringify({
       popupId,
-      orderType: "RESERVATION",
+      orderType: "GOODS",
+      paymentMethod: "CARD",
       items: [
         {
-          goodsId: `goods_${popupId}`,
-          quantity: 1,
+          orderItemType: "GOODS",
+          goodsId: "00000000-0000-0000-0000-000000000301",
+          qty: 1,
           unitPrice: 10000
         }
       ]
     });
 
-    const res = http.post(`${BASE_URL}/api/orders/v1/orders`, body, {
+    const res = http.post(`${BASE_URL}/api/orders/v1`, body, {
       headers: headers(),
       timeout: API_TIMEOUT,
       tags: { name: "order_create" }
@@ -685,8 +688,7 @@ function api_my_order_status(orderId) {
   if (!TEST_MODE && !ensureValidToken()) return null;
 
   return retryApiCall(`my_order_status(${orderId})`, () => {
-    // 실제 주문 조회 API 사용 (order-query 서비스가 없으므로 orders API 사용)
-    const res = http.get(`${BASE_URL}/api/orders/v1/orders/${orderId}`, {
+    const res = http.get(`${BASE_URL}/api/order-query/v1/orders/${orderId}`, {
       headers: headers(),
       timeout: API_TIMEOUT,
       tags: { name: "query_my_order_status" },
@@ -704,8 +706,7 @@ function api_popup_stock(popupId) {
   if (!TEST_MODE && !ensureValidToken()) return null;
 
   return retryApiCall(`popup_stock(${popupId})`, () => {
-    // 팝업 상세 조회로 재고 정보 확인 (stock API 대신)
-    const res = http.get(`${BASE_URL}/api/stores/v1/popups/${popupId}`, {
+    const res = http.get(`${BASE_URL}/api/order-query/v1/popups/${popupId}/stock`, {
       headers: headers(),
       timeout: API_TIMEOUT,
       tags: { name: "query_popup_stock" },
@@ -723,8 +724,7 @@ function api_order_list(userId, page = 0, size = 20) {
   if (!TEST_MODE && !ensureValidToken()) return null;
 
   return retryApiCall(`order_list(${userId}, page=${page})`, () => {
-    // 사용자별 주문 목록 API가 없으므로 팝업 목록으로 대체
-    const res = http.get(`${BASE_URL}/api/stores/v1/popups?page=${page}&size=${size}`, {
+    const res = http.get(`${BASE_URL}/api/order-query/v1/users/${userId}/orders?page=${page}&size=${size}`, {
       headers: headers(),
       timeout: API_TIMEOUT,
       tags: { name: "query_order_list" },
@@ -1174,7 +1174,7 @@ function scenarioHot(stage) {
         }
 
         // 결제 요청
-        if (circuitBreakers.payment_request.canExecute()) {
+        if (ENABLE_PAYMENT_REQUEST && circuitBreakers.payment_request.canExecute()) {
           api_payment_request({ orderId });
         }
       }
@@ -1206,7 +1206,7 @@ function scenarioDist(stage) {
   if (Math.random() < (writeProb * WRITE_PROB_MULTIPLIER)) {
     const orderRes = api_order_create({ popupId });
     const orderId = extractOrderId(orderRes);
-    if (orderId) api_payment_request({ orderId });
+    if (ENABLE_PAYMENT_REQUEST && orderId) api_payment_request({ orderId });
   }
 }
 
@@ -1225,7 +1225,7 @@ function scenarioFault(stage) {
   if (Math.random() < (writeProb * WRITE_PROB_MULTIPLIER)) {
     const orderRes = api_order_create({ popupId });
     const orderId = extractOrderId(orderRes);
-    if (orderId) api_payment_request({ orderId }); // PG 지연 주입 시 여기서 duration 증가 관측
+    if (ENABLE_PAYMENT_REQUEST && orderId) api_payment_request({ orderId }); // PG 지연 주입 시 여기서 duration 증가 관측
   }
 }
 

@@ -17,7 +17,6 @@ import com.popcorn.store.domain.popup.dto.query.response.PopupListResponse;
 import com.popcorn.store.domain.popup.entity.enums.PopupCategory;
 import com.popcorn.store.domain.popup.service.PopupService;
 import com.popcorn.store.domain.popup.service.ScheduleInventoryApiService;
-import com.popcorn.store.domain.popup.service.ScheduleInventoryApiService;
 
 import lombok.RequiredArgsConstructor;
 
