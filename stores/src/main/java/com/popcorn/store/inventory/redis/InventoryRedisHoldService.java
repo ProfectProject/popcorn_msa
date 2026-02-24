@@ -33,6 +33,7 @@ public class InventoryRedisHoldService {
     private final RedisScript<Long> holdGoodsScript;
     private final RedisScript<Long> holdBothScript;
     private final RedisScript<Long> releaseHoldScript;
+    private final RedisScript<Long> commitHoldScript;
 
     public boolean ensureGoodsAvailabilityKey(UUID popupId, UUID goodsId, int available) {
         String key = buildGoodsKey(popupId, goodsId);
@@ -159,8 +160,16 @@ public class InventoryRedisHoldService {
     }
 
     public HoldResult releaseHold(UUID orderId) {
+        return deleteHold(orderId, releaseHoldScript);
+    }
+
+    public HoldResult commitHold(UUID orderId) {
+        return deleteHold(orderId, commitHoldScript);
+    }
+
+    private HoldResult deleteHold(UUID orderId, RedisScript<Long> script) {
         if (orderId == null) {
-            throw new IllegalArgumentException("orderId is required for release");
+            throw new IllegalArgumentException("orderId is required for hold deletion");
         }
         String popupIdValue = redisTemplate.opsForValue().get(buildLookupKey(orderId));
         if (!StringUtils.hasText(popupIdValue)) {
@@ -170,11 +179,11 @@ public class InventoryRedisHoldService {
         UUID popupId = UUID.fromString(popupIdValue);
         String holdKey = buildHoldKey(popupId, orderId);
         Long result = redisTemplate.execute(
-                releaseHoldScript,
+                script,
                 Collections.singletonList(holdKey)
         );
         removePopupLookup(orderId);
-        return interpretReleaseResult(result);
+        return interpretHoldDeletionResult(result);
     }
 
     public boolean hasHold(UUID orderId) {
@@ -255,7 +264,7 @@ public class InventoryRedisHoldService {
         return new HoldResult(code, code.getDescription());
     }
 
-    private HoldResult interpretReleaseResult(Long result) {
+    private HoldResult interpretHoldDeletionResult(Long result) {
         HoldCode code = result != null && result == -3L ? HoldCode.ALREADY_HELD : HoldCode.fromValue(result);
         return new HoldResult(code, code.getDescription());
     }

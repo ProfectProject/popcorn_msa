@@ -55,6 +55,14 @@ public class InventoryRedisConfig {
         return script;
     }
 
+    @Bean("commitHoldScript")
+    public DefaultRedisScript<Long> commitHoldScript() {
+        DefaultRedisScript<Long> script = new DefaultRedisScript<>();
+        script.setScriptSource(new ResourceScriptSource(new ClassPathResource("redis/commit_hold.lua")));
+        script.setResultType(Long.class);
+        return script;
+    }
+
     /**
      * 🚀 Redis 스크립트 전용 템플릿 (성능 최적화)
      */

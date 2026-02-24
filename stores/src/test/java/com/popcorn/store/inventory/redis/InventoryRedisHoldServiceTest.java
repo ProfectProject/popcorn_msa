@@ -21,6 +21,7 @@ import java.util.UUID;
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.anyList;
+import static org.mockito.ArgumentMatchers.anyString;
 import static org.mockito.Mockito.eq;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
@@ -47,12 +48,15 @@ class InventoryRedisHoldServiceTest {
     @Mock
     RedisScript<Long> releaseHoldScript;
 
+    @Mock
+    RedisScript<Long> commitHoldScript;
+
     InventoryRedisHoldService holdService;
 
     @BeforeEach
     void setUp() {
         holdService = new InventoryRedisHoldService(redisTemplate, holdScheduleScript, holdGoodsScript,
-                holdBothScript, releaseHoldScript);
+                holdBothScript, releaseHoldScript, commitHoldScript);
         when(redisTemplate.opsForValue()).thenReturn(valueOperations);
     }
 
@@ -106,5 +110,20 @@ class InventoryRedisHoldServiceTest {
         assertThat(args[5]).isEqualTo("2");
         assertThat(args[6]).isEqualTo(String.valueOf(Duration.ofMinutes(30).toMillis()));
         assertThat(args[7]).isNotNull();
+    }
+
+    @Test
+    void commitHold_shouldInvokeCommitScript() {
+        UUID orderId = UUID.randomUUID();
+        UUID popupId = UUID.randomUUID();
+        when(valueOperations.get(anyString())).thenReturn(popupId.toString());
+        when(redisTemplate.execute(eq(commitHoldScript), anyList(), any(Object[].class))).thenReturn(1L);
+
+        holdService.commitHold(orderId);
+
+        ArgumentCaptor<List<String>> keysCaptor = ArgumentCaptor.forClass(List.class);
+        verify(redisTemplate).execute(eq(commitHoldScript), keysCaptor.capture(), any(Object[].class));
+        assertThat(keysCaptor.getValue()).hasSize(1);
+        assertThat(keysCaptor.getValue().get(0)).isEqualTo("hold:{" + popupId + "}:" + orderId);
     }
 }

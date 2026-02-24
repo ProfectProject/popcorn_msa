@@ -186,12 +186,12 @@ public class StoreRequestsKafkaListener {
             reservationService.updateStatus(reservation, ReservationStatus.COMMITTED, null);
             details.add(String.format("goodsId=%s qty=%d", goodsId, qty));
         }
-        releaseHoldWithRetry(orderId, "stock-deduction");
         if (details.isEmpty()) {
             eventPublisher.publishStockDeductionFailedEvent(orderId, orderNo, popupId,
                     "차감할 항목 없음", "NO_ITEMS", "items empty");
             return;
         }
+        commitHoldWithRetry(orderId, "stock-deduction");
         eventPublisher.publishStockDeductionSuccessEvent(orderId, orderNo, popupId, String.join(", ", details));
     }
 
@@ -314,10 +314,11 @@ public class StoreRequestsKafkaListener {
             details.add(String.format("scheduleId=%s qty=%d", scheduleId, qty));
             anySuccess = true;
         }
-        releaseHoldWithRetry(orderId, "schedule-confirmation");
         if (anySuccess) {
+            commitHoldWithRetry(orderId, "schedule-confirmation");
             eventPublisher.publishScheduleConfirmationSuccessEvent(orderId, orderNo, popupId, String.join(", ", details));
         } else {
+            releaseHoldWithRetry(orderId, "schedule-confirmation");
             eventPublisher.publishScheduleConfirmationFailedEvent(orderId, orderNo, popupId,
                     "처리할 예약 없음");
         }
@@ -497,6 +498,27 @@ public class StoreRequestsKafkaListener {
             }
         }
         log.error("💀 [{}] Redis HOLD 해제 최대 재시도 실패 - orderId={} (DLQ/알람 필요)", context, orderId);
+        return false;
+    }
+
+    private boolean commitHoldWithRetry(UUID orderId, String context) {
+        if (orderId == null) {
+            return false;
+        }
+        for (int attempt = 1; attempt <= MAX_RETRY_ATTEMPTS; attempt++) {
+            try {
+                HoldResult result = inventoryHoldService.commitHold(orderId);
+                if (result != null && result.isSuccess()) {
+                    log.debug("🚀 [{}] Redis HOLD 커밋 성공 - orderId={} attempt={}", context, orderId, attempt);
+                    return true;
+                }
+                log.warn("⚠️ [{}] Redis HOLD 커밋 실패 - orderId={} attempt={} detail={}",
+                        context, orderId, attempt, result != null ? result.getDetail() : "null");
+            } catch (Exception e) {
+                log.warn("⚠️ [{}] Redis HOLD 커밋 오류 - attempt={}, error={}", context, attempt, e.getMessage());
+            }
+        }
+        log.error("💀 [{}] Redis HOLD 커밋 최대 재시도 실패 - orderId={} (DLQ/알람 필요)", context, orderId);
         return false;
     }
 
