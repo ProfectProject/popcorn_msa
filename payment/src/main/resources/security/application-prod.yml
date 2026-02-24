@@ -1,8 +1,17 @@
 server:
   port: ${SERVER_PORT:8085}
   shutdown: graceful  # 프로덕션에서는 graceful shutdown
+
+  # === 🚀 Tomcat 성능 최적화 ===
   tomcat:
     uri-encoding: UTF-8
+    threads:
+      max: 200                    # 최대 스레드 수
+      min-spare: 10              # 최소 스레드 수
+    connection-timeout: 20000    # 연결 타임아웃 20초
+    keep-alive-timeout: 60000    # Keep-Alive 타임아웃
+    max-connections: 8192        # 최대 연결 수
+    accept-count: 100           # 대기 연결 수
 
 # 프론트엔드 기본 URL 설정
 frontend:
@@ -22,14 +31,17 @@ spring:
     username: ${PAYMENT_USERNAME}
     password: ${PAYMENT_PASSWORD}
     driver-class-name: org.postgresql.Driver
-    # 프로덕션 커넥션 풀 최적화
+    # === 🚀 HikariCP 성능 최적화 ===
     hikari:
-      maximum-pool-size: 30
-      minimum-idle: 10
-      connection-timeout: 20000
-      validation-timeout: 3000
-      idle-timeout: 300000
-      max-lifetime: 1200000
+      connection-init-sql: SET search_path TO payment
+      maximum-pool-size: 30        # 결제 서비스는 트래픽이 높아 30 유지
+      minimum-idle: 15             # 최소 유휴 연결 증가
+      connection-timeout: 30000    # 연결 타임아웃 30초
+      validation-timeout: 5000     # 검증 타임아웃 증가
+      idle-timeout: 600000         # 유휴 연결 타임아웃 10분
+      max-lifetime: 1800000        # 최대 연결 생존 시간 30분
+      leak-detection-threshold: 60000  # 연결 누수 감지 1분
+      pool-name: "PaymentHikariPool"
 
   # JPA 설정 (프로덕션)
   jpa:

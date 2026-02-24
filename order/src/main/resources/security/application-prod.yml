@@ -2,6 +2,16 @@ server:
   port: 8084
   shutdown: immediate
 
+  # === 🚀 Tomcat 성능 최적화 ===
+  tomcat:
+    threads:
+      max: 200                    # 최대 스레드 수
+      min-spare: 10              # 최소 스레드 수
+    connection-timeout: 20000    # 연결 타임아웃 20초
+    keep-alive-timeout: 60000    # Keep-Alive 타임아웃
+    max-connections: 8192        # 최대 연결 수
+    accept-count: 100           # 대기 연결 수
+
 spring:
   kafka:
     bootstrap-servers: ${KAFKA_BOOTSTRAP_SERVERS}
@@ -25,13 +35,16 @@ spring:
     username: ${ORDER_USERNAME}
     password: ${ORDER_PASSWORD}
     driver-class-name: org.postgresql.Driver
-    # 프로덕션 커넥션 풀 최적화
+    # === 🚀 HikariCP 성능 최적화 ===
     hikari:
-      minimum-idle: 5
-      maximum-pool-size: 20
-      idle-timeout: 300000
-      max-lifetime: 1200000
-      connection-timeout: 20000
+      connection-init-sql: SET search_path TO orders
+      minimum-idle: 10              # 최소 유휴 연결 증가
+      maximum-pool-size: 25         # 최대 연결 수 증가
+      idle-timeout: 600000          # 유휴 연결 타임아웃 10분
+      max-lifetime: 1800000         # 최대 연결 생존 시간 30분
+      connection-timeout: 30000     # 연결 타임아웃 30초
+      leak-detection-threshold: 60000  # 연결 누수 감지 1분
+      pool-name: "OrderHikariPool"
 
   # JPA 설정 (프로덕션)
   jpa:

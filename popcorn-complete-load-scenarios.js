@@ -106,6 +106,7 @@ const CIRCUIT_SUCCESS_THRESHOLD = parseInt(__ENV.CIRCUIT_SUCCESS_THRESHOLD || "5
 const DYNAMIC_LOAD_ENABLED = (__ENV.DYNAMIC_LOAD_ENABLED || "true").toLowerCase() === "true";
 const ERROR_RATE_THRESHOLD = parseFloat(__ENV.ERROR_RATE_THRESHOLD || "0.30");
 const LOAD_REDUCTION_FACTOR = parseFloat(__ENV.LOAD_REDUCTION_FACTOR || "0.7");
+const WRITE_PROB_MULTIPLIER = parseFloat(__ENV.WRITE_PROB_MULTIPLIER || "1.0");
 
 // === OPERATIONAL MODE 설정 ===
 const SCENARIO = (__ENV.SCENARIO || "hot").toLowerCase();
@@ -1157,7 +1158,7 @@ function scenarioHot(stage) {
   if (stage === "spike") writeProb = 0.55;
 
   // 동적 부하 조절: 에러율이 높으면 쓰기 비중 감소
-  const adjustedWriteProb = writeProb * currentLoadFactor;
+  const adjustedWriteProb = writeProb * currentLoadFactor * WRITE_PROB_MULTIPLIER;
 
   if (Math.random() < adjustedWriteProb) {
     // 서킷 브레이커 상태 확인 후 주문 시도
@@ -1202,7 +1203,7 @@ function scenarioDist(stage) {
   if (stage === "rush") writeProb = 0.15;   // rush에서도 분산 운영 가정
   if (stage === "spike") writeProb = 0.25;
 
-  if (Math.random() < writeProb) {
+  if (Math.random() < (writeProb * WRITE_PROB_MULTIPLIER)) {
     const orderRes = api_order_create({ popupId });
     const orderId = extractOrderId(orderRes);
     if (orderId) api_payment_request({ orderId });
@@ -1221,7 +1222,7 @@ function scenarioFault(stage) {
   if (stage === "rush") writeProb = 0.35;
   if (stage === "spike") writeProb = 0.60;
 
-  if (Math.random() < writeProb) {
+  if (Math.random() < (writeProb * WRITE_PROB_MULTIPLIER)) {
     const orderRes = api_order_create({ popupId });
     const orderId = extractOrderId(orderRes);
     if (orderId) api_payment_request({ orderId }); // PG 지연 주입 시 여기서 duration 증가 관측
