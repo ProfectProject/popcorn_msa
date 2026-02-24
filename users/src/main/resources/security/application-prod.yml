@@ -42,13 +42,13 @@ spring:
     password: ${USER_AUTH_PASSWORD}
     driver-class-name: org.postgresql.Driver
     hikari:
-      maximum-pool-size: 80        # 극한 부하 대응 (20→80)
-      minimum-idle: 20             # 최소 idle 연결 확보 (5→20)
-      connection-timeout: 3000     # 연결 대기 시간 단축 (20s→3s)
-      validation-timeout: 1000     # 검증 타임아웃 최적화
-      idle-timeout: 300000         # idle 타임아웃 단축 (10분→5분)
-      max-lifetime: 1200000        # 연결 최대 생명주기 단축 (30분→20분)
-      leak-detection-threshold: 30000 # 연결 누수 감지 단축 (60s→30s)
+      maximum-pool-size: 150       # 🚨 Emergency 극한 대응 (80→150)
+      minimum-idle: 50             # 🚨 최소 idle 연결 급증 (20→50)
+      connection-timeout: 1000     # 🚨 연결 타임아웃 극한 단축 (3s→1s)
+      validation-timeout: 500      # 🚨 검증 타임아웃 극한 단축 (1s→500ms)
+      idle-timeout: 180000         # 🚨 idle 타임아웃 3분으로 단축
+      max-lifetime: 600000         # 🚨 연결 생명주기 10분으로 단축
+      leak-detection-threshold: 10000 # 🚨 누수 감지 10초로 단축
 
   jpa:
     open-in-view: false

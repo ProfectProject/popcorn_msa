@@ -1,0 +1,149 @@
+{
+    "metrics": {
+        "http_req_connecting": {
+            "med": 0,
+            "max": 5027.497,
+            "p(90)": 0,
+            "p(95)": 0,
+            "avg": 6.926200702690128,
+            "min": 0
+        },
+        "http_req_waiting": {
+            "avg": 786.0728014011308,
+            "min": 6.897,
+            "med": 721.1975,
+            "max": 57521.383,
+            "p(90)": 1031.7431,
+            "p(95)": 1208.4671999999991
+        },
+        "data_sent": {
+            "count": 99749295,
+            "rate": 520003.6333262534
+        },
+        "iterations": {
+            "count": 472469,
+            "rate": 2463.0309079780627
+        },
+        "t_order_create": {
+            "min": 7.28,
+            "med": 721.841,
+            "max": 57522.325,
+            "p(90)": 1032.7036,
+            "p(95)": 1210.4505999999997,
+            "avg": 786.7523918543013,
+            "thresholds": {
+                "p(95)<3000": false
+            }
+        },
+        "iteration_duration": {
+            "p(90)": 1034.1964249999999,
+            "p(95)": 1214.9345753999999,
+            "avg": 799.9778730847422,
+            "min": 7.951209,
+            "med": 722.156042,
+            "max": 58083.669375
+        },
+        "r_fail": {
+            "passes": 472469,
+            "fails": 0,
+            "thresholds": {
+                "rate<0.20": true
+            },
+            "value": 1
+        },
+        "http_req_duration{expected_response:true}": {
+            "avg": 1414.024,
+            "min": 1414.024,
+            "med": 1414.024,
+            "max": 1414.024,
+            "p(90)": 1414.024,
+            "p(95)": 1414.024
+        },
+        "checks": {
+            "passes": 0,
+            "fails": 472469,
+            "value": 0
+        },
+        "data_received": {
+            "count": 133820607,
+            "rate": 697620.9892403216
+        },
+        "http_req_duration": {
+            "p(90)": 1032.7060999999999,
+            "p(95)": 1210.45755,
+            "avg": 786.7537194975552,
+            "min": 7.28,
+            "med": 721.8415,
+            "max": 57522.325
+        },
+        "http_req_tls_handshaking": {
+            "avg": 5.773160435583204,
+            "min": 0,
+            "med": 0,
+            "max": 7884.351,
+            "p(90)": 0,
+            "p(95)": 0
+        },
+        "http_req_sending": {
+            "max": 170.629,
+            "p(90)": 0.156,
+            "p(95)": 0.377,
+            "avg": 0.12648909772050562,
+            "min": 0.008,
+            "med": 0.043
+        },
+        "http_req_failed": {
+            "passes": 472469,
+            "fails": 1,
+            "value": 0.9999978834635004
+        },
+        "http_reqs": {
+            "rate": 2463.036121083913,
+            "count": 472470
+        },
+        "vus": {
+            "value": 2000,
+            "min": 0,
+            "max": 2000
+        },
+        "http_req_blocked": {
+            "avg": 12.703997521587286,
+            "min": 0,
+            "med": 0,
+            "max": 12905.409,
+            "p(90)": 0.001,
+            "p(95)": 0.001
+        },
+        "vus_max": {
+            "max": 2000,
+            "value": 2000,
+            "min": 2000
+        },
+        "http_req_receiving": {
+            "min": 0.004,
+            "med": 0.048,
+            "max": 333.342,
+            "p(90)": 0.842,
+            "p(95)": 1.54,
+            "avg": 0.554428998666729
+        }
+    },
+    "setup_data": {
+        "token": "eyJhbGciOiJIUzI1NiJ9.eyJpYXQiOjE3NzE5MjM5MzQsImV4cCI6MTc3MTkyNzUzNCwiaWQiOjEsImVtYWlsIjoicG9wY29ybjFAcG9wY29ybi5jb20iLCJyb2xlIjoiQ1VTVE9NRVIifQ.z1O2IPe4u4h8w36a6bGPc8kd9y0Dft5NgUcl5YcGkM0"
+    },
+    "root_group": {
+        "name": "",
+        "path": "",
+        "id": "d41d8cd98f00b204e9800998ecf8427e",
+        "groups": {},
+        "checks": {
+                "order_create 2xx": {
+                    "id": "1efaf75d797b1d4a9ee20dfee67b31d8",
+                    "passes": 0,
+                    "fails": 472469,
+                    "name": "order_create 2xx",
+                    "path": "::order_create 2xx"
+                }
+            }
+    }
+}
