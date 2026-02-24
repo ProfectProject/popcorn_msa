@@ -52,11 +52,11 @@ public class DatabaseOptimizationConfig {
         config.setPassword(environment.getProperty("spring.datasource.password", "quary123"));
 
         // === 📊 연결 풀 최적화 설정 ===
-        config.setMaximumPoolSize(20);          // 최대 연결 수 (대시보드 쿼리 고려)
-        config.setMinimumIdle(5);               // 최소 유휴 연결
-        config.setConnectionTimeout(30000);     // 연결 타임아웃 30초
-        config.setIdleTimeout(600000);          // 유휴 연결 타임아웃 10분
-        config.setMaxLifetime(1800000);         // 최대 연결 생존 시간 30분
+        config.setMaximumPoolSize(environment.getProperty("spring.datasource.hikari.maximum-pool-size", Integer.class, 25));
+        config.setMinimumIdle(environment.getProperty("spring.datasource.hikari.minimum-idle", Integer.class, 5));
+        config.setConnectionTimeout(environment.getProperty("spring.datasource.hikari.connection-timeout", Long.class, 30000L));
+        config.setIdleTimeout(environment.getProperty("spring.datasource.hikari.idle-timeout", Long.class, 600000L));
+        config.setMaxLifetime(environment.getProperty("spring.datasource.hikari.max-lifetime", Long.class, 1800000L));
         // 운영 시작 구간(Flyway/JPA init)에서 false positive가 자주 발생해 프로파일별로 조정
         long leakDetectionMs = environment.getProperty(
             "spring.datasource.hikari.leak-detection-threshold",

@@ -39,7 +39,7 @@ public class JpaConfig {
         // Hibernate JPA Vendor Adapter 설정
         HibernateJpaVendorAdapter vendorAdapter = new HibernateJpaVendorAdapter();
         vendorAdapter.setGenerateDdl(false);
-        vendorAdapter.setShowSql(true);
+        vendorAdapter.setShowSql(false);
         em.setJpaVendorAdapter(vendorAdapter);
 
         // Hibernate를 PersistenceProvider로 명시적 설정

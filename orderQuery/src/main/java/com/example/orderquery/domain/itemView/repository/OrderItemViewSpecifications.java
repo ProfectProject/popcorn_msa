@@ -112,8 +112,17 @@ public final class OrderItemViewSpecifications {
      * 팝업 ID로 필터링
      */
     public static Specification<OrderItemView> hasPopupId(String popupId) {
-        return (root, query, builder) ->
-            popupId != null ? builder.equal(root.get("id").get("popupId"), UUID.fromString(popupId)) : null;
+        return (root, query, builder) -> {
+            if (popupId == null || popupId.isBlank()) {
+                return null;
+            }
+            try {
+                return builder.equal(root.get("id").get("popupId"), UUID.fromString(popupId));
+            } catch (IllegalArgumentException e) {
+                // invalid UUID should not trigger 500 on list endpoint
+                return builder.disjunction();
+            }
+        };
     }
 
     /**
