@@ -23,8 +23,16 @@ agent:
 server:
   port: ${SERVER_PORT:8085}
   shutdown: immediate
+  # 🚨 Emergency Tomcat 극한 최적화 - 5xx 에러 해결
   tomcat:
     uri-encoding: UTF-8
+    threads:
+      max: 1000                    # 🚨 Emergency: 대폭 증가
+      min-spare: 200              # 🚨 최소 스레드 대폭 증가
+    connection-timeout: 60000      # 🚨 60초 타임아웃
+    keep-alive-timeout: 60000      # 🚨 Keep-Alive 연장
+    max-connections: 50000         # 🚨 최대 연결 수 대폭 증가
+    accept-count: 2000            # 🚨 대기 연결 수 대폭 증가
 
 # 🌐 Gateway 설정
 gateway:
@@ -49,12 +57,15 @@ spring:
     password: ${PAYMENT_PASSWORD:payment123}
     driver-class-name: org.postgresql.Driver
     hikari:
-      maximum-pool-size: 10  # 최적화: 20 → 10
-      minimum-idle: 3        # 최적화: 5 → 3
-      connection-timeout: 5000  # 최적화: 20초 → 5초
-      validation-timeout: 3000
-      idle-timeout: 300000
-      max-lifetime: 1200000
+      maximum-pool-size: 500         # 🚨 Emergency: 10 → 500 (5xx 에러 해결)
+      minimum-idle: 200              # 🚨 Emergency: 3 → 200
+      connection-timeout: 10000      # 🚨 Emergency: 5초 → 10초
+      validation-timeout: 5000       # 🚨 Emergency: 3초 → 5초
+      idle-timeout: 300000           # 5분 유휴 타임아웃
+      max-lifetime: 900000           # 🚨 Emergency: 20분 → 15분
+      leak-detection-threshold: 30000 # 🚨 Emergency: 누수 감지 30초
+      connection-test-query: SELECT 1 # 연결 테스트 쿼리
+      keepalive-time: 30000          # 🚨 Emergency: Keep alive 30초
 
   jpa:
     open-in-view: false
@@ -95,10 +106,12 @@ spring:
       connection-timeout: 1000ms  # 최적화: 2초 → 1초
       lettuce:
         pool:
-          max-active: 10  # 최적화: 20 → 10
-          max-idle: 8     # 최적화: 16 → 8
-          min-idle: 3     # 최적화: 8 → 3
-          max-wait: 1000ms  # 최적화: 2초 → 1초
+          max-active: 1000          # 🚨 Emergency: 10 → 1000 (5xx 에러 해결)
+          max-idle: 500             # 🚨 Emergency: 8 → 500
+          min-idle: 200             # 🚨 Emergency: 3 → 200
+          max-wait: 30000ms         # 🚨 Emergency: 1초 → 30초
+          time-between-eviction-runs: 60000ms # 유휴 연결 정리 주기
+          min-evictable-idle-time: 300000ms # 최소 유휴 시간
 
   flyway:
     enabled: true
