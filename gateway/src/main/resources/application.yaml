@@ -22,8 +22,8 @@ spring:
 server:
   port: 8080
   netty:
-    connection-timeout: 120000       # 🚨 EXTREME: 60초 → 120초 연결 타임아웃
-    h2c-max-content-length: 0        # 🚨 EXTREME: 무제한 컨텐츠 길이
+    connection-timeout: 30000        # 🔧 SAFE: 120초 → 30초 연결 타임아웃
+    h2c-max-content-length: 5MB      # 🔧 SAFE: 무제한 → 5MB 제한
     initial-buffer-size: 128         # 🚨 EXTREME: 초기 버퍼 크기 증가
     max-initial-line-length: 4096    # 🚨 EXTREME: 최대 초기 라인 길이
   # 🚨 Emergency Reactor Netty 극한 튜닝
@@ -31,12 +31,12 @@ server:
     netty:
       connection-provider:
         type: fixed                  # 고정 연결 풀 사용
-        max-connections: 5000        # 🚨 EXTREME: 2000 → 5000 연결 (800 RPS 대응)
-        max-idle-time: 60s          # 🚨 EXTREME: 30s → 60s 유휴 연결 유지
-        max-life-time: 120s         # 🚨 EXTREME: 60s → 120s 연결 생존 시간
+        max-connections: 1000        # 🔧 SAFE: 5000 → 1000 연결 (로컬 안정성)
+        max-idle-time: 30s          # 🔧 SAFE: 60s → 30s 유휴 연결
+        max-life-time: 60s          # 🔧 SAFE: 120s → 60s 연결 생존 시간
       event-loop:
-        select-count: 16             # 🚨 EXTREME: 8 → 16 이벤트 루프 스레드
-        worker-count: 200            # 🚨 EXTREME: 100 → 200 워커 스레드
+        select-count: 8              # 🔧 SAFE: 16 → 8 이벤트 루프 스레드
+        worker-count: 50             # 🔧 SAFE: 200 → 50 워커 스레드
 
       routes:
         - id: checkIns
