@@ -403,6 +403,8 @@ management:
       exposure:
         include: health,info,metrics
   health:
+    redis:
+      enabled: ${MANAGEMENT_HEALTH_REDIS_ENABLED:false}
     circuitbreakers:
       enabled: true
         
