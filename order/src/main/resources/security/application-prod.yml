@@ -69,12 +69,10 @@ spring:
           fetch_size: 100              # 페치 크기 증가
         order_inserts: true            # INSERT 순서 최적화
         order_updates: true            # UPDATE 순서 최적화
-        # 🚀 L2 캐시 활성화 (Order 서비스 극한 성능)
+        # JCache 의존성 미탑재 환경에서도 안정 기동되도록 L2/Query 캐시 비활성화
         cache:
-          use_second_level_cache: true
-          use_query_cache: true
-          region:
-            factory_class: org.hibernate.cache.jcache.JCacheRegionFactory
+          use_second_level_cache: false
+          use_query_cache: false
 
   # Flyway 설정 (프로덕션)
   flyway:

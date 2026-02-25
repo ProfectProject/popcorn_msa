@@ -55,8 +55,8 @@ public class PerformanceConfig {
     /**
      * 🚀 팝업 상세용 캐시 설정
      */
-    @Bean
-    public CacheManager popupDetailCacheManager() {
+    @Bean("popupDetailCaffeineCacheManager")
+    public CacheManager popupDetailCaffeineCacheManager() {
         CaffeineCacheManager cacheManager = new CaffeineCacheManager("popup-detail");
         cacheManager.setCaffeine(Caffeine.newBuilder()
                 .maximumSize(50000)           // 많은 상세 정보 캐시
