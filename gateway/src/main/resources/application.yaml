@@ -9,7 +9,7 @@ spring:
   data:
     redis:
       ssl:
-        enabled: ${REDIS_SSL_ENABLED:true}
+        enabled: ${REDIS_SSL_ENABLED:false}
   cloud:
     gateway:
       server:
