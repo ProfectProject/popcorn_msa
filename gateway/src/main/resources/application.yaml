@@ -410,5 +410,7 @@ management:
 logging:
   level:
     org.springframework.cloud.gateway: WARN
+    org.springframework.cloud.gateway.config.GatewayProperties: WARN
+    org.springframework.cloud.gateway.config.GatewayClassPathWarningAutoConfiguration: ERROR
     org.springframework.http.server.reactive: WARN
     reactor.netty.http.client: WARN
