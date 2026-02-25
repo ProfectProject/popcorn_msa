@@ -6,6 +6,8 @@ spring:
     redis:
       repositories:
         enabled: false
+  autoconfigure:
+    exclude: org.springframework.boot.autoconfigure.jdbc.DataSourceTransactionManagerAutoConfiguration
   profiles:
     default: local
   jackson:

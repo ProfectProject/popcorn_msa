@@ -1,0 +1,251 @@
+# Spring Boot HYPER-ULTIMATE Performance Profile
+# 각 서비스의 src/main/resources/application-hyper-ultimate.yml로 복사
+
+spring:
+  # 데이터소스 ULTRA 최적화 (더 안정적)
+  datasource:
+    driver-class-name: org.postgresql.Driver
+    url: jdbc:postgresql://${DB_HOST:db}:${DB_PORT:5432}/${DB_NAME:popcorn_db}?currentSchema=stores
+    username: ${STORE_USERNAME:popcorn_user}
+    password: ${STORE_PASSWORD:popcorn123}
+    hikari:
+      # 연결 풀 안정적 확장
+      maximum-pool-size: 200
+      minimum-idle: 100
+      connection-timeout: 60000
+      idle-timeout: 600000
+      max-lifetime: 1800000
+      leak-detection-threshold: 120000
+      # 연결 검증 최적화
+      validation-timeout: 10000
+      connection-test-query: SELECT 1
+      # 안정적 최적화
+      register-mbeans: false
+      auto-commit: true
+      # 네트워크 최적화
+      connection-init-sql: "SET statement_timeout = 300000"
+
+  # JPA HYPER 최적화
+  jpa:
+    hibernate:
+      ddl-auto: none
+    properties:
+      hibernate:
+        # HYPER 배치 처리 최적화
+        jdbc.batch_size: 200
+        jdbc.fetch_size: 500
+        order_inserts: true
+        order_updates: true
+        batch_versioned_data: true
+        # HYPER 캐시 최적화
+        cache.use_second_level_cache: true
+        cache.use_query_cache: true
+        cache.region.factory_class: org.hibernate.cache.ehcache.EhCacheRegionFactory
+        # HYPER 성능 최적화
+        generate_statistics: false
+        format_sql: false
+        show_sql: false
+        # HYPER 연결 최적화
+        connection.provider_disables_autocommit: true
+        # HYPER 쿼리 최적화
+        query.in_clause_parameter_padding: true
+        query.fail_on_pagination_over_collection_fetch: true
+        # HYPER 메모리 최적화
+        max_fetch_depth: 3
+        default_batch_fetch_size: 100
+
+  # Redis 안정적 최적화
+  data:
+    redis:
+      timeout: 30000ms
+      connect-timeout: 10000ms
+      jedis:
+        pool:
+          max-active: 100
+          max-idle: 50
+          min-idle: 25
+          max-wait: 30000ms
+          time-between-eviction-runs: 30000ms
+          # 안정적 추가 최적화
+          test-on-borrow: false
+          test-on-return: false
+          test-while-idle: true
+          num-tests-per-eviction-run: 5
+
+  # 웹 HYPER 최적화
+  web:
+    resources:
+      cache:
+        period: 31536000s  # 1년
+      chain:
+        compressed: true
+        cache: true
+        strategy:
+          content:
+            enabled: true
+            paths: "/**"
+
+  # 트랜잭션 HYPER 최적화
+  transaction:
+    default-timeout: 600
+    rollback-on-commit-failure: true
+
+  # HYPER 스레딩 최적화
+  task:
+    execution:
+      pool:
+        core-size: 50
+        max-size: 500
+        queue-capacity: 10000
+        keep-alive: 60s
+    scheduling:
+      pool:
+        size: 20
+
+# 서버 HYPER 최적화
+server:
+  # HTTP/2 강제 활성화
+  http2:
+    enabled: true
+
+  # 압축 HYPER 최적화
+  compression:
+    enabled: true
+    mime-types: application/json,text/plain,text/css,text/javascript,application/javascript,application/xml,text/xml,text/html
+    min-response-size: 256B
+
+  # 에러 최소화
+  error:
+    include-message: never
+    include-binding-errors: never
+    include-stacktrace: never
+
+  tomcat:
+    # 스레드 안정적 최적화
+    threads:
+      max: 1000
+      min-spare: 200
+    # 연결 안정적 최적화
+    max-connections: 10000
+    accept-count: 2000
+    connection-timeout: 60s
+    keep-alive-timeout: 60s
+    max-keep-alive-requests: 10000
+    # 안정적 추가 최적화
+    max-http-form-post-size: 50MB
+    max-swallow-size: 50MB
+    processor-cache: 1000
+    # HYPER 네트워크 최적화
+    remoteip:
+      remote-ip-header: X-Forwarded-For
+      protocol-header: X-Forwarded-Proto
+
+# 액추에이터 HYPER 최소화
+management:
+  endpoints:
+    web:
+      exposure:
+        include: health
+  endpoint:
+    health:
+      show-details: never
+      show-components: never
+  metrics:
+    enable:
+      all: false
+    export:
+      prometheus:
+        enabled: false
+
+# 로깅 HYPER 최적화
+logging:
+  level:
+    root: ERROR
+    org.springframework: ERROR
+    org.hibernate: ERROR
+    com.zaxxer.hikari: ERROR
+    org.apache.tomcat: ERROR
+    org.apache.coyote: ERROR
+    org.apache.catalina: ERROR
+  pattern:
+    console: "%msg%n"
+    file: "%msg%n"
+  logback:
+    rollingpolicy:
+      clean-history-on-start: true
+
+# HYPER 타임아웃 설정 (극한 연장)
+resilience4j:
+  circuitbreaker:
+    instances:
+      default:
+        failure-rate-threshold: 95
+        wait-duration-in-open-state: 5s
+        sliding-window-size: 200
+        minimum-number-of-calls: 20
+        slow-call-rate-threshold: 95
+        slow-call-duration-threshold: 60s
+  timelimiter:
+    instances:
+      default:
+        timeout-duration: 600s  # 10분
+
+# HTTP 클라이언트 HYPER 타임아웃
+http:
+  client:
+    connection-timeout: 120000
+    read-timeout: 600000
+    write-timeout: 600000
+    # HYPER 연결 풀
+    max-connections: 5000
+    max-connections-per-route: 1000
+
+# 애플리케이션별 HYPER 타임아웃
+app:
+  timeout:
+    database: 600000    # 10분
+    redis: 120000       # 2분
+    http: 600000        # 10분
+  cache:
+    ttl: 3600           # 1시간
+    max-size: 100000    # 10만개
+  performance:
+    async-pool-size: 500
+    batch-size: 1000
+
+# JVM HYPER 최적화 가이드
+jvm:
+  tuning:
+    heap: "-Xms8g -Xmx16g"
+    gc: "-XX:+UseG1GC -XX:MaxGCPauseMillis=20 -XX:G1HeapRegionSize=32m"
+    performance: "-XX:+UseStringDeduplication -XX:+UseTransparentHugePages -XX:+AlwaysPreTouch"
+    network: "-Djava.net.preferIPv4Stack=true -Djava.awt.headless=true"
+
+# HYPER 네트워크 최적화
+network:
+  tcp:
+    keep-alive: true
+    nodelay: true
+    reuse-address: true
+  socket:
+    timeout: 120000
+    buffer-size: 65536
+
+# HYPER Spring Cloud Gateway 최적화 (gateway 서비스용)
+spring.cloud.gateway:
+  httpclient:
+    pool:
+      max-connections: 5000
+      max-idle-time: 30s
+      max-life-time: 60s
+    connect-timeout: 60000
+    response-timeout: 600s
+  # HYPER 라우팅 최적화
+  routes:
+    - id: default
+      predicates:
+        - Path=/**
+      filters:
+        - name: Retry
+          args:
+            retries: 0  # 재시도 비활성화로 성능 향상

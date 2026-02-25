@@ -17,6 +17,59 @@ spring:
           httpclient:
             connect-timeout: 30000   # 🚨 EXTREME: 15s → 30s (800 RPS 극한 대응)
             response-timeout: 120s   # 🚨 EXTREME: 60s → 120s (극한 완화)
+          routes:
+            - id: checkIns
+              uri: ${CHECKIN_SERVICE_URL}
+              predicates:
+                - Path=/api/qr/**
+            - id: checkin-docs
+              uri: ${CHECKIN_SERVICE_URL}
+              predicates:
+                - Path=/api/checkins/**
+            - id: coupon
+              uri: ${COUPON_SERVICE_URL}
+              predicates:
+                - Path=/api/v1/coupons/**
+            - id: backend
+              uri: ${BACKEND_SERVICE_URL}
+              predicates:
+                - Path=/api/v1/**
+            - id: user-service
+              uri: ${USER_SERVICE_URL}
+              predicates:
+                - Path=/api/users/**
+            - id: user-api
+              uri: ${USER_SERVICE_URL}
+              predicates:
+                - Path=/api/user/**
+            - id: stores
+              uri: ${STORE_SERVICE_URL}
+              predicates:
+                - Path=/api/stores/**
+            - id: order
+              uri: ${ORDER_SERVICE_URL}
+              predicates:
+                - Path=/api/orders/**
+            - id: order-api
+              uri: ${ORDER_SERVICE_URL}
+              predicates:
+                - Path=/api/order/**
+            - id: payment
+              uri: ${PAYMENT_SERVICE_URL}
+              predicates:
+                - Path=/api/payments/**
+            - id: payment-pay
+              uri: ${PAYMENT_SERVICE_URL}
+              predicates:
+                - Path=/api/pay/**
+            - id: order-query
+              uri: ${ORDERQUERY_SERVICE_URL}
+              predicates:
+                - Path=/api/order-query/**
+            - id: orderquery
+              uri: ${ORDERQUERY_SERVICE_URL}
+              predicates:
+                - Path=/api/orderquery/**
 
 # 🚨 Emergency WebFlux/Netty 극한 최적화 - 1800 RPS 대응
 server:
