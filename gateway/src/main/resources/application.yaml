@@ -25,7 +25,6 @@ server:
     connection-timeout: 120000       # 🚨 EXTREME: 60초 → 120초 연결 타임아웃
     h2c-max-content-length: 0        # 🚨 EXTREME: 무제한 컨텐츠 길이
     initial-buffer-size: 128         # 🚨 EXTREME: 초기 버퍼 크기 증가
-    max-chunk-size: 8192             # 🚨 EXTREME: 최대 청크 크기 증가
     max-initial-line-length: 4096    # 🚨 EXTREME: 최대 초기 라인 길이
   # 🚨 Emergency Reactor Netty 극한 튜닝
   reactor:
@@ -412,5 +411,8 @@ logging:
     org.springframework.cloud.gateway: WARN
     org.springframework.cloud.gateway.config.GatewayProperties: WARN
     org.springframework.cloud.gateway.config.GatewayClassPathWarningAutoConfiguration: ERROR
+    org.springframework.cloud.gateway.support.wiretap.StarterDeprecatedAutoConfiguration: ERROR
+    org.springframework.cloud.gateway.route.RouteDefinitionRouteLocator: WARN
+    org.springframework.cloud.gateway.filter.factory.cache.LocalResponseCacheProperties: WARN
     org.springframework.http.server.reactive: WARN
     reactor.netty.http.client: WARN
