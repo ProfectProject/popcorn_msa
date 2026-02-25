@@ -3,7 +3,6 @@ package com.popcorn.common.filter;
 import java.io.IOException;
 import java.util.List;
 
-import org.springframework.beans.factory.annotation.Value;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.security.authentication.UsernamePasswordAuthenticationToken;
@@ -25,8 +24,12 @@ import jakarta.servlet.http.HttpServletResponse;
 public class HeaderAuthenticationFilter extends OncePerRequestFilter {
     private static final Logger log = LoggerFactory.getLogger(HeaderAuthenticationFilter.class);
 
-    @Value("${passport.secret}")
-    private String passportSecret;
+    private final String passportSecret;
+
+    public HeaderAuthenticationFilter() {
+        String secret = System.getenv("PASSPORT_SECRET");
+        this.passportSecret = (secret == null || secret.isBlank()) ? "passport-shared-secret" : secret;
+    }
 
     @Override
     protected boolean shouldNotFilter(HttpServletRequest request) throws ServletException {

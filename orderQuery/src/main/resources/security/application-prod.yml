@@ -43,8 +43,8 @@ spring:
 
   flyway:
     url: jdbc:postgresql://${DB_HOST}:${DB_PORT}/${DB_NAME}
-    user: ${ORDER_QUERY_FLYWAY_USERNAME}
-    password: ${ORDER_QUERY_FLYWAY_PASSWORD}
+    user: ${ORDER_QUERY_FLYWAY_USERNAME:${ORDER_QUERY_USERNAME}}
+    password: ${ORDER_QUERY_FLYWAY_PASSWORD:${ORDER_QUERY_PASSWORD}}
     enabled: true
     baseline-on-migrate: true
     validate-on-migrate: true
@@ -54,10 +54,10 @@ spring:
     clean-disabled: false
 
   kafka:
-    bootstrap-servers: ${KAFKA_BOOTSTRAP_SERVERS}
+    bootstrap-servers: ${KAFKA_BOOTSTRAP_SERVERS:kafka-1:9092,kafka-2:9092,kafka-3:9092}
 
     consumer:
-      group-id: ${ORDER_QUERY_KAFKA_GROUP}
+      group-id: ${ORDER_QUERY_KAFKA_GROUP:order-query-group}
       auto-offset-reset: earliest
       enable-auto-commit: false
       key-deserializer: org.apache.kafka.common.serialization.StringDeserializer
@@ -78,11 +78,11 @@ springdoc:
   server-url: ${GATEWAY_SERVICE_URL}
 
 passport:
-  secret: ${PASSPORT_SECRET}
+  secret: ${PASSPORT_SECRET:passport-shared-secret}
   ttl-seconds: 60
 
 jwt:
-  secret: ${JWT_SECRET}
+  secret: ${JWT_SECRET:dGVzdC1qd3Qtc2VjcmV0LWtleS1mb3ItbG9jYWwtZGV2ZWxvcG1lbnQtb25seS1kb25vdC11c2UtaW4tcHJvZHVjdGlvbg==}
   expiration: 3600000
   refresh-expiration-ms: 1209600000
 

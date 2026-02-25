@@ -88,8 +88,8 @@ spring:
 
   flyway:
     url: jdbc:postgresql://${DB_HOST}:${DB_PORT}/${DB_NAME}
-    user: ${STORE_FLYWAY_USERNAME}
-    password: ${STORE_FLYWAY_PASSWORD}
+    user: ${STORE_FLYWAY_USERNAME:${STORE_USERNAME}}
+    password: ${STORE_FLYWAY_PASSWORD:${STORE_PASSWORD}}
     enabled: true
     baseline-on-migrate: true
     validate-on-migrate: true
@@ -120,12 +120,12 @@ spring:
       concurrency: ${KAFKA_LISTENER_CONCURRENCY:3}
 
 jwt:
-  secret: ${JWT_SECRET}
+  secret: ${JWT_SECRET:dGVzdC1qd3Qtc2VjcmV0LWtleS1mb3ItbG9jYWwtZGV2ZWxvcG1lbnQtb25seS1kb25vdC11c2UtaW4tcHJvZHVjdGlvbg==}
   expiration: 3600000
   refresh-expiration-ms: 1209600000
 
 passport:
-  secret: ${PASSPORT_SECRET}
+  secret: ${PASSPORT_SECRET:passport-shared-secret}
   ttl-seconds: 60
 
 logging:

@@ -83,8 +83,8 @@ spring:
 
   flyway:
     enabled: true
-    user: ${STORE_FLYWAY_USERNAME}
-    password: ${STORE_FLYWAY_PASSWORD}
+    user: ${STORE_FLYWAY_USERNAME:${STORE_USERNAME:store_app}}
+    password: ${STORE_FLYWAY_PASSWORD:${STORE_PASSWORD:store123}}
     default-schema: store
     schemas: store
     locations: classpath:db/migration/schema,classpath:db/migration/seed
@@ -117,7 +117,7 @@ spring:
 
 # 인증 설정
 passport:
-  secret: ${PASSPORT_SECRET}
+  secret: ${PASSPORT_SECRET:passport-shared-secret}
   ttl-seconds: 60
 
 # Redis 이벤트 설정
@@ -126,7 +126,7 @@ redis:
     enabled: true
 
 jwt:
-  secret: ${JWT_SECRET}
+  secret: ${JWT_SECRET:dGVzdC1qd3Qtc2VjcmV0LWtleS1mb3ItbG9jYWwtZGV2ZWxvcG1lbnQtb25seS1kb25vdC11c2UtaW4tcHJvZHVjdGlvbg==}
   expiration: 3600000
   refresh-expiration-ms: 1209600000
 
