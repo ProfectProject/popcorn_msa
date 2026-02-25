@@ -62,7 +62,6 @@ spring:
     properties:
       hibernate:
         default_schema: user_auth
-        dialect: org.hibernate.dialect.PostgreSQLDialect
         type:
           preferred_enum_jdbc_type: NAMED_ENUM
         # 🚀 JPA 배치 및 성능 최적화 - 5xx 에러 해결
@@ -77,10 +76,8 @@ spring:
         show_sql: false              # SQL 로깅 비활성화 (성능)
         # 🚀 L2 캐시 활성화
         cache:
-          use_second_level_cache: true
-          use_query_cache: true
-          region:
-            factory_class: org.hibernate.cache.jcache.JCacheRegionFactory
+          use_second_level_cache: false
+          use_query_cache: false
 
   cache:
     type: simple
@@ -114,6 +111,7 @@ logging:
     org.springframework.boot.web: WARN # DEBUG → WARN
     org.hibernate.SQL: WARN            # DEBUG → WARN (SQL 로깅 최소화)
     org.springframework.security: WARN # DEBUG → WARN
+    org.flywaydb.core.internal.database.base.Database: ERROR
     com.adjh.springbootkafka: INFO     # DEBUG → INFO
     org:
       apache.kafka: WARN               # INFO → WARN

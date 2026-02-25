@@ -49,7 +49,6 @@ spring:
   # JPA 설정 (프로덕션)
   jpa:
     open-in-view: false
-    database-platform: org.hibernate.dialect.PostgreSQLDialect
     show-sql: false
     generate-ddl: false
     hibernate:
@@ -163,6 +162,9 @@ logging:
     org.springframework.web: WARN
     org.springframework.security: WARN
     org.hibernate.SQL: WARN
+    reactor.core.publisher.Hooks: INFO
+    io.github.resilience4j.spring6.utils.RxJava2OnClasspathCondition: INFO
+    org.flywaydb.core.internal.database.base.Database: ERROR
   pattern:
     console: "%d{yyyy-MM-dd HH:mm:ss.SSS} [%thread] %-5level %logger{36} - %msg%n"
     file: "%d{yyyy-MM-dd HH:mm:ss.SSS} [%thread] %-5level %logger{36} - %msg%n"

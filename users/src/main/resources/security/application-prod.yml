@@ -72,10 +72,8 @@ spring:
           batch_versioned_data: true  # 버전 데이터 배치 처리
           fetch_size: 100             # 🚨 Emergency: 50 → 100 (극한 페치)
         cache:
-          use_second_level_cache: true   # 🚨 Emergency: L2 캐시 활성화
-          use_query_cache: true          # 쿼리 캐시 활성화
-          region:
-            factory_class: org.hibernate.cache.jcache.JCacheRegionFactory
+          use_second_level_cache: false
+          use_query_cache: false
         connection:
           provider_disables_autocommit: true  # AutoCommit 비활성화로 성능 향상
         order_inserts: true               # INSERT 순서 최적화
@@ -118,6 +116,7 @@ logging:
     com.zaxxer.hikari: WARN             # HikariCP 로그 최소화
     org.springframework.security: WARN   # Spring Security 로그 최소화
     org.hibernate: WARN                 # Hibernate 로그 최소화
+    org.flywaydb.core.internal.database.base.Database: ERROR
   pattern:
     console: "%d{HH:mm:ss.SSS} %-5level [%thread] %logger{36} - %msg%n"  # 간결한 로그 패턴
 app:
